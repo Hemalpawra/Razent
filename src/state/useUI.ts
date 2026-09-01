@@ -6,6 +6,7 @@ export type Screen =
   | "orders"
   | "analytics"
   | "ai_agent"
+  | "audit_trail"
   | "ai_agent_placeholder"
   | "import_placeholder"
   | "audit_placeholder"

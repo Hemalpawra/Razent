@@ -44,7 +44,7 @@ const navGroups: { label: string; items: { label: string; key: Screen; icon: typ
     items: [
       { label: "AI Agent", key: "ai_agent", icon: Bot },
       { label: "Orders", key: "orders", icon: ShoppingCart },
-      { label: "Audit Trail", key: "audit_placeholder", icon: FileText },
+      { label: "Audit Trail", key: "audit_trail", icon: FileText },
       { label: "Analytics", key: "analytics", icon: BarChart3 },
     ],
   },
