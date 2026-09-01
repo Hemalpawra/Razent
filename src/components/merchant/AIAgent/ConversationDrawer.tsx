@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
+import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { formatPrice } from "@/lib/types/product"
 import type { Conversation } from "@/lib/types/conversation"
 import { mockOrders } from "@/lib/mock/orders"
@@ -59,45 +62,38 @@ export default function ConversationDrawer({ open, onClose, conversation }: { op
 
             <Separator />
 
-            {/* Tabs */}
+            {/* Tabs — variant line */}
             <Tabs defaultValue="conversation" className="px-6 pt-3">
-              <TabsList className="w-full">
-                <TabsTrigger value="conversation" className="flex-1">Conversation</TabsTrigger>
-                <TabsTrigger value="products" className="flex-1">Products & Timeline</TabsTrigger>
+              <TabsList className="w-full justify-start gap-6 bg-transparent p-0 h-auto rounded-none border-b">
+                <TabsTrigger value="conversation" className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 -mb-px bg-transparent shadow-none data-[selected]:border-primary data-[selected]:text-foreground data-[selected]:shadow-none data-[selected]:bg-transparent text-muted-foreground">Conversation</TabsTrigger>
+                <TabsTrigger value="products" className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 -mb-px bg-transparent shadow-none data-[selected]:border-primary data-[selected]:text-foreground data-[selected]:shadow-none data-[selected]:bg-transparent text-muted-foreground">Products & Timeline</TabsTrigger>
               </TabsList>
 
               <TabsContent value="conversation" className="mt-4 space-y-4 pb-6">
-                {/* Chat timeline */}
+                {/* Chat — Message like shadcn: left AI avatar, right user avatar */}
                 <section>
                   <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Chat — {sourceLabel(conversation.type)}</h3>
-                  <div className="mt-3 space-y-3">
-                    {conversation.messages.map((m) => (
-                      <div key={m.id} className="flex gap-2 justify-start">
-                        <div className={"max-w-[85%] rounded-xl px-3 py-2 text-sm leading-5 " + (m.role === "customer" ? "bg-muted text-foreground" : "bg-primary text-primary-foreground")}>
-                          <div className="text-[11px] opacity-70 mb-1">{m.role === "customer" ? (conversation.type === "agent_to_agent" ? "Agent" : "Customer") : "AI"} · {new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                          {m.text}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                <Separator />
-
-                {/* Shipping + Order quick */}
-                <section>
-                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Shipping Details</h3>
-                  <div className="mt-2">
-                    {conversation.shipping_collected && conversation.shipping_address ? (
-                      <div className="rounded-lg border bg-card p-3 text-sm leading-5">
-                        <div className="font-medium text-foreground">{conversation.shipping_address.full_name}</div>
-                        <div className="text-muted-foreground">{conversation.shipping_address.phone}</div>
-                        <div className="text-muted-foreground">{conversation.shipping_address.line1}, {conversation.shipping_address.city}</div>
-                        <Badge variant="success" className="mt-2 rounded-full">Collected</Badge>
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">Shipping details not yet collected.</div>
-                    )}
+                  <div className="mt-3 flex flex-col gap-4">
+                    {conversation.messages.map((m) => {
+                      const isAI = m.role === "ai"
+                      return (
+                        <Message key={m.id} align={isAI ? "start" : "end"}>
+                          <MessageAvatar>
+                            <Avatar className="size-8">
+                              <AvatarFallback className={isAI ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}>
+                                {isAI ? <Bot className="size-4" /> : <User className="size-4" />}
+                              </AvatarFallback>
+                            </Avatar>
+                          </MessageAvatar>
+                          <MessageContent className={isAI ? "items-start" : "items-end"}>
+                            <div className="text-[11px] text-muted-foreground">{isAI ? "AI Assistant" : conversation.type === "agent_to_agent" ? "Agent" : "Customer"} · {new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                            <Bubble variant={isAI ? "default" : "muted"} align={isAI ? "start" : "end"}>
+                              <BubbleContent>{m.text}</BubbleContent>
+                            </Bubble>
+                          </MessageContent>
+                        </Message>
+                      )
+                    })}
                   </div>
                 </section>
 
@@ -167,6 +163,24 @@ export default function ConversationDrawer({ open, onClose, conversation }: { op
                     </div>
                   </section>
                 )}
+
+                <Separator />
+
+                <section>
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Shipping Details</h3>
+                  <div className="mt-3">
+                    {conversation.shipping_collected && conversation.shipping_address ? (
+                      <div className="rounded-lg border bg-card p-3 text-sm leading-5">
+                        <div className="font-medium text-foreground">{conversation.shipping_address.full_name}</div>
+                        <div className="text-muted-foreground">{conversation.shipping_address.phone}</div>
+                        <div className="text-muted-foreground">{conversation.shipping_address.line1}, {conversation.shipping_address.city}</div>
+                        <Badge variant="success" className="mt-2 rounded-full">Collected</Badge>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">Shipping details not yet collected.</div>
+                    )}
+                  </div>
+                </section>
 
                 <Separator />
 

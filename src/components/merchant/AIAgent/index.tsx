@@ -118,33 +118,12 @@ export default function AIAgentScreen({ loading, error }: { loading?: boolean; e
         <KpiCard icon={<IndianRupee className="size-4" />} label="Revenue Generated Today" value={formatPrice(revenueToday || 12456000)} sub="From AI-assisted orders" valueIsAmount />
       </div>
 
-      {/* Business Insights */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="rounded-xl bg-card border-l-4 border-l-primary">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2"><div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary"><Lightbulb className="size-4" /></div><CardTitle className="text-sm">Bundle opportunity</CardTitle><Badge variant="secondary" className="ml-auto rounded-full">₹42k potential</Badge></div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-5 text-muted-foreground">Customers who bought Air Purifier Pro also bought Smart Bulb 4-pack. Bundle recommendations increased revenue by <span className="font-medium text-foreground">18%</span> this week.</p>
-            <Button size="sm" className="mt-3 h-8 rounded-full">Create bundle</Button>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl bg-card border-l-4 border-l-amber-500">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2"><div className="flex size-8 items-center justify-center rounded-full bg-amber-500/10 text-amber-600"><TrendingUp className="size-4" /></div><CardTitle className="text-sm">Missed revenue</CardTitle><Badge variant="secondary" className="ml-auto rounded-full">Kitchen</Badge></div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-5 text-muted-foreground">Kitchen category had 4 chats for out-of-stock kettle. Premium suggestion (Espresso Machine) converted 2/4.</p>
-            <Button size="sm" variant="outline" className="mt-3 h-8 rounded-full bg-card">View products</Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main: Live Conversations + Needs Attention side */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="overflow-hidden rounded-xl bg-card py-0 lg:col-span-2">
+      {/* 70/30 Grid: Left AI conversation, Right bundle + missed + needs attention */}
+      <div className="grid gap-4 lg:grid-cols-[70%_30%]">
+        {/* Left — AI Conversation / Live Conversations */}
+        <Card className="overflow-hidden rounded-xl bg-card py-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-3">
-            <div><CardTitle className="text-base">Live Conversations</CardTitle><CardDescription className="text-xs">Latest 5 · auto-refresh</CardDescription></div>
+            <div><CardTitle className="text-base">Live Conversations</CardTitle><CardDescription className="text-xs">Latest 5 · AI Assistant + AI Agent</CardDescription></div>
             <Badge variant="secondary" className="rounded-full text-[11px]">5 of {mockConversations.length}</Badge>
           </CardHeader>
           <div className="overflow-x-auto">
@@ -185,18 +164,39 @@ export default function AIAgentScreen({ loading, error }: { loading?: boolean; e
           <div className="flex items-center justify-between border-t bg-card px-4 py-3 text-xs text-muted-foreground"><span>Showing 5 of {mockConversations.length} conversations</span><Button variant="outline" size="sm" className="h-7 rounded-full bg-card" onClick={() => setOpenId(mockConversations[0].id)}>Open latest</Button></div>
         </Card>
 
-        <Card className="rounded-xl bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-base">Needs Attention</CardTitle>
-            <Badge variant="secondary" className="rounded-full text-[11px]">{activeCount} open</Badge>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <AttentionRow icon={AlertTriangle} title="Waiting for payment" desc="1 conversation · ₹8,999 at risk" count="1" tone="warning" />
-            <AttentionRow icon={Users} title="Human support requested" desc="Priya Nair asked for help" count="1" tone="warning" />
-            <AttentionRow icon={Package} title="Out of stock" desc="Smart Kettle — 1 chat affected" count="1" tone="destructive" />
-            <AttentionRow icon={TrendingUp} title="Abandoned high-value" desc="₹15,999 bundle stalled" count="1" tone="warning" />
-          </CardContent>
-        </Card>
+        {/* Right — 30% stack: Bundle + Missed + Needs Attention */}
+        <div className="space-y-4">
+          <Card className="rounded-xl bg-card border-l-4 border-l-primary">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2"><div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary"><Lightbulb className="size-4" /></div><CardTitle className="text-sm">Bundle opportunity</CardTitle><Badge variant="secondary" className="ml-auto rounded-full">₹42k potential</Badge></div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-5 text-muted-foreground">Customers who bought Air Purifier Pro also bought Smart Bulb 4-pack. Bundle recommendations increased revenue by <span className="font-medium text-foreground">18%</span> this week.</p>
+              <Button size="sm" className="mt-3 h-8 rounded-full">Create bundle</Button>
+            </CardContent>
+          </Card>
+          <Card className="rounded-xl bg-card border-l-4 border-l-amber-500">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2"><div className="flex size-8 items-center justify-center rounded-full bg-amber-500/10 text-amber-600"><TrendingUp className="size-4" /></div><CardTitle className="text-sm">Missed revenue</CardTitle><Badge variant="secondary" className="ml-auto rounded-full">Kitchen</Badge></div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-5 text-muted-foreground">Kitchen category had 4 chats for out-of-stock kettle. Premium suggestion (Espresso Machine) converted 2/4.</p>
+              <Button size="sm" variant="outline" className="mt-3 h-8 rounded-full bg-card">View products</Button>
+            </CardContent>
+          </Card>
+          <Card className="rounded-xl bg-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardTitle className="text-base">Needs Attention</CardTitle>
+              <Badge variant="secondary" className="rounded-full text-[11px]">{activeCount} open</Badge>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <AttentionRow icon={AlertTriangle} title="Waiting for payment" desc="1 conversation · ₹8,999 at risk" count="1" tone="warning" />
+              <AttentionRow icon={Users} title="Human support requested" desc="Priya Nair asked for help" count="1" tone="warning" />
+              <AttentionRow icon={Package} title="Out of stock" desc="Smart Kettle — 1 chat affected" count="1" tone="destructive" />
+              <AttentionRow icon={TrendingUp} title="Abandoned high-value" desc="₹15,999 bundle stalled" count="1" tone="warning" />
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <ConversationDrawer open={openId !== null} onClose={() => setOpenId(null)} conversation={selected} />
