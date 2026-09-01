@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Cell } from "recharts"
 
 // Strict shadcn — every visual is a shadcn primitive, layout is 1:1 Figma 1920WLight
 // Theme-aware: uses bg-card / text-foreground / muted / primary tokens so .dark toggles correctly
@@ -166,42 +167,64 @@ function OverviewCard() {
           </ChartContainer>
         </div>
 
-        {/* Revenue Breakdown — donut via SVG + shadcn tokens */}
+        {/* Revenue Breakdown — donut via PieChart with ChartTooltip */}
         <div className="border-t pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
           <div className="text-sm font-semibold text-foreground">Revenue Breakdown</div>
-          <div className="mt-4 flex flex-col items-center">
-            <div className="relative size-[130px]">
-              <svg viewBox="0 0 130 130" className="size-full -rotate-90">
-                <circle cx="65" cy="65" r="46" fill="none" stroke="var(--border)" strokeWidth="38" className="opacity-30" />
-                <circle cx="65" cy="65" r="46" fill="none" stroke="var(--chart-5)" strokeWidth="38" strokeDasharray={`${46 * 2 * Math.PI * 0.25} ${46 * 2 * Math.PI}`} />
-                <circle
-                  cx="65"
-                  cy="65"
-                  r="46"
-                  fill="none"
-                  stroke="var(--primary)"
-                  strokeWidth="38"
-                  strokeDasharray={`${46 * 2 * Math.PI * 0.66} ${46 * 2 * Math.PI}`}
-                  strokeDashoffset={`${-46 * 2 * Math.PI * 0.25}`}
-                />
-              </svg>
-              <div className="absolute inset-[19px] flex flex-col items-center justify-center rounded-full bg-card">
-                <div className="pt-2 text-[13px] font-bold leading-none text-foreground">₹1,24,560</div>
-                <div className="text-[10px] leading-none text-muted-foreground">Total Revenue</div>
+          {(() => {
+            const donutData = [
+              { name: "AI Conversations", value: 82750, fill: "var(--primary)" },
+              { name: "Direct Sales", value: 31200, fill: "var(--chart-2)" },
+              { name: "Upsell & Cross-sell", value: 10610, fill: "var(--chart-4)" },
+            ]
+            const donutConfig = {
+              ai: { label: "AI Conversations", color: "var(--primary)" },
+              direct: { label: "Direct Sales", color: "var(--chart-2)" },
+              upsell: { label: "Upsell & Cross-sell", color: "var(--chart-4)" },
+            }
+            return (
+              <div className="mt-4 flex flex-col items-center">
+                <div className="relative size-[130px]">
+                  <ChartContainer config={donutConfig} className="size-full">
+                    <PieChart>
+                      <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={2} stroke="none" isAnimationActive={false}>
+                        {donutData.map((e) => (
+                          <Cell key={e.name} fill={e.fill} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            hideLabel
+                            formatter={(value, name) => (
+                              <div className="flex w-full justify-between gap-6">
+                                <span className="text-muted-foreground">{String(name)}</span>
+                                <span className="font-medium tabular-nums text-foreground">₹{Number(value).toLocaleString("en-IN")}</span>
+                              </div>
+                            )}
+                          />
+                        }
+                      />
+                    </PieChart>
+                  </ChartContainer>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                    <div className="text-[13px] font-bold leading-none text-foreground">₹1,24,560</div>
+                    <div className="text-[10px] leading-none text-muted-foreground">Total Revenue</div>
+                  </div>
+                </div>
+                <div className="mt-4 w-full space-y-1 text-xs leading-4 text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-primary" /> AI Conversations — ₹82,750 (66%)
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-chart-2" /> Direct Sales — ₹31,200 (25%)
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-chart-4" /> Upsell & Cross-sell — ₹10,610 (9%)
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="mt-4 w-full space-y-1 text-xs leading-4 text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-primary" /> AI Conversations — ₹82,750 (66%)
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-chart-2" /> Direct Sales — ₹31,200 (25%)
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-chart-4" /> Upsell & Cross-sell — ₹10,610 (9%)
-              </div>
-            </div>
-          </div>
+            )
+          })()}
         </div>
       </CardContent>
     </Card>
@@ -251,12 +274,24 @@ function AiPerformanceCard() {
                 </div>
               </div>
               <div className="col-span-3 flex items-center justify-center">
-                <svg viewBox="0 0 177 139" className="h-[110px] w-[140px]">
-                  <path d="M0 0 L177 0 L140 40 L37 40 Z" fill="var(--primary)" />
-                  <path d="M37 40 L140 40 L120 80 L57 80 Z" fill="var(--chart-2)" />
-                  <path d="M57 80 L120 80 L105 110 L72 110 Z" fill="var(--chart-1)" />
-                  <path d="M72 110 L105 110 L95 139 L82 139 Z" fill="var(--chart-3)" />
-                </svg>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <svg viewBox="0 0 177 139" className="h-[110px] w-[140px] cursor-default">
+                      <path d="M0 0 L177 0 L140 40 L37 40 Z" fill="var(--primary)" />
+                      <path d="M37 40 L140 40 L120 80 L57 80 Z" fill="var(--chart-2)" />
+                      <path d="M57 80 L120 80 L105 110 L72 110 Z" fill="var(--chart-1)" />
+                      <path d="M72 110 L105 110 L95 139 L82 139 Z" fill="var(--chart-3)" />
+                    </svg>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    <div className="space-y-1">
+                      <div>Conversations Started: 156 (100%)</div>
+                      <div>Products Shown: 432 · 31.2% of convo</div>
+                      <div>Add to Cart: 36 · 8.3%</div>
+                      <div>Orders Created: 18 · 4.2%</div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <div className="col-span-2 flex flex-col justify-between border-l pl-3 text-right text-[10px] font-medium text-muted-foreground">
                 <span>100%</span>

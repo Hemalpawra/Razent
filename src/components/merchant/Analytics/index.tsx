@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Cell } from "recharts"
 import { mockAnalytics } from "@/lib/mock/analytics"
 import { mockOrders } from "@/lib/mock/orders"
@@ -509,20 +510,27 @@ function FunnelCard() {
             const conv = idx === 0 ? 100 : (stage.count / prev) * 100
             const widthPct = (stage.count / max) * 100
             return (
-              <div key={stage.label} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-foreground">{stage.label}</span>
-                  <span className="flex items-center gap-2">
-                    <span className="font-semibold tabular-nums text-foreground">{stage.count}</span>
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-                      {conv.toFixed(1)}%
-                    </span>
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-primary/20">
-                  <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${widthPct}%` }} />
-                </div>
-              </div>
+              <Tooltip key={stage.label}>
+                <TooltipTrigger asChild>
+                  <div className="space-y-1 cursor-default">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-foreground">{stage.label}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-semibold tabular-nums text-foreground">{stage.count}</span>
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                          {conv.toFixed(1)}%
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-primary/20">
+                      <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${widthPct}%` }} />
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {stage.label}: {stage.count} · {conv.toFixed(1)}% conv · {widthPct.toFixed(1)}% of start
+                </TooltipContent>
+              </Tooltip>
             )
           })}
         </div>
