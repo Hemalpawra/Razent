@@ -272,10 +272,10 @@ export default function StoreHome() {
         </div>
       </header>
 
-      {/* Split layout when AI open */}
+      {/* Split layout when AI open — workspace mode: no footer, full-height 2-column */}
       <div className={aiOpen ? "mx-auto grid max-w-6xl grid-cols-1 gap-0 xl:grid-cols-[1fr_380px]" : "mx-auto max-w-6xl"}>
-        {/* LEFT: store */}
-        <div className="min-w-0">
+        {/* LEFT: store — stays visible and usable */}
+        <div className={aiOpen ? "min-w-0 xl:h-[calc(100vh-56px)] xl:overflow-auto" : "min-w-0"}>
           {/* Breadcrumb when listing/detail */}
           {(view === "listing" || view === "detail") && (
             <div className="flex items-center gap-1.5 px-4 py-3 text-xs text-muted-foreground">
@@ -570,8 +570,9 @@ export default function StoreHome() {
             </section>
           )}
 
-          {/* Footer simple */}
-          <footer className="mt-6 border-t bg-card px-4 py-6">
+          {/* Footer — hidden in Ask AI workspace so split stays clean */}
+          {!aiOpen && (
+            <footer className="mt-6 border-t bg-card px-4 py-6">
             <div className="grid gap-6 text-xs md:grid-cols-4">
               <div>
                 <div className="text-sm font-semibold">{storeProfile.storeName}</div>
@@ -605,10 +606,11 @@ export default function StoreHome() {
               </div>
             </div>
             <div className="mt-6 text-center text-[11px] text-muted-foreground">© 2026 {storeProfile.businessName} · Secure payments powered by Razorpay</div>
-          </footer>
+            </footer>
+          )}
         </div>
 
-        {/* RIGHT: AI Assistant full height */}
+        {/* RIGHT: AI Assistant — full-height panel, not a drawer/overlay */}
         {aiOpen && (
           <div className="flex min-h-[520px] flex-col border bg-card xl:sticky xl:top-0 xl:h-[calc(100vh-56px)] xl:border-l xl:border-t-0">
             <div className="flex items-center justify-between border-b px-4 py-3">
