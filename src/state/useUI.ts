@@ -3,6 +3,7 @@ import { create } from "zustand"
 export type Screen =
   | "dashboard"
   | "products"
+  | "product_import"
   | "orders"
   | "analytics"
   | "ai_agent"

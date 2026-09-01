@@ -1,0 +1,4 @@
+product_name,sku,category,price,stock,brand,description,image_url,tags,shipping_note,return_note,warranty_note,ai_visibility,related_products
+Air Purifier Pro,SKU-APRO-001,Home Appliance,18999,42,Razent,HEPA H13 smart air purifier for 450 sq ft,https://example.com/images/apro.jpg,"purifier, hepa, smart",Free delivery 3-5 days,7-day returns,1 year warranty,visible,"SKU-X1-002, SKU-PS3-003"
+CleanAir X1,SKU-X1-002,Home Appliance,14999,8,Razent,Compact purifier for bedroom low noise,https://example.com/images/x1.jpg,"compact, bedroom",Free delivery,7-day returns,1 year warranty,visible,SKU-APRO-001
+PureSense 300,SKU-PS3-003,Home Appliance,22999,0,Razent,Premium purifier with AQI display + app,https://example.com/images/ps300.jpg,"premium, aqi, app",Free delivery,7-day returns,1 year warranty,hidden,

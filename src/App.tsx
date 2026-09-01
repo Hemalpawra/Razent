@@ -9,6 +9,7 @@ import OrdersScreen from "@/components/merchant/Orders"
 import AnalyticsScreen from "@/components/merchant/Analytics"
 import AIAgentScreen from "@/components/merchant/AIAgent"
 import AuditTrailScreen from "@/components/merchant/AuditTrail"
+import ProductImportScreen from "@/components/merchant/ProductImport"
 
 import { EmptyState } from "@/components/shared/EmptyState"
 import { SparklesIcon } from "lucide-react"
@@ -19,6 +20,7 @@ export default function App() {
   const screenMap: Record<typeof activeScreen, React.ReactNode> = {
     dashboard: <DashboardScreen />,
     products: <ProductsScreen />,
+    product_import: <ProductImportScreen />,
     orders: <OrdersScreen />,
     analytics: <AnalyticsScreen />,
     ai_agent: <AIAgentScreen />,

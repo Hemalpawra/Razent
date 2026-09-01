@@ -36,7 +36,7 @@ const navGroups: { label: string; items: { label: string; key: Screen; icon: typ
     items: [
       { label: "Dashboard", key: "dashboard", icon: LayoutDashboard },
       { label: "Products", key: "products", icon: Package },
-      { label: "Product Import", key: "import_placeholder", icon: Upload },
+      { label: "Product Import", key: "product_import", icon: Upload },
     ],
   },
   {

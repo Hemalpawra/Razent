@@ -1,0 +1,49 @@
+{
+  "sheets": [
+    {
+      "name": "Products",
+      "freeze_panes": "A2",
+      "autofilter": "A1:N1",
+      "column_widths": {"A": 22, "B": 16, "C": 16, "D": 14, "E": 12, "F": 14, "G": 28, "H": 32, "I": 22, "J": 16, "K": 22, "L": 22, "M": 14, "N": 22},
+      "rows": [
+        [
+          {"value": "product_name", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "sku", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "category", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "price", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "stock", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "brand", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "description", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "image_url", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "tags", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "shipping_note", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "return_note", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "warranty_note", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "ai_visibility", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"},
+          {"value": "related_products", "bold": true, "fill": "0F172A", "font_color": "FFFFFF", "align": "center"}
+        ],
+        ["Air Purifier Pro", "SKU-APRO-001", "Home Appliance", 18999, 42, "Razent", "HEPA H13 smart air purifier for 450 sq ft", "https://example.com/images/apro.jpg", "purifier, hepa, smart", "Free delivery 3-5 days", "7-day returns", "1 year warranty", "visible", "SKU-X1-002, SKU-PS3-003"],
+        ["CleanAir X1", "SKU-X1-002", "Home Appliance", 14999, 8, "Razent", "Compact purifier for bedroom, low noise", "https://example.com/images/x1.jpg", "compact, bedroom", "Free delivery", "7-day returns", "1 year warranty", "visible", "SKU-APRO-001"],
+        ["PureSense 300", "SKU-PS3-003", "Home Appliance", 22999, 0, "Razent", "Premium purifier with AQI display + app", "https://example.com/images/ps300.jpg", "premium, aqi, app", "Free delivery", "7-day returns", "1 year warranty", "hidden", ""]
+      ],
+      "tables": [
+        {"name": "ProductsTable", "range": "A1:N4", "style": "TableStyleMedium9"}
+      ],
+      "validations": [
+        {"range": "M2:M1000", "type": "list", "formula1": "\"visible,hidden\""}
+      ]
+    },
+    {
+      "name": "Instructions",
+      "column_widths": {"A": 90},
+      "rows": [
+        [{"value": "How to use this template", "bold": true}],
+        [{"value": "1. Fill one row per product. Required: product_name, sku, category, price, stock."}],
+        [{"value": "2. price = number (INR), stock = integer. Keep sku unique."}],
+        [{"value": "3. ai_visibility: visible or hidden. related_products: comma-separated SKUs."}],
+        [{"value": "4. Do not rename headers. Keep autofilter on. Upload XLS/XLSX in Product Import → Excel Import."}],
+        [{"value": "5. Max 5000 rows per file recommended."}]
+      ]
+    }
+  ]
+}
