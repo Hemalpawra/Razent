@@ -50,7 +50,7 @@ const navGroups: { label: string; items: { label: string; key: Screen; icon: typ
   },
   {
     label: "System",
-    items: [{ label: "Settings", key: "settings_placeholder", icon: Settings }],
+    items: [{ label: "Settings", key: "settings", icon: Settings }],
   },
 ]
 

@@ -8,6 +8,7 @@ export type Screen =
   | "analytics"
   | "ai_agent"
   | "audit_trail"
+  | "settings"
   | "ai_agent_placeholder"
   | "import_placeholder"
   | "audit_placeholder"

@@ -10,6 +10,7 @@ import AnalyticsScreen from "@/components/merchant/Analytics"
 import AIAgentScreen from "@/components/merchant/AIAgent"
 import AuditTrailScreen from "@/components/merchant/AuditTrail"
 import ProductImportScreen from "@/components/merchant/ProductImport"
+import SettingsScreen from "@/components/merchant/Settings"
 
 import { EmptyState } from "@/components/shared/EmptyState"
 import { SparklesIcon } from "lucide-react"
@@ -25,6 +26,7 @@ export default function App() {
     analytics: <AnalyticsScreen />,
     ai_agent: <AIAgentScreen />,
     audit_trail: <AuditTrailScreen />,
+    settings: <SettingsScreen />,
     ai_agent_placeholder: (
       <EmptyState
         title="AI Agent"
