@@ -31,6 +31,7 @@ import {
 import { listProducts, deleteProduct } from "@/lib/api/client"
 import { formatPrice } from "@/lib/types/product"
 import type { Product, ProductStatus } from "@/lib/types/product"
+import ProductDrawer from "./ProductDrawer"
 
 function getSku(p: Product): string {
   const any = p as unknown as Record<string, string>
@@ -47,6 +48,8 @@ export default function ProductsScreen() {
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [selected, setSelected] = useState<Product | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -221,7 +224,14 @@ export default function ProductsScreen() {
               </TableRow>
             ) : (
               paged.map((p) => (
-                <TableRow key={p.id} className="hover:bg-muted/30">
+                <TableRow
+                  key={p.id}
+                  className="hover:bg-muted/30 cursor-pointer"
+                  onClick={() => {
+                    setSelected(p)
+                    setDrawerOpen(true)
+                  }}
+                >
                   <TableCell className="px-3">
                     <input type="checkbox" className="size-4 rounded border-input" aria-label={`select ${p.title}`} />
                   </TableCell>
@@ -294,20 +304,37 @@ export default function ProductsScreen() {
                         variant="outline"
                         size="icon-sm"
                         className="rounded-md"
-                        onClick={() => alert(`Edit ${p.title}`)}
-                        aria-label={`Edit ${p.title}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelected(p)
+                          setDrawerOpen(true)
+                        }}
+                        aria-label={`View ${p.title}`}
                       >
                         <Pencil className="size-3.5" />
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger
-                          render={<Button variant="outline" size="icon-sm" className="rounded-md" aria-label={`Actions for ${p.title}`} />}
+                          render={
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              className="rounded-md"
+                              aria-label={`Actions for ${p.title}`}
+                              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                            />
+                          }
                         >
                           <MoreHorizontal className="size-3.5" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-36">
-                          <DropdownMenuItem onClick={() => alert(`Edit ${p.title}`)}>
-                            <Pencil className="size-3.5" /> Edit
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelected(p)
+                              setDrawerOpen(true)
+                            }}
+                          >
+                            <Pencil className="size-3.5" /> View details
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             variant="destructive"
@@ -376,6 +403,8 @@ export default function ProductsScreen() {
           </div>
         </div>
       </Card>
+
+      <ProductDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} product={selected} />
     </div>
   )
 }
