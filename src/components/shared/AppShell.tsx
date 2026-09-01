@@ -12,6 +12,7 @@ import {
   Shield,
 } from "lucide-react"
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
+import StoreHome from "@/components/customer/StoreHome"
 import { useUI, type Screen } from "@/state/useUI"
 import {
   Sidebar,
@@ -157,14 +158,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
           {role === "store" ? (
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="rounded-xl border border-dashed bg-card p-12 text-center">
-                <Store className="mx-auto size-8 text-muted-foreground" />
-                <h3 className="mt-3 font-heading text-lg font-medium text-foreground">Store preview</h3>
-                <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                  Customer storefront (Store home, Product detail, Cart, Delivery, Razorpay Checkout, Invoice + Tracking) will live here. Switch back to <span className="font-medium text-foreground">Merchant</span> to manage the dashboard.
-                </p>
-              </div>
+            <div className="-m-4 md:-m-6">
+              <StoreHome />
             </div>
           ) : (
             <div className="mx-auto w-full max-w-6xl">{children}</div>
