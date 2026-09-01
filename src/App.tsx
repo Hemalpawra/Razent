@@ -7,6 +7,7 @@ import DashboardScreen from "@/components/merchant/Dashboard"
 import ProductsScreen from "@/components/merchant/Products"
 import OrdersScreen from "@/components/merchant/Orders"
 import AnalyticsScreen from "@/components/merchant/Analytics"
+import AIAgentScreen from "@/components/merchant/AIAgent"
 
 import { EmptyState } from "@/components/shared/EmptyState"
 import { SparklesIcon } from "lucide-react"
@@ -19,6 +20,7 @@ export default function App() {
     products: <ProductsScreen />,
     orders: <OrdersScreen />,
     analytics: <AnalyticsScreen />,
+    ai_agent: <AIAgentScreen />,
     ai_agent_placeholder: (
       <EmptyState
         title="AI Agent"
