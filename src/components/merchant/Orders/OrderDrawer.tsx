@@ -85,7 +85,7 @@ export default function OrderDrawer({ open, onClose, order }: OrderDrawerProps) 
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         showCloseButton={false}
-        className="w-[420px] max-w-[92vw] overflow-y-auto p-0"
+        className="w-[560px] max-w-[96vw] overflow-y-auto p-0"
       >
         {/* Header: Order Details + X */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-border/60 sticky top-0 bg-popover z-10">
