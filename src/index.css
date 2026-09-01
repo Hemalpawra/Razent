@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/public-sans";
@@ -121,6 +121,79 @@ body,
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+@font-face {
+  font-family: 'Inter:Regular';
+  src: url('https://static.figma.com/font/Inter_1') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Inter:Medium';
+  src: url('https://static.figma.com/font/Inter_1') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Inter:Semi_Bold';
+  src: url('https://static.figma.com/font/Inter_1') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Inter:Bold';
+  src: url('https://static.figma.com/font/Inter_1') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Poppins:SemiBold';
+  src: url('https://static.figma.com/font/Poppins-SemiBold_6') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'TASA_Orbiter_Display:SemiBold';
+  src: url('https://static.figma.com/font/TASAOrbiter_wght__1') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'TASA_Orbiter:SemiBold';
+  src: url('https://static.figma.com/font/TASAOrbiter_wght__1') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Hanken_Grotesk:Regular';
+  src: url('https://static.figma.com/font/HankenGrotesk_wght__1') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Hanken_Grotesk:SemiBold';
+  src: url('https://static.figma.com/font/HankenGrotesk_wght__1') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Hanken_Grotesk:Bold';
+  src: url('https://static.figma.com/font/HankenGrotesk_wght__1') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Arial:Regular';
+  src: local('Arial'), local('ArialMT');
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Arial:Bold';
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  font-weight: 700;
+  font-style: normal;
 }
 
 @layer base {
