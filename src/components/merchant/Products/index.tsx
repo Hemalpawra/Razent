@@ -4,7 +4,7 @@ import {
   SlidersHorizontal,
   Download,
   Plus,
-  Pencil,
+  Eye,
   Trash2,
   ChevronLeft,
   ChevronRight,
@@ -36,7 +36,6 @@ import ProductDrawer from "./ProductDrawer"
 function getSku(p: Product): string {
   const any = p as unknown as Record<string, string>
   if (any.sku) return any.sku
-  // deterministic SKU from id: SKU-XXXXXX
   const raw = p.id.replace(/^prod_/, "").slice(0, 6).toUpperCase().padEnd(4, "0")
   return `SKU-${raw}`
 }
@@ -101,28 +100,19 @@ export default function ProductsScreen() {
     return { total, active, low, out, draft }
   }, [products])
 
+  function openDrawer(p: Product) {
+    setSelected(p)
+    setDrawerOpen(true)
+  }
+
   return (
-    <div className="space-y-4 bg-muted/30 -m-6 p-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
-            Products
-          </h1>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Manage your product catalog, inventory and visibility.
-          </p>
-        </div>
-        <div className="hidden items-center gap-3 lg:flex">
-          <div className="flex size-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-            MS
-          </div>
-          <div className="leading-none">
-            <div className="text-xs font-bold text-foreground">Merchant Store</div>
-            <div className="text-[11px] text-muted-foreground">Super Admin</div>
-          </div>
-          <span className="text-xs text-muted-foreground">⌄</span>
-        </div>
+    <div className="space-y-3">
+      {/* Header — simplified, no avatar block, no date */}
+      <div className="flex flex-col gap-1">
+        <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
+          Products
+        </h1>
+        <p className="text-sm leading-6 text-muted-foreground">Manage your product catalog, inventory and visibility.</p>
       </div>
 
       {/* KPI strip — 5 cards */}
@@ -134,12 +124,12 @@ export default function ProductsScreen() {
         <KpiCard icon={<FileText className="size-4" />} label="Draft Products" value={String(kpi.draft)} sub="Not Published yet" />
       </div>
 
-      {/* Table card — wraps toolbar + status pills + table + footer */}
-      <Card className="rounded-xl bg-card overflow-hidden p-0 shadow-sm">
-        {/* Toolbar */}
-        <div className="flex flex-col gap-3 border-b bg-card p-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-1 items-center gap-2">
-            <div className="relative w-full max-w-[285px]">
+      {/* Table card — full width, no side gutters */}
+      <Card className="overflow-hidden rounded-xl bg-card p-0 shadow-sm">
+        {/* Toolbar — left: search + filters + refresh + more, right: Export + Add Product, flex-wrap gap-2 */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-card p-3">
+          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
+            <div className="relative w-full max-w-[285px] min-w-[180px] flex-1 sm:flex-none">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search products, categories, tags..."
@@ -152,14 +142,14 @@ export default function ProductsScreen() {
               <SlidersHorizontal className="size-3.5" />
               More Filters
             </Button>
-            <Button variant="outline" size="icon" className="size-9 rounded-md" aria-label="Refresh" onClick={() => window.location.reload()}>
+            <Button variant="outline" size="icon" className="size-9 rounded-md shrink-0" aria-label="Refresh" onClick={() => window.location.reload()}>
               <RotateCw className="size-4" />
             </Button>
-            <Button variant="outline" size="icon" className="size-9 rounded-md" aria-label="More options">
+            <Button variant="outline" size="icon" className="size-9 rounded-md shrink-0" aria-label="More options">
               <MoreHorizontal className="size-4" />
             </Button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button variant="outline" className="h-9 rounded-md border-primary text-primary hover:bg-primary/5 hover:text-primary">
               <Download className="size-4" />
               Export
@@ -172,7 +162,7 @@ export default function ProductsScreen() {
         </div>
 
         {/* Status filter pills */}
-        <div className="flex items-center gap-1.5 border-b bg-card px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1.5 border-b bg-card px-3 py-2">
           <span className="mr-1 text-[11px] font-medium text-muted-foreground">Status:</span>
           {(["all", "active", "draft", "archived"] as const).map((s) => (
             <button
@@ -192,168 +182,151 @@ export default function ProductsScreen() {
           <span className="ml-auto text-xs text-muted-foreground">{filtered.length} products</span>
         </div>
 
-        {/* Table */}
-        <Table>
-          <TableHeader className="bg-muted/40">
-            <TableRow className="hover:bg-muted/40">
-              <TableHead className="w-[48px] px-3">
-                <input type="checkbox" className="size-4 rounded border-input" aria-label="select all" />
-              </TableHead>
-              <TableHead className="text-xs font-semibold text-foreground">Product</TableHead>
-              <TableHead className="text-xs font-semibold text-foreground">SKU</TableHead>
-              <TableHead className="text-xs font-semibold text-foreground">Category</TableHead>
-              <TableHead className="text-right text-xs font-semibold text-foreground">Price</TableHead>
-              <TableHead className="text-center text-xs font-semibold text-foreground">Stock</TableHead>
-              <TableHead className="text-xs font-semibold text-foreground">Status</TableHead>
-              <TableHead className="hidden lg:table-cell text-xs font-semibold text-foreground">Last updated</TableHead>
-              <TableHead className="text-right text-xs font-semibold text-foreground">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="py-16 text-center text-sm text-muted-foreground">
-                  Loading products...
-                </TableCell>
+        {/* Table — full width, horizontal scroll with min-w, sticky header, tight cells */}
+        <div className="overflow-x-auto">
+          <Table className="min-w-[900px]">
+            <TableHeader className="sticky top-0 z-10 bg-muted/40">
+              <TableRow className="hover:bg-muted/40">
+                <TableHead className="w-[40px] px-2.5 py-2">
+                  <input type="checkbox" className="size-4 rounded border-input" aria-label="select all" onClick={(e) => e.stopPropagation()} />
+                </TableHead>
+                <TableHead className="px-2.5 py-2 text-xs font-semibold text-foreground">Product</TableHead>
+                <TableHead className="px-2.5 py-2 text-xs font-semibold text-foreground">SKU</TableHead>
+                <TableHead className="px-2.5 py-2 text-xs font-semibold text-foreground">Category</TableHead>
+                <TableHead className="px-2.5 py-2 text-right text-xs font-semibold text-foreground">Price</TableHead>
+                <TableHead className="px-2.5 py-2 text-center text-xs font-semibold text-foreground">Stock</TableHead>
+                <TableHead className="px-2.5 py-2 text-xs font-semibold text-foreground">Status</TableHead>
+                <TableHead className="px-2.5 py-2 text-right text-xs font-semibold text-foreground">Actions</TableHead>
               </TableRow>
-            ) : paged.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="py-16 text-center text-sm text-muted-foreground">
-                  No products match this filter.
-                </TableCell>
-              </TableRow>
-            ) : (
-              paged.map((p) => (
-                <TableRow
-                  key={p.id}
-                  className="hover:bg-muted/30 cursor-pointer"
-                  onClick={() => {
-                    setSelected(p)
-                    setDrawerOpen(true)
-                  }}
-                >
-                  <TableCell className="px-3">
-                    <input type="checkbox" className="size-4 rounded border-input" aria-label={`select ${p.title}`} />
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={p.image_url}
-                        alt={p.title}
-                        className="size-9 shrink-0 rounded-md object-cover ring-1 ring-border/50"
-                        loading="lazy"
-                      />
-                      <div className="min-w-0 max-w-[220px]">
-                        <div className="truncate text-sm font-medium text-foreground">{p.title}</div>
-                        <div className="truncate text-xs text-muted-foreground">{p.description.slice(0, 48)}…</div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3">
-                    <span className="font-mono text-xs font-medium tracking-tight text-muted-foreground">{getSku(p)}</span>
-                  </TableCell>
-                  <TableCell className="px-3 text-xs text-muted-foreground">{p.category}</TableCell>
-                  <TableCell className="px-3 text-right text-sm font-semibold tabular-nums text-foreground">
-                    {formatPrice(p.price_paise)}
-                  </TableCell>
-                  <TableCell className="px-3 text-center">
-                    <span
-                      className={
-                        "text-sm font-semibold tabular-nums " +
-                        (p.stock === 0
-                          ? "text-destructive"
-                          : p.stock <= 10
-                            ? "text-amber-600 dark:text-amber-400"
-                            : "text-emerald-600 dark:text-emerald-400")
-                      }
-                    >
-                      {p.stock}
-                    </span>
-                    <span
-                      className={
-                        "ml-1 text-xs " +
-                        (p.stock === 0
-                          ? "text-destructive"
-                          : p.stock <= 10
-                            ? "text-amber-600/80"
-                            : "text-muted-foreground")
-                      }
-                    >
-                      {p.stock === 0 ? "out" : p.stock <= 10 ? "low stock" : "in stock"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-3">
-                    <Badge
-                      variant={p.status === "active" ? "success" : p.status === "draft" ? "warning" : "secondary"}
-                      className="rounded-full px-2.5 py-0 text-xs capitalize"
-                    >
-                      {p.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell px-3 text-xs text-muted-foreground">
-                    <div className="leading-tight text-foreground">
-                      {new Date(p.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {new Date(p.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className="rounded-md"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelected(p)
-                          setDrawerOpen(true)
-                        }}
-                        aria-label={`View ${p.title}`}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button
-                              variant="outline"
-                              size="icon-sm"
-                              className="rounded-md"
-                              aria-label={`Actions for ${p.title}`}
-                              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                            />
-                          }
-                        >
-                          <MoreHorizontal className="size-3.5" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-36">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelected(p)
-                              setDrawerOpen(true)
-                            }}
-                          >
-                            <Pencil className="size-3.5" /> View details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onClick={async () => {
-                              await deleteProduct(p.id)
-                              setProducts((prev) => prev.filter((x) => x.id !== p.id))
-                            }}
-                          >
-                            <Trash2 className="size-3.5" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+            </TableHeader>
+            <TableBody>
+              {loading && filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-16 text-center text-sm text-muted-foreground">
+                    Loading products...
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : paged.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-16 text-center text-sm text-muted-foreground">
+                    No products match this filter.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paged.map((p) => (
+                  <TableRow
+                    key={p.id}
+                    className="cursor-pointer hover:bg-muted/30 even:bg-muted/10"
+                    onClick={() => openDrawer(p)}
+                  >
+                    <TableCell className="px-2.5 py-2" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" className="size-4 rounded border-input" aria-label={`select ${p.title}`} onClick={(e) => e.stopPropagation()} />
+                    </TableCell>
+                    <TableCell className="px-2.5 py-2">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={p.image_url}
+                          alt={p.title}
+                          className="size-9 shrink-0 rounded-md object-cover ring-1 ring-border/50"
+                          loading="lazy"
+                        />
+                        <div className="min-w-0 max-w-[240px]">
+                          <div className="truncate text-sm font-medium text-foreground">{p.title}</div>
+                          <div className="truncate text-xs text-muted-foreground">{p.description.slice(0, 48)}…</div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-2.5 py-2">
+                      <span className="font-mono text-xs font-medium tracking-tight text-muted-foreground">{getSku(p)}</span>
+                    </TableCell>
+                    <TableCell className="px-2.5 py-2 text-xs text-muted-foreground">{p.category}</TableCell>
+                    <TableCell className="px-2.5 py-2 text-right text-sm font-semibold tabular-nums text-foreground">
+                      {formatPrice(p.price_paise)}
+                    </TableCell>
+                    <TableCell className="px-2.5 py-2 text-center">
+                      <span
+                        className={
+                          "text-sm font-semibold tabular-nums " +
+                          (p.stock === 0
+                            ? "text-destructive"
+                            : p.stock <= 10
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-emerald-600 dark:text-emerald-400")
+                        }
+                      >
+                        {p.stock}
+                      </span>
+                      <span
+                        className={
+                          "ml-1 text-xs " +
+                          (p.stock === 0 ? "text-destructive" : p.stock <= 10 ? "text-amber-600/80" : "text-muted-foreground")
+                        }
+                      >
+                        {p.stock === 0 ? "out" : p.stock <= 10 ? "low" : "in stock"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-2.5 py-2">
+                      <Badge
+                        variant={p.status === "active" ? "success" : p.status === "draft" ? "warning" : "secondary"}
+                        className="rounded-full px-2.5 py-0 text-xs capitalize"
+                      >
+                        {p.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-2.5 py-2 text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          className="rounded-md"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openDrawer(p)
+                          }}
+                          aria-label={`View ${p.title}`}
+                        >
+                          <Eye className="size-3.5" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                variant="outline"
+                                size="icon-sm"
+                                className="rounded-md"
+                                aria-label={`Actions for ${p.title}`}
+                                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                              />
+                            }
+                          >
+                            <MoreHorizontal className="size-3.5" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-36">
+                            <DropdownMenuItem
+                              onClick={() => openDrawer(p)}
+                            >
+                              <Eye className="size-3.5" /> View details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                await deleteProduct(p.id)
+                                setProducts((prev) => prev.filter((x) => x.id !== p.id))
+                              }}
+                            >
+                              <Trash2 className="size-3.5" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
 
         {/* Footer: Showing + Select rows per page + pagination */}
         <div className="flex flex-col gap-3 border-t bg-card px-3 py-3 sm:flex-row sm:items-center sm:justify-between">

@@ -29,7 +29,7 @@ export default function ConversationDrawer({ open, onClose, conversation }: { op
   const titleName = "ChatGPT Assistant"
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-[560px] max-w-[96vw] overflow-hidden p-0 flex flex-col">
+      <SheetContent className="w-[560px] max-w-[96vw] overflow-hidden p-0 flex flex-col md:hidden">
         {/* Header — same shell in every state */}
         <div className="shrink-0 border-b bg-card px-5 py-4">
           <div className="flex items-center justify-between">

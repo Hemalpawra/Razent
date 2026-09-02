@@ -300,7 +300,7 @@ export default function ProductImportScreen() {
   const summary = { total: 18, valid: 14, failed: 4, dup: 2 }
 
   return (
-    <div className="space-y-4 bg-muted/30 -m-6 p-6">
+    <div className="space-y-3">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">Product Import</h1>
@@ -309,11 +309,7 @@ export default function ProductImportScreen() {
         <div className="flex items-center gap-2">
           <Button variant="outline" className="h-9 rounded-lg bg-card" asChild><a href="/product-import-template.csv" download><Download className="size-4" /> CSV template</a></Button>
           <Button variant="outline" className="h-9 rounded-lg bg-card" asChild><a href="/product-import-template.xlsx" download><FileSpreadsheet className="size-4" /> Excel template</a></Button>
-          <Button variant="outline" className="h-9 rounded-lg bg-card"><History className="size-4" /> Import history</Button>
-          <div className="hidden items-center gap-3 pl-2 lg:flex">
-            <div className="flex size-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">MS</div>
-            <div className="leading-none"><div className="text-xs font-bold text-foreground">Merchant Store</div><div className="text-[11px] text-muted-foreground">Super Admin</div></div>
-          </div>
+          <Button variant="outline" className="h-9 rounded-lg bg-card" onClick={() => alert("Import history — dummy: last 3 imports show 14/18 valid")}><History className="size-4" /> Import history</Button>
         </div>
       </div>
 
@@ -330,6 +326,7 @@ export default function ProductImportScreen() {
           <TabsTrigger value="excel" className="rounded-md text-xs"><FileSpreadsheet className="size-3.5" /> Excel Import</TabsTrigger>
           <TabsTrigger value="manual" className="rounded-md text-xs"><Package className="size-3.5" /> Manual Add</TabsTrigger>
         </TabsList>
+        <Separator className="mt-3" />
 
         <TabsContent value="csv" className="mt-4">
           <ImportWorkspace accept=".csv" label="Drop CSV here or choose file" hint="Supported: .csv • Max 10MB • UTF-8" templateHref="/product-import-template.csv" templateLabel="Download CSV template" />
@@ -390,11 +387,19 @@ export default function ProductImportScreen() {
               </Card>
 
               <Card className="rounded-xl bg-card">
-                <CardHeader className="pb-3"><CardTitle className="text-sm">Media</CardTitle></CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-sm">Media</CardTitle><CardDescription className="text-xs">Upload image file or paste URL — preview updates live</CardDescription></CardHeader>
                 <CardContent className="space-y-3">
-                  <div><Label className="text-xs">Main image URL</Label><Input value={manual.image_url} onChange={e=>setManual({...manual, image_url:e.target.value})} placeholder="https://…" className="h-9 text-sm" /></div>
+                  <div>
+                    <Label className="text-xs">Upload main image</Label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Input type="file" accept="image/*" className="h-9 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1 file:text-xs file:font-medium file:text-primary-foreground" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setManual((m) => ({ ...m, image_url: String(r.result) })); r.readAsDataURL(f); }} />
+                      <Badge variant="secondary" className="rounded-full text-[11px] shrink-0">{manual.image_url ? "Ready" : "No file"}</Badge>
+                    </div>
+                  </div>
+                  <div><Label className="text-xs">Or image URL</Label><Input value={manual.image_url.startsWith("data:") ? "" : manual.image_url} onChange={e=>setManual({...manual, image_url:e.target.value})} placeholder="https://…" className="h-9 text-sm" /></div>
                   <div><Label className="text-xs">Gallery URLs (comma separated)</Label><Input value={manual.gallery} onChange={e=>setManual({...manual, gallery:e.target.value})} placeholder="https://… , https://…" className="h-9 text-sm" /></div>
-                  {manual.image_url ? <img src={manual.image_url} alt="preview" className="h-32 w-full rounded-lg object-cover border" onError={e=>((e.target as HTMLImageElement).style.display='none')} /> : <div className="flex h-24 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">Thumbnail preview</div>}
+                  {manual.image_url ? <img src={manual.image_url} alt="preview" className="h-32 w-full rounded-lg object-cover border" onError={e=>((e.target as HTMLImageElement).style.display='none')} /> : <div className="flex h-24 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">Thumbnail preview — upload or paste URL</div>}
+                  {manual.gallery ? <div className="grid grid-cols-4 gap-2">{manual.gallery.split(",").map(s=>s.trim()).filter(Boolean).slice(0,4).map((url,i)=><img key={i} src={url} alt="" className="h-16 w-full rounded-md object-cover border" onError={e=>((e.target as HTMLImageElement).style.display='none')} />)}</div> : null}
                 </CardContent>
               </Card>
 

@@ -1,3 +1,4 @@
+import { useState } from "react"
 import {
   IndianRupee,
   ShoppingCart,
@@ -34,10 +35,27 @@ const chartConfig = {
   revenue: { label: "Revenue", color: "var(--chart-2)" },
 }
 
+const dateRanges = ["May 20 - May 27", "May 13 - May 19", "Last 7 days", "Last 30 days"] as const
+
 export default function DashboardScreen() {
+  const [rangeIdx, setRangeIdx] = useState(0)
+
+  const handleExport = () => {
+    const csv = ["Revenue,Orders", "124560,18", "110000,15", "88000,12"].join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "dashboard-export.csv"
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
   return (
-    <div className="space-y-4 bg-muted/30 -m-6 p-6">
-      {/* Header — Figma Header: Dashboard title + subtitle left, controls right */}
+    <div className="space-y-3">
+      {/* Header — Dashboard title + subtitle left, controls right */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
@@ -48,29 +66,23 @@ export default function DashboardScreen() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="h-9 rounded-lg bg-card">
-            May 20, 2025 - May 27, 2025
+          <Button
+            variant="outline"
+            className="h-9 rounded-lg bg-card"
+            onClick={() => setRangeIdx((i) => (i + 1) % dateRanges.length)}
+          >
+            {dateRanges[rangeIdx]}
             <ChevronDown className="size-4 opacity-60" />
           </Button>
-          <Button variant="outline" className="h-9 rounded-lg bg-card">
+          <Button variant="outline" className="h-9 rounded-lg bg-card" onClick={handleExport}>
             <Download className="size-4" />
             Export
           </Button>
-          <div className="hidden items-center gap-3 pl-2 lg:flex">
-            <div className="flex size-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              MS
-            </div>
-            <div className="leading-none">
-              <div className="text-xs font-bold text-foreground">Merchant Store</div>
-              <div className="text-[11px] text-muted-foreground">Super Admin</div>
-            </div>
-            <span className="text-xs text-muted-foreground">⌄</span>
-          </div>
         </div>
       </div>
 
-      {/* KPI strip — 5 cards — Figma Container12 */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {/* KPI strip — 5 cards — tighter gap + padding */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard icon={<IndianRupee className="size-4" />} label="Revenue Generated" value="₹1,000.00" delta="↑ 18.6% vs May 13 - May 19" />
         <KpiCard icon={<ShoppingCart className="size-4" />} label="Orders Created" value="256" delta="↑ 16.2% vs May 13 - May 19" />
         <KpiCard icon={<Bot className="size-4" />} label="AI Conversion Rate" value="24.5%" delta="↑ 5.3% vs May 13 - May 19" />
@@ -78,16 +90,16 @@ export default function DashboardScreen() {
         <KpiCard icon={<Wallet className="size-4" />} label="Avg. Order Value" value="₹3,419" delta="↑ 2.7% vs May 13 - May 19" />
       </div>
 
-      {/* Main grid: left 2 cols (Overview + AI Performance), right 1 col (Needs Attention + Recent Activity) — Figma Container31 */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Left column — 2/3 — Figma Container32 */}
-        <div className="space-y-4 lg:col-span-2">
+      {/* Main grid: left (Overview + AI Performance), right (Needs Attention + Recent Activity) — tighter + closer side cards */}
+      <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
+        {/* Left column — Overview + AI Performance */}
+        <div className="space-y-3">
           <OverviewCard />
           <AiPerformanceCard />
         </div>
 
-        {/* Right column — 1/3 — Figma Container87 */}
-        <div className="space-y-4">
+        {/* Right column — Needs Attention + Recent Activity */}
+        <div className="space-y-3">
           <NeedsAttentionCard />
           <RecentActivityCard />
         </div>
@@ -109,7 +121,7 @@ function KpiCard({
 }) {
   const [up, rest] = delta.split(" vs ")
   return (
-    <Card className="rounded-xl bg-card p-5 shadow-sm">
+    <Card className="rounded-xl bg-card p-4 shadow-sm">
       <div className="flex gap-3">
         <div className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary sm:flex">
           {icon}
@@ -137,12 +149,12 @@ function OverviewCard() {
           <ChevronDown className="size-4" />
         </Button>
       </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-[1.55fr_1fr]">
+      <CardContent className="grid gap-3 lg:grid-cols-[1.55fr_1fr]">
         {/* Sales Overview chart — shadcn Chart + Recharts */}
         <div>
           <div className="text-sm font-semibold text-foreground">Sales Overview</div>
           <CardDescription className="text-xs">Revenue generated from AI assisted orders</CardDescription>
-          <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full">
+          <ChartContainer config={chartConfig} className="mt-4 h-[200px] w-full">
             <AreaChart data={revenueData} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
               <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} dy={8} />

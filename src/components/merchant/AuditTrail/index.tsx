@@ -61,7 +61,7 @@ export default function AuditTrailScreen() {
   }
 
   return (
-    <div className="space-y-4 bg-muted/30 -m-6 p-6">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
@@ -88,7 +88,7 @@ export default function AuditTrailScreen() {
       </div>
 
       {/* KPI 5 cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Kpi label="Total Sessions" value={String(totalSessions)} sub="All sessions" />
         <Kpi label="Total Events" value={String(totalEvents)} sub="Logged events" />
         <Kpi label="Success Events" value={String(success)} sub="Completed successfully" tone="success" />

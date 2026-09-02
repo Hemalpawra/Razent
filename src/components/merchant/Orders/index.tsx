@@ -156,7 +156,7 @@ export default function OrdersScreen() {
   }, [])
 
   return (
-    <div className="space-y-4 bg-muted/30 -m-6 p-6">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
@@ -190,7 +190,7 @@ export default function OrdersScreen() {
       </div>
 
       {/* KPI row — 5 cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard icon={<ShoppingCart className="size-4" />} label="Total Orders" value={String(kpis.total)} sub="All time Orders" />
         <KpiCard
           icon={<ShoppingCart className="size-4" />}

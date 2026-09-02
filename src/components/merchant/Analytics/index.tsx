@@ -132,7 +132,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
 
   if (loading) {
     return (
-      <div className="space-y-4 bg-muted/30 -m-6 p-6">
+      <div className="space-y-3">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <Skeleton className="h-8 w-40" />
@@ -143,7 +143,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
             <Skeleton className="h-9 w-24 rounded-xl" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <Card key={i} className="rounded-xl bg-card p-5">
               <Skeleton className="h-11 w-11 rounded-xl" />
@@ -152,7 +152,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
             </Card>
           ))}
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
           <Card className="rounded-xl bg-card lg:col-span-2">
             <CardHeader>
               <Skeleton className="h-5 w-32" />
@@ -171,7 +171,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
             </CardContent>
           </Card>
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
           <Card className="rounded-xl bg-card">
             <CardContent className="p-6">
               <Skeleton className="h-[220px] w-full rounded-full" />
@@ -188,7 +188,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
   }
 
   return (
-    <div className="space-y-4 bg-muted/30 -m-6 p-6">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
@@ -216,7 +216,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
       </div>
 
       {/* KPI strip — 5 cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard icon={<IndianRupee className="size-4" />} label="Revenue Generated" value={formatPrice(totalRevenuePaise)} delta="↑ 18.6% vs May 13 - May 19" />
         <KpiCard icon={<ShoppingCart className="size-4" />} label="Orders Created" value={String(totalOrders || 256)} delta="↑ 16.2% vs May 13 - May 19" />
         <KpiCard icon={<Bot className="size-4" />} label="AI Conversion Rate" value={`${a.conversion_rate_pct}%`} delta="↑ 5.3% vs May 13 - May 19" />
@@ -230,7 +230,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
       </div>
 
       {/* Row 2: Revenue Over Time (col-span-2) + Orders by Source donut */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
         <Card className="rounded-xl bg-card lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div>
@@ -269,7 +269,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
       </div>
 
       {/* Row 3: Revenue by Source donut + Funnel (col-span-2) */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
         <DonutCard
           title="Revenue by Source"
           description="Revenue share by origin"
@@ -282,7 +282,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
       </div>
 
       {/* Row 4: Top Products (col-span-2) + Conversation bar */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
         <Card className="rounded-xl bg-card lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-foreground">Top Performing Products</CardTitle>
@@ -354,7 +354,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
       </div>
 
       {/* Row 5: AI Overview + Insights */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
         <Card className="rounded-xl bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-foreground">AI Conversation Overview</CardTitle>

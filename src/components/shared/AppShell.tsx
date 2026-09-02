@@ -61,10 +61,43 @@ export function AppShell({ children }: { children: ReactNode }) {
   const role = useUI((s) => s.role)
   const setRole = useUI((s) => s.setRole)
 
+  // Store view — full width, no merchant sidebar chrome
+  if (role === "store") {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="flex items-center gap-2 border-b bg-card px-4 py-2">
+          <div className="inline-flex rounded-lg border bg-muted p-1">
+            <button
+              type="button"
+              onClick={() => setRole("merchant")}
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <Store className="size-3.5" />
+              Merchant
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole("store")}
+              className="inline-flex items-center gap-1.5 rounded-md bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm"
+            >
+              <ShoppingCart className="size-3.5" />
+              Store
+            </button>
+          </div>
+          <span className="hidden text-xs text-muted-foreground lg:inline">Customer storefront — full width</span>
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
+          </div>
+        </div>
+        <StoreHome />
+      </div>
+    )
+  }
+
   return (
-    <SidebarProvider>
+    <SidebarProvider style={{ ["--sidebar-width" as string]: "14.5rem" }}>
       <Sidebar variant="sidebar" collapsible="offcanvas" className="border-sidebar-border">
-        <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
+        <SidebarHeader className="border-b border-sidebar-border px-3 py-3">
           <div className="flex items-center gap-2 px-1">
             <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Shield className="size-4" />
@@ -73,6 +106,31 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="text-sm font-semibold text-sidebar-foreground">Razent</div>
               <div className="text-[11px] text-muted-foreground">Merchant AI Gateway</div>
             </div>
+          </div>
+          {/* Merchant / Store switch — now in sidebar, slim fixed */}
+          <div className="mt-3 inline-flex w-full rounded-lg border bg-muted p-1">
+            <button
+              type="button"
+              onClick={() => setRole("merchant")}
+              className={
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
+                (role === "merchant" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
+              }
+            >
+              <Store className="size-3.5" />
+              Merchant
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole("store")}
+              className={
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
+                (role === "store" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
+              }
+            >
+              <ShoppingCart className="size-3.5" />
+              Store
+            </button>
           </div>
         </SidebarHeader>
 
@@ -84,11 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <SidebarMenu>
                   {group.items.map(({ label, key, icon: Icon }) => (
                     <SidebarMenuItem key={key}>
-                      <SidebarMenuButton
-                        isActive={activeScreen === key}
-                        onClick={() => setScreen(key)}
-                        tooltip={label}
-                      >
+                      <SidebarMenuButton isActive={activeScreen === key} onClick={() => setScreen(key)} tooltip={label}>
                         <Icon />
                         <span>{label}</span>
                       </SidebarMenuButton>
@@ -114,60 +168,22 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Sidebar>
 
       <SidebarInset>
-        {/* Top bar — Merchant / Store switch + actions */}
-        <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        {/* Top bar — simple per-page: trigger + theme only. No floating role switch */}
+        <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="h-6" />
-
-          {/* Merchant / Store toggle — replaces previous nav */}
-          <div className="inline-flex rounded-lg border bg-muted p-1">
-            <button
-              type="button"
-              onClick={() => setRole("merchant")}
-              className={
-                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors " +
-                (role === "merchant" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
-              }
-            >
-              <Store className="size-3.5" />
-              Merchant
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole("store")}
-              className={
-                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors " +
-                (role === "store" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
-              }
-            >
-              <ShoppingCart className="size-3.5" />
-              Store
-            </button>
-          </div>
-
-          {role === "store" && (
-            <span className="hidden text-xs text-muted-foreground lg:inline">
-              Customer view — Store home · Product · Cart · Checkout
-            </span>
-          )}
-
+          <span className="text-sm font-medium text-foreground capitalize">{String(activeScreen).replace(/_/g, " ")}</span>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-          {role === "store" ? (
-            <div className="-m-4 md:-m-6">
-              <StoreHome />
-            </div>
-          ) : (
-            <div className="mx-auto w-full max-w-6xl">{children}</div>
-          )}
+        <div className="flex flex-1 flex-col p-3 md:p-4">
+          <div className="mx-auto w-full max-w-[1360px]">{children}</div>
         </div>
 
-        <footer className="border-t bg-background/40 py-4 text-center text-xs text-muted-foreground">
-          <div className="flex flex-col items-center justify-between gap-2 px-4 md:flex-row">
+        <footer className="border-t bg-background/40 py-3 text-center text-xs text-muted-foreground">
+          <div className="mx-auto flex max-w-[1360px] flex-col items-center justify-between gap-2 px-4 md:flex-row">
             <p>© 2026 Merchant AI Gateway — shadcn base-mira · Figma 1920WLight.</p>
             <p className="font-mono text-[11px]">C:\Users\hemal\Ragent</p>
           </div>
