@@ -132,6 +132,9 @@ export default function StoreHome() {
   const [error, setError] = useState<string | null>(null)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [failedOrderId, setFailedOrderId] = useState<string | null>(null)
+  const [lastPaymentId, setLastPaymentId] = useState<string | null>(null)
+  const [lastInvoiceNo, setLastInvoiceNo] = useState<string | null>(null)
+  const [lastOrderSnapshot, setLastOrderSnapshot] = useState<CartItem[] | null>(null)
 
   const activeProducts = useMemo(() => mockProducts.filter((p) => p.status === "active"), [])
 
@@ -898,7 +901,13 @@ export default function StoreHome() {
               cartTotal={cartTotal}
               onClose={() => setView("cart")}
               onBackToCart={() => setView("cart")}
-              onPaymentSuccess={() => setView("payment-success")}
+              onPaymentSuccess={(orderId, paymentId, invoiceNo) => {
+                setFailedOrderId(orderId)
+                setLastPaymentId(paymentId)
+                setLastInvoiceNo(invoiceNo)
+                setLastOrderSnapshot([...cart])
+                setView("payment-success")
+              }}
               onPaymentFailed={(orderId) => { setView("payment-failed"); setFailedOrderId(orderId) }}
               onOpenProduct={openProduct}
             />
@@ -915,7 +924,18 @@ export default function StoreHome() {
           )}
 
           {view === "payment-success" && (
-            <PaymentSuccessView orderId={failedOrderId || `ORD-${Math.floor(100000 + Math.random() * 900000)}`} onContinue={() => { setCart([]); setView("home") }} />
+            <PaymentSuccessView
+              orderId={failedOrderId || `ORD-${Math.floor(100000 + Math.random() * 900000)}`}
+              paymentId={lastPaymentId || `pay_${Math.random().toString(36).slice(2, 6).toUpperCase()}1234`}
+              invoiceNo={lastInvoiceNo || `INV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`}
+              cartSnapshot={lastOrderSnapshot || cart}
+              cartTotal={cartTotal}
+              onTrackOrder={() => setView("track-order")}
+              onViewInvoice={() => setView("track-order")}
+              onDownloadInvoice={() => {}}
+              onContinueShopping={() => { setCart([]); setView("listing") }}
+              onAskAI={() => setAiOpen(true)}
+            />
           )}
 
           {/* Footer — hidden in Ask AI workspace so split stays clean, and no footer on cart/checkout/payment */}
@@ -2646,7 +2666,7 @@ interface CheckoutViewProps {
   cartTotal: number
   onClose: () => void
   onBackToCart: () => void
-  onPaymentSuccess: () => void
+  onPaymentSuccess: (orderId: string, paymentId: string, invoiceNo: string) => void
   onPaymentFailed: (orderId: string) => void
   onOpenProduct: (id: string) => void
 }
@@ -2737,7 +2757,9 @@ function CheckoutView({ cart, cartTotal, onClose: _onClose, onBackToCart, onPaym
       setPaying(false)
       const ok = Math.random() > 0.28
       const mockId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`
-      if (ok) onPaymentSuccess()
+      const payId = `pay_${Math.random().toString(36).slice(2, 10).toUpperCase()}${Math.floor(10 + Math.random() * 90)}`
+      const invNo = `INV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
+      if (ok) onPaymentSuccess(mockId, payId, invNo)
       else onPaymentFailed(mockId)
     }, 1400)
   }
@@ -3024,20 +3046,158 @@ function PaymentFailedView({ orderId, onRetry, onChangeMethod, onBackToCart, onO
   )
 }
 
-function PaymentSuccessView({ orderId, onContinue }: { orderId: string; onContinue: () => void }) {
+function PaymentSuccessView({ orderId, paymentId, invoiceNo, cartSnapshot, cartTotal, onTrackOrder, onViewInvoice, onDownloadInvoice, onContinueShopping, onAskAI }: { orderId: string; paymentId: string; invoiceNo: string; cartSnapshot: CartItem[]; cartTotal: number; onTrackOrder: () => void; onViewInvoice: () => void; onDownloadInvoice: () => void; onContinueShopping: () => void; onAskAI: () => void }) {
+  const now = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+  const invoiceDate = new Date().toLocaleDateString("en-IN", { dateStyle: "medium" })
+  const displayItems = (cartSnapshot.length > 0 ? cartSnapshot : [{ id: mockProducts[0].id, qty: 1 } as CartItem]).slice(0, 4)
+  const shippingCost = cartTotal > 149900 ? 0 : 4900
+  const tax = Math.round((cartTotal + shippingCost) * 0.18)
+  const totalPaid = cartSnapshot.length > 0 ? cartTotal + shippingCost + tax : 2499900
+
+  const steps = ["Preparing", "Packed", "Shipped", "Out for Delivery", "Delivered"] as const
+  const currentStep = 0 // dummy: just placed → Preparing
+
   return (
     <section className="px-4 pb-12">
-      <div className="mx-auto max-w-[640px]">
-        <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
-          <CardContent className="p-8 text-center">
-            <div className="mx-auto grid size-14 place-items-center rounded-full bg-emerald-600 text-white">
+      <div className="mx-auto max-w-[1000px] space-y-6">
+        {/* Success summary — green */}
+        <Card className="border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20">
+          <CardContent className="p-6 text-center">
+            <div className="mx-auto grid size-14 place-items-center rounded-full bg-emerald-600 text-white shadow-sm">
               <Check className="size-7" />
             </div>
-            <h1 className="mt-3 font-heading text-xl font-semibold text-emerald-700 dark:text-emerald-300">Payment successful</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Order {orderId} confirmed. Invoice emailed.</p>
-            <Button className="mt-4" onClick={onContinue}>Continue shopping</Button>
+            <h1 className="mt-3 font-heading text-xl font-semibold text-emerald-700 dark:text-emerald-300">Payment Successful</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Your payment was completed successfully.</p>
+            <div className="mt-3 inline-flex flex-wrap items-center justify-center gap-2 text-xs">
+              <Badge className="bg-emerald-600 hover:bg-emerald-600">Paid</Badge>
+              <span className="font-mono font-medium">{orderId}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="font-semibold">{formatPrice(totalPaid)}</span>
+            </div>
+            <div className="mt-2 text-[11px] text-muted-foreground">Payment ID <span className="font-mono text-foreground">{paymentId}</span> · Razorpay</div>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Button size="lg" onClick={onTrackOrder}><PackageCheck className="size-4" /> Track Order</Button>
+              <Button size="lg" variant="outline" onClick={onViewInvoice}><Eye className="size-4" /> View Invoice</Button>
+              <Button size="lg" variant="ghost" onClick={onContinueShopping}>Continue Shopping</Button>
+            </div>
           </CardContent>
         </Card>
+
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          {/* LEFT */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Order details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid gap-2 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Order ID</span><span className="font-mono font-medium">{orderId}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Payment ID</span><span className="font-mono text-xs">{paymentId}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Payment method</span><span>UPI / Card via Razorpay</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Paid at</span><span>{now}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Customer</span><span>Ananya Rao · 98765 43210</span></div>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  {displayItems.map((c) => {
+                    const p = mockProducts.find((x) => x.id === c.id)
+                    if (!p) return null
+                    return (
+                      <div key={c.id} className="flex items-center gap-3 text-sm">
+                        <img src={p.image_url} alt={p.title} className="size-10 rounded-md object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{p.title}</div>
+                          <div className="text-xs text-muted-foreground">Qty {c.qty} · {p.category}</div>
+                        </div>
+                        <span className="font-medium">{formatPrice(p.price_paise * c.qty)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <Separator />
+                <div className="flex justify-between text-sm font-semibold"><span>Amount paid</span><span className="text-emerald-600">{formatPrice(totalPaid)}</span></div>
+                <div className="text-xs text-muted-foreground text-center">Inclusive of all taxes · Shipping {shippingCost === 0 ? "Free" : formatPrice(shippingCost)} · GST {formatPrice(tax)}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Dummy shipping progress</CardTitle>
+                <p className="text-xs text-muted-foreground">Simulated — test mode, no carrier yet.</p>
+              </CardHeader>
+              <CardContent>
+                <div className="relative pl-6">
+                  <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
+                  {steps.map((s, i) => {
+                    const isDone = i < currentStep
+                    const isCurrent = i === currentStep
+                    return (
+                      <div key={s} className="relative flex gap-3 pb-5 last:pb-0">
+                        <div className={`relative z-10 grid size-6 place-items-center rounded-full border-2 ${isCurrent ? "border-emerald-600 bg-emerald-600 text-white" : isDone ? "border-emerald-600 bg-emerald-600 text-white" : "border-muted-foreground/30 bg-card text-muted-foreground"}`}>
+                          {isDone || isCurrent ? <Check className="size-3.5" /> : <span className="size-2 rounded-full bg-muted-foreground/30" />}
+                        </div>
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <div className={`text-sm ${isCurrent ? "font-semibold text-emerald-700 dark:text-emerald-300" : isDone ? "font-medium" : "text-muted-foreground"}`}>{s}</div>
+                          <div className="text-[11px] text-muted-foreground">{isCurrent ? "Order confirmed — preparing for shipment" : isDone ? "Completed" : "Pending"}</div>
+                        </div>
+                        {isCurrent && <Badge className="h-5 bg-emerald-600 text-[11px]">Current</Badge>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* RIGHT */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Invoice</CardTitle>
+                  <Badge className="bg-emerald-600 hover:bg-emerald-600">Generated</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{invoiceNo} · {invoiceDate}</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-md bg-muted/50 px-3 py-2 text-xs">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Invoice no.</span><span className="font-mono font-medium">{invoiceNo}</span></div>
+                  <div className="flex justify-between mt-1"><span className="text-muted-foreground">Status</span><span className="font-medium text-emerald-600">Generated</span></div>
+                  <div className="flex justify-between mt-1"><span className="text-muted-foreground">Date</span><span>{invoiceDate}</span></div>
+                  <div className="flex justify-between mt-1"><span className="text-muted-foreground">Amount</span><span className="font-semibold">{formatPrice(totalPaid)}</span></div>
+                </div>
+                <div className="grid gap-2">
+                  <Button size="sm" onClick={onDownloadInvoice}><Download className="size-4" /> Download invoice</Button>
+                  <Button size="sm" variant="outline" onClick={onViewInvoice}><Eye className="size-4" /> View invoice</Button>
+                  <Button size="sm" variant="ghost" onClick={onViewInvoice}><Mail className="size-4" /> Resend invoice</Button>
+                </div>
+                <p className="text-center text-[11px] text-muted-foreground">PDF sent to ananya.rao@example.com</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Next actions</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-2">
+                <Button size="sm" onClick={onTrackOrder}><PackageCheck className="size-4" /> Track Order</Button>
+                <Button size="sm" variant="outline" onClick={onViewInvoice}><Eye className="size-4" /> View Invoice</Button>
+                <Button size="sm" variant="outline" onClick={onContinueShopping}><ArrowRight className="size-4" /> Continue Shopping</Button>
+                <Button size="sm" variant="ghost" onClick={onAskAI}><Sparkles className="size-4" /> Ask AI about this order</Button>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-muted/40">
+              <CardContent className="p-4 space-y-2 text-xs">
+                <div className="flex items-center gap-2 font-medium"><ShieldCheck className="size-4 text-emerald-600" /> Secure payment · Razorpay</div>
+                <div className="flex items-center gap-2"><RotateCcw className="size-3.5 text-muted-foreground" /> 7-day easy returns</div>
+                <div className="flex items-center gap-2"><Headset className="size-3.5 text-muted-foreground" /> Support: support@razent.store · +91 80 1234 5678</div>
+                <div className="flex items-center gap-2"><Truck className="size-3.5 text-muted-foreground" /> Track order anytime</div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </section>
   )
