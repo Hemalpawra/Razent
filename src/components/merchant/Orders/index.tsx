@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import OrderDrawer from "@/components/merchant/Orders/OrderDrawer"
 import { useUI } from "@/state/useUI"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { mockOrders } from "@/lib/mock/orders"
 import { formatPrice, type OrderStatus } from "@/lib/types/order"
 import type { Order } from "@/lib/types/order"
@@ -88,6 +89,8 @@ export default function OrdersScreen() {
   const openDrawer = useUI((s) => s.openOrderDrawer)
   const drawerId = useUI((s) => s.drawerOrderId)
   const closeDrawer = useUI((s) => s.closeOrderDrawer)
+  const setActiveScreen = useUI((s) => s.setActiveScreen)
+  const isMobile = useIsMobile()
   const selectedOrder = drawerId ? (mockOrders.find((o) => o.id === drawerId) ?? null) : null
 
   const [q, setQ] = useState("")
@@ -355,7 +358,13 @@ export default function OrdersScreen() {
                       </TableCell>
                       <TableCell className="px-3 py-3">
                         <button
-                          onClick={() => openDrawer(order.id)}
+                          onClick={() => {
+                            if (isMobile) {
+                              setActiveScreen("order_detail")
+                            } else {
+                              openDrawer(order.id)
+                            }
+                          }}
                           className="text-left text-xs font-medium text-foreground hover:underline"
                         >
                           {order.id}
@@ -405,7 +414,13 @@ export default function OrdersScreen() {
                             variant="ghost"
                             size="icon-sm"
                             aria-label="View details"
-                            onClick={() => openDrawer(order.id)}
+                            onClick={() => {
+                              if (isMobile) {
+                                setActiveScreen("order_detail")
+                              } else {
+                                openDrawer(order.id)
+                              }
+                            }}
                             className="size-7"
                           >
                             <Eye className="size-4" />
@@ -417,7 +432,17 @@ export default function OrdersScreen() {
                               <MoreHorizontal className="size-4" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40">
-                              <DropdownMenuItem onClick={() => openDrawer(order.id)}>View details</DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  if (isMobile) {
+                                    setActiveScreen("order_detail")
+                                  } else {
+                                    openDrawer(order.id)
+                                  }
+                                }}
+                              >
+                                View details
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => {
                                   navigator.clipboard.writeText(order.id).catch(() => {})
@@ -496,7 +521,7 @@ export default function OrdersScreen() {
         </div>
       </Card>
 
-      <OrderDrawer open={drawerId !== null} onClose={closeDrawer} order={selectedOrder} />
+      <OrderDrawer open={!isMobile && drawerId !== null} onClose={closeDrawer} order={selectedOrder} />
     </div>
   )
 }

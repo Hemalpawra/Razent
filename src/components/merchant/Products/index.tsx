@@ -32,15 +32,15 @@ import { listProducts, deleteProduct } from "@/lib/api/client"
 import { formatPrice } from "@/lib/types/product"
 import type { Product, ProductStatus } from "@/lib/types/product"
 import ProductDrawer from "./ProductDrawer"
-
-function getSku(p: Product): string {
-  const any = p as unknown as Record<string, string>
-  if (any.sku) return any.sku
-  const raw = p.id.replace(/^prod_/, "").slice(0, 6).toUpperCase().padEnd(4, "0")
-  return `SKU-${raw}`
-}
+import { useUI } from "@/state/useUI"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 export default function ProductsScreen() {
+  const isMobile = useIsMobile()
+  const setActiveScreen = useUI((s) => s.setActiveScreen)
+  const openProductDrawer = useUI((s) => s.openProductDrawer)
+  const closeProductDrawer = useUI((s) => s.closeProductDrawer)
+  const drawerProductId = useUI((s) => s.drawerProductId)
   const [q, setQ] = useState("")
   const [statusFilter, setStatusFilter] = useState<ProductStatus | "all">("all")
   const [products, setProducts] = useState<Product[]>([])
@@ -100,9 +100,13 @@ export default function ProductsScreen() {
     return { total, active, low, out, draft }
   }, [products])
 
-  function openDrawer(p: Product) {
-    setSelected(p)
-    setDrawerOpen(true)
+  function handleProductClick(p: Product) {
+    if (isMobile) {
+      setActiveScreen("product_detail")
+    } else {
+      setSelected(p)
+      setDrawerOpen(true)
+    }
   }
 
   return (
@@ -279,10 +283,10 @@ export default function ProductsScreen() {
                           variant="outline"
                           size="icon-sm"
                           className="rounded-md"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openDrawer(p)
-                          }}
+onClick={(e) => {
+                             e.stopPropagation()
+                             handleProductClick(p)
+                           }}
                           aria-label={`View ${p.title}`}
                         >
                           <Eye className="size-3.5" />
@@ -303,7 +307,7 @@ export default function ProductsScreen() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-36">
                             <DropdownMenuItem
-                              onClick={() => openDrawer(p)}
+onClick={() => handleProductClick(p)}
                             >
                               <Eye className="size-3.5" /> View details
                             </DropdownMenuItem>
@@ -377,7 +381,7 @@ export default function ProductsScreen() {
         </div>
       </Card>
 
-      <ProductDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} product={selected} />
+      <ProductDrawer open={!isMobile && drawerProductId !== null} onClose={closeProductDrawer} product={selected} />
     </div>
   )
 }

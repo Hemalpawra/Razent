@@ -1,7 +1,8 @@
 "use client"
 
+import { useEffect } from "react"
 import {
-  XIcon,
+  ArrowLeft,
   FileTextIcon,
   UserIcon,
   MailIcon,
@@ -10,19 +11,12 @@ import {
   CheckIcon,
   CircleIcon,
 } from "lucide-react"
-
-import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter } from "@/components/ui/drawer"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useUI } from "@/state/useUI"
+import { mockOrders } from "@/lib/mock/orders"
 import { formatPrice } from "@/lib/types/order"
-import type { Order } from "@/lib/types/order"
-
-interface OrderDrawerProps {
-  open: boolean
-  onClose: () => void
-  order?: Order | null
-}
 
 function formatPaid(paise: number) {
   const rupees = paise / 100
@@ -34,15 +28,25 @@ function formatPaid(paise: number) {
   }).format(rupees)
 }
 
-export default function OrderDrawer({ open, onClose, order }: OrderDrawerProps) {
-  const isMobile = useIsMobile()
-  const paymentMethod = order?.via_ai ? "UPI" : "Card"
-  const paidOn = order?.paid_at ? new Date(order.paid_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—"
+export default function OrderDetailScreen() {
+  const setActiveScreen = useUI((s) => s.setActiveScreen)
+  const drawerId = useUI((s) => s.drawerOrderId)
+  const closeDrawer = useUI((s) => s.closeOrderDrawer)
+  const order = drawerId ? mockOrders.find((o) => o.id === drawerId) ?? null : null
 
-  // derive timeline
+  const paymentMethod = order?.via_ai ? "UPI" : "Card"
+  const paidOn = order?.paid_at
+    ? new Date(order.paid_at).toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "—"
+
   const getTrackingLocation = (keyword: string) => {
     if (!order?.tracking?.events) return undefined
-    const ev = order.tracking.events.find((e) => e.status.toLowerCase().includes(keyword.toLowerCase()))
+    const ev = order.tracking.events.find((e) =>
+      e.status.toLowerCase().includes(keyword.toLowerCase())
+    )
     return ev?.location
   }
 
@@ -70,7 +74,10 @@ export default function OrderDrawer({ open, onClose, order }: OrderDrawerProps) 
           label: "Shipped",
           done: !!order.shipped_at,
           at: order.shipped_at,
-          location: getTrackingLocation("shipped") ?? getTrackingLocation("packed") ?? undefined,
+          location:
+            getTrackingLocation("shipped") ??
+            getTrackingLocation("packed") ??
+            undefined,
         },
         {
           label: "Delivered",
@@ -81,54 +88,71 @@ export default function OrderDrawer({ open, onClose, order }: OrderDrawerProps) 
       ]
     : []
 
-  // Mobile: instead of drawer, navigate to detail screen
-  if (isMobile) {
-    return null // Rendering nothing here — OrdersScreen handles navigation to order_detail
+  const handleBack = () => {
+    closeDrawer()
+    setActiveScreen("orders")
   }
 
   return (
-    <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
-      <DrawerContent className="p-6">
-        <DrawerHeader>
-          <DrawerTitle className="text-lg font-heading font-medium tracking-tight">Order Details</DrawerTitle>
-          <DrawerDescription>Order #{order?.id}</DrawerDescription>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 p-1 rounded-md hover:bg-muted/30"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <XIcon className="size-4" />
-          </Button>
-        </DrawerHeader>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleBack}
+          className="p-1"
+        >
+          <ArrowLeft className="size-5" />
+        </Button>
+        <span className="text-sm font-medium capitalize">
+          Order #{order?.id ?? "Details"}
+        </span>
+      </header>
 
+      <div className="p-4">
         {!order ? (
-          <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-            No order selected.
-          </div>
+          <Card className="flex flex-col items-center justify-center p-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              No order selected. Please go back and select an order.
+            </p>
+            <Button variant="outline" onClick={handleBack} className="mt-4">
+              Back to Orders
+            </Button>
+          </Card>
         ) : (
-          <div className="mt-6 space-y-4">
-            {/* 1. Order Items */}
-            <section>
+          <div className="space-y-4">
+            {/* Amount Paid */}
+            <Card className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Amount Paid
+              </p>
+              <p className="font-heading text-2xl font-bold tracking-tight mt-1">
+                {formatPaid(order.total_paise)}
+              </p>
+            </Card>
+
+            {/* Order Items */}
+            <Card className="p-4">
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
                 Order Items
               </h3>
-              <div className="rounded-md border border-border/50 divide-y divide-border/50 overflow-hidden bg-card/20">
-                {order?.items.map((item) => (
-                  <div key={item.product_id} className="flex items-center gap-3 px-3 py-3">
+              <div className="space-y-3">
+                {order.items.map((item) => (
+                  <div key={item.product_id} className="flex items-center gap-3">
                     <img
                       src={item.image_url}
                       alt={item.title}
-                      className="size-10 rounded-full object-cover ring-1 ring-border/40 shrink-0"
+                      className="size-12 rounded-full object-cover ring-1 ring-border/40 shrink-0"
                       loading="lazy"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-tight truncate">{item.title}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">
-                        {item.product_id}
+                      <p className="text-sm font-medium leading-tight truncate">
+                        {item.title}
                       </p>
-                      <p className="text-xs text-muted-foreground">Qty: {item.qty}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Qty: {item.qty}
+                      </p>
                     </div>
                     <p className="text-sm font-medium tabular-nums whitespace-nowrap shrink-0">
                       {formatPrice(item.unit_price_paise * item.qty)}
@@ -136,96 +160,75 @@ export default function OrderDrawer({ open, onClose, order }: OrderDrawerProps) 
                   </div>
                 ))}
               </div>
-            </section>
+            </Card>
+
+            {/* Actions */}
+            <Button variant="default" className="w-full">
+              <FileTextIcon className="size-4" />
+              View Invoice
+            </Button>
 
             <Separator />
 
-            {/* 2. Amount Paid */}
-            <section>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Amount Paid
-              </p>
-              <p className="font-heading text-2xl font-bold tracking-tight mt-1">
-                {formatPaid(order?.total_paise)}
-              </p>
-            </section>
-
-            <Separator />
-
-            {/* 3. Primary action: View Invoice */}
-            <section>
-              <Button variant="default" className="w-full">
-                <FileTextIcon className="size-4" />
-                View Invoice
-              </Button>
-            </section>
-
-            <Separator />
-
-            {/* 4. Customer Details */}
-            <section>
+            {/* Customer Details */}
+            <Card className="p-4">
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
                 Customer Details
               </h3>
               <div className="space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <UserIcon className="size-3.5 text-muted-foreground shrink-0" />
-                  <span className="text-sm">{order?.shipping_address?.full_name}</span>
+                  <UserIcon className="size-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm">{order.shipping_address.full_name}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <MailIcon className="size-3.5 text-muted-foreground shrink-0" />
-                  <span className="text-sm truncate">{order?.shipping_address?.email}</span>
+                  <MailIcon className="size-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate">{order.shipping_address.email}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <PhoneIcon className="size-3.5 text-muted-foreground shrink-0" />
-                  <span className="text-sm">{order?.shipping_address?.phone}</span>
+                  <PhoneIcon className="size-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm">{order.shipping_address.phone}</span>
                 </div>
               </div>
-            </section>
+            </Card>
 
-            <Separator />
-
-            {/* 5. Payment Details */}
-            <section>
+            {/* Payment Details */}
+            <Card className="p-4">
               <h3 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
-                <CreditCardIcon className="size-3.5 text-muted-foreground" />
+                <CreditCardIcon className="size-4 text-muted-foreground" />
                 Payment Details
               </h3>
               <div className="space-y-2.5">
-                <div className="flex justify-between gap-4 text-sm">
+                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Payment ID</span>
                   <span className="font-medium text-xs truncate max-w-[55%] text-right">
-                    {order?.razorpay_payment_id ?? "—"}
+                    {order.razorpay_payment_id ?? "—"}
                   </span>
                 </div>
-                <div className="flex justify-between gap-4 text-sm">
+                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Razorpay Order ID</span>
                   <span className="font-medium text-xs truncate max-w-[55%] text-right">
-                    {order?.razorpay_order_id}
+                    {order.razorpay_order_id}
                   </span>
                 </div>
-                <div className="flex justify-between gap-4 text-sm">
+                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Payment Method</span>
                   <span className="font-medium">{paymentMethod}</span>
                 </div>
-                <div className="flex justify-between gap-4 text-sm">
+                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Paid On</span>
                   <span className="font-medium text-xs text-right">{paidOn}</span>
                 </div>
               </div>
-            </section>
+            </Card>
 
-            <Separator />
-
-            {/* 6. Order Timeline */}
-            <section>
+            {/* Order Timeline */}
+            <Card className="p-4">
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-4">
                 Order Timeline
               </h3>
-              <div className="relative ml-3 border-l border-border/60 pl-6 space-y-6">
+              <div className="relative ml-4 border-l-2 border-border/60 pl-6 space-y-6">
                 {timeline.map((step) => (
                   <div key={step.label} className="relative">
-                    {/* Dot */}
                     <span
                       className={
                         step.done
@@ -241,7 +244,12 @@ export default function OrderDrawer({ open, onClose, order }: OrderDrawerProps) 
                     </span>
                     <p className="text-sm font-medium leading-tight">{step.label}</p>
                     <p className="text-xs text-muted-foreground">
-                      {step.at ? new Date(step.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Pending"}
+                      {step.at
+                        ? new Date(step.at).toLocaleString("en-IN", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })
+                        : "Pending"}
                     </p>
                     {step.location ? (
                       <p className="text-xs text-muted-foreground">{step.location}</p>
@@ -249,23 +257,21 @@ export default function OrderDrawer({ open, onClose, order }: OrderDrawerProps) 
                   </div>
                 ))}
               </div>
-            </section>
+            </Card>
 
-            <Separator />
-
-            {/* 7. Bottom actions */}
-            <section className="px-6 py-4 space-y-3">
+            {/* Bottom Actions */}
+            <Card className="p-4 space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline">View Conversation</Button>
                 <Button variant="outline">View Tracking</Button>
               </div>
-              <Button variant="default" className="w-full bg-primary">
+              <Button variant="destructive" className="w-full">
                 Refund Order
               </Button>
-            </section>
+            </Card>
           </div>
         )}
-      </DrawerContent>
-    </Drawer>
+      </div>
+    </div>
   )
 }

@@ -60,6 +60,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const setScreen = useUI((s) => s.setActiveScreen)
   const role = useUI((s) => s.role)
   const setRole = useUI((s) => s.setRole)
+  const closeOrderDrawer = useUI((s) => s.closeOrderDrawer)
+  const closeProductDrawer = useUI((s) => s.closeProductDrawer)
+  const drawerOrderId = useUI((s) => s.drawerOrderId)
+  const drawerProductId = useUI((s) => s.drawerProductId)
+
+  const handleScreenChange = (key: Screen) => {
+    if (drawerOrderId) closeOrderDrawer()
+    if (drawerProductId) closeProductDrawer()
+    setScreen(key)
+  }
 
   // Store view — full width, no merchant sidebar chrome
   if (role === "store") {
@@ -108,30 +118,38 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           {/* Merchant / Store switch — now in sidebar, slim fixed */}
-          <div className="mt-3 inline-flex w-full rounded-lg border bg-muted p-1">
-            <button
-              type="button"
-              onClick={() => setRole("merchant")}
-              className={
-                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
-                (role === "merchant" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
-              }
-            >
-              <Store className="size-3.5" />
-              Merchant
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole("store")}
-              className={
-                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
-                (role === "store" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
-              }
-            >
-              <ShoppingCart className="size-3.5" />
-              Store
-            </button>
-          </div>
+<div className="mt-3 inline-flex w-full rounded-lg border bg-muted p-1">
+    <button
+      type="button"
+      onClick={() => {
+        if (drawerOrderId) closeOrderDrawer()
+        if (drawerProductId) closeProductDrawer()
+        setRole("merchant")
+      }}
+      className={
+        "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
+        (role === "merchant" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
+      }
+    >
+      <Store className="size-3.5" />
+      Merchant
+    </button>
+    <button
+      type="button"
+      onClick={() => {
+        if (drawerOrderId) closeOrderDrawer()
+        if (drawerProductId) closeProductDrawer()
+        setRole("store")
+      }}
+      className={
+        "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
+        (role === "store" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
+      }
+    >
+      <ShoppingCart className="size-3.5" />
+      Store
+    </button>
+  </div>
         </SidebarHeader>
 
         <SidebarContent className="gap-0">
@@ -142,7 +160,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <SidebarMenu>
                   {group.items.map(({ label, key, icon: Icon }) => (
                     <SidebarMenuItem key={key}>
-                      <SidebarMenuButton isActive={activeScreen === key} onClick={() => setScreen(key)} tooltip={label}>
+                      <SidebarMenuButton isActive={activeScreen === key} onClick={() => handleScreenChange(key)} tooltip={label}>
                         <Icon />
                         <span>{label}</span>
                       </SidebarMenuButton>
