@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -64,7 +64,7 @@ import {
   Phone,
 } from "lucide-react"
 
-type StoreView = "home" | "listing" | "detail" | "track-order"
+type StoreView = "home" | "listing" | "detail" | "track-order" | "cart" | "checkout" | "payment-failed" | "payment-success"
 
 type CartItem = { id: string; qty: number }
 
@@ -131,6 +131,7 @@ export default function StoreHome() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const [failedOrderId, setFailedOrderId] = useState<string | null>(null)
 
   const activeProducts = useMemo(() => mockProducts.filter((p) => p.status === "active"), [])
 
@@ -341,7 +342,7 @@ export default function StoreHome() {
             <Button size="sm" onClick={() => setAiOpen((v) => !v)} className="hidden sm:inline-flex">
               <Sparkles className="size-4" /> Ask AI
             </Button>
-            <Button variant="ghost" size="icon" className="relative" onClick={() => setCartOpen(true)}>
+            <Button variant="ghost" size="icon" className="relative" onClick={() => setView("cart")}>
               <ShoppingCart className="size-5" />
               {cartCount > 0 && (
                 <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
@@ -878,8 +879,47 @@ export default function StoreHome() {
             />
           )}
 
-          {/* Footer — hidden in Ask AI workspace so split stays clean */}
-          {!aiOpen && (
+          {view === "cart" && (
+            <CartView
+              cart={cart}
+              onClose={() => setView("home")}
+              onUpdateQty={updateQty}
+              onRemove={(id) => updateQty(id, -999)}
+              onApplyCoupon={() => {}}
+              onCheckout={() => setView("checkout")}
+              onOpenProduct={openProduct}
+              cartTotal={cartTotal}
+            />
+          )}
+
+          {view === "checkout" && (
+            <CheckoutView
+              cart={cart}
+              cartTotal={cartTotal}
+              onClose={() => setView("cart")}
+              onBackToCart={() => setView("cart")}
+              onPaymentSuccess={() => setView("payment-success")}
+              onPaymentFailed={(orderId) => { setView("payment-failed"); setFailedOrderId(orderId) }}
+              onOpenProduct={openProduct}
+            />
+          )}
+
+          {view === "payment-failed" && (
+            <PaymentFailedView
+              orderId={failedOrderId || "ORD-123456"}
+              onRetry={() => setView("checkout")}
+              onChangeMethod={() => {}}
+              onBackToCart={() => setView("cart")}
+              onOpenAI={() => setAiOpen(true)}
+            />
+          )}
+
+          {view === "payment-success" && (
+            <PaymentSuccessView orderId={failedOrderId || `ORD-${Math.floor(100000 + Math.random() * 900000)}`} onContinue={() => { setCart([]); setView("home") }} />
+          )}
+
+          {/* Footer — hidden in Ask AI workspace so split stays clean, and no footer on cart/checkout/payment */}
+          {!aiOpen && !["cart", "checkout", "payment-failed", "payment-success"].includes(view) && (
             <footer className="mt-6 border-t bg-card px-4 py-6">
             <div className="grid gap-6 text-xs md:grid-cols-4">
               <div>
@@ -2374,6 +2414,630 @@ function TrackOrder({ onClose, onOpenAI }: TrackOrderProps) {
         <div className="text-center">
           <Button variant="ghost" onClick={onClose}><ArrowRight className="size-4 mr-1" /> Back to Home</Button>
         </div>
+      </div>
+    </section>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  Cart                                      */
+/* -------------------------------------------------------------------------- */
+
+interface CartViewProps {
+  cart: CartItem[]
+  onClose: () => void
+  onUpdateQty: (id: string, delta: number) => void
+  onRemove: (id: string) => void
+  onApplyCoupon: () => void
+  onCheckout: () => void
+  onOpenProduct: (id: string) => void
+  cartTotal: number
+}
+
+function CartSkeleton() {
+  return (
+    <div className="space-y-4 px-4">
+      <Skeleton className="h-8 w-1/4" />
+      <Skeleton className="h-4 w-1/2" />
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-28 w-full" />
+        ))}
+      </div>
+      <Skeleton className="h-48 w-full" />
+    </div>
+  )
+}
+
+function CartEmpty({ onClose }: { onClose: () => void }) {
+  return (
+    <Card className="p-10 text-center">
+      <ShoppingCart className="mx-auto size-12 text-muted-foreground" />
+      <h3 className="mt-3 font-semibold">Your cart is empty</h3>
+      <p className="mt-1 max-w-md mx-auto text-sm text-muted-foreground">
+        Looks like you haven't added any products yet.
+      </p>
+      <Button className="mt-4" onClick={onClose}>
+        <ArrowRight className="size-4 mr-2" /> Browse products
+      </Button>
+    </Card>
+  )
+}
+
+function CartView({ cart, onClose, onUpdateQty, onRemove, onApplyCoupon, onCheckout, onOpenProduct, cartTotal }: CartViewProps) {
+  const [coupon, setCoupon] = useState("")
+  const [couponApplied, setCouponApplied] = useState(false)
+  const [discount, setDiscount] = useState(0)
+  const shipping = cartTotal > 149900 ? 0 : 9900 // Free over ₹1,499
+  const tax = Math.round((cartTotal - discount + shipping) * 0.18)
+  const total = cartTotal - discount + shipping + tax
+
+  const handleApplyCoupon = () => {
+    if (!coupon.trim()) return
+    const code = coupon.trim().toUpperCase()
+    if (code === "SAVE100") {
+      setDiscount(10000)
+      setCouponApplied(true)
+    } else if (code === "WELCOME50") {
+      setDiscount(5000)
+      setCouponApplied(true)
+    } else {
+      setDiscount(0)
+      setCouponApplied(false)
+    }
+    onApplyCoupon()
+  }
+
+  if (cart.length === 0) return <CartEmpty onClose={onClose} />
+
+  return (
+    <section className="px-4 pb-12">
+      <div className="mx-auto max-w-[1000px] space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-heading text-2xl font-semibold">Your Cart</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Review your items and proceed to checkout.</p>
+          </div>
+          <Button variant="ghost" onClick={onClose}><ArrowRight className="size-4 mr-1" /> Continue shopping</Button>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+          {/* LEFT: Cart items */}
+          <div className="space-y-4">
+            {cart.map((c) => {
+              const p = mockProducts.find((x) => x.id === c.id)!
+              const itemTotal = p.price_paise * c.qty
+              return (
+                <Card key={c.id} className="p-3">
+                  <div className="flex gap-4">
+                    <button onClick={() => onOpenProduct(p.id)} className="block overflow-hidden rounded-md">
+                      <img src={p.image_url} alt={p.title} className="size-20 object-cover" />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <button onClick={() => onOpenProduct(p.id)} className="truncate font-medium hover:underline">
+                            {p.title}
+                          </button>
+                          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{p.description}</p>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => onRemove(p.id)}>
+                          <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
+                        </Button>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        {p.stock === 0 ? (
+                          <Badge variant="destructive">Out of stock</Badge>
+                        ) : p.stock < 10 ? (
+                          <Badge className="bg-amber-500 text-white hover:bg-amber-500">Low stock</Badge>
+                        ) : (
+                          <Badge variant="secondary">{p.stock} in stock</Badge>
+                        )}
+                        {p.tags.includes("bestseller") && <Badge className="bg-emerald-500 text-white">Bestseller</Badge>}
+                        <Badge variant="outline" className="text-[11px]">{p.category}</Badge>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2 border rounded-md">
+                          <Button variant="outline" size="icon" onClick={() => onUpdateQty(p.id, -1)} disabled={c.qty <= 1}>
+                            <Minus className="size-3.5" />
+                          </Button>
+                          <Input
+                            type="number"
+                            value={c.qty}
+                            onChange={(e) => {
+                              const v = Math.max(1, Math.min(p.stock, parseInt(e.target.value) || 1))
+                              onUpdateQty(p.id, v - c.qty)
+                            }}
+                            className="w-12 text-center h-8"
+                            min={1}
+                            max={p.stock}
+                            inputMode="numeric"
+                          />
+                          <Button variant="outline" size="icon" onClick={() => onUpdateQty(p.id, 1)} disabled={c.qty >= p.stock}>
+                            <Plus className="size-3.5" />
+                          </Button>
+                        </div>
+                        <span className="text-lg font-semibold">{formatPrice(itemTotal)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+
+          {/* RIGHT: Order summary */}
+          <div className="lg:sticky lg:top-24 lg:self-start">
+            <Card>
+              <CardHeader>
+                <CardTitle>Order Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal ({cart.reduce((s, c) => s + c.qty, 0)} items)</span>
+                    <span className="font-medium">{formatPrice(cartTotal)}</span>
+                  </div>
+                  {discount > 0 && (
+                    <div className="flex justify-between text-emerald-600">
+                      <span>Discount</span>
+                      <span className="font-medium">-{formatPrice(discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Shipping</span>
+                    <span className="font-medium">{shipping === 0 ? "Free" : formatPrice(shipping)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tax (18% GST)</span>
+                    <span className="font-medium">{formatPrice(tax)}</span>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex justify-between text-lg font-semibold">
+                  <span>Total</span>
+                  <span>{formatPrice(total)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">Inclusive of all taxes. Shipping calculated at checkout.</p>
+
+                {/* Coupon */}
+                <div className="space-y-2">
+                  <Label htmlFor="coupon" className="text-sm font-medium">Coupon code</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="coupon"
+                      value={coupon}
+                      onChange={(e) => setCoupon(e.target.value)}
+                      placeholder="SAVE100"
+                      className="flex-1"
+                    />
+                    <Button size="sm" onClick={handleApplyCoupon} disabled={couponApplied}>
+                      Apply
+                    </Button>
+                  </div>
+                  {couponApplied && (
+                    <p className="text-xs text-emerald-600">Coupon applied! Saved {formatPrice(discount)}</p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">Try: SAVE100 (₹100 off) or WELCOME50 (₹50 off)</p>
+                </div>
+
+                <Button className="w-full" size="lg" onClick={onCheckout} disabled={cart.length === 0}>
+                  Proceed to Checkout · {formatPrice(total)}
+                </Button>
+
+                <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <ShieldCheck className="size-3.5 text-emerald-600" /> Secure checkout powered by Razorpay
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Checkout                                    */
+/* -------------------------------------------------------------------------- */
+
+interface CheckoutViewProps {
+  cart: CartItem[]
+  cartTotal: number
+  onClose: () => void
+  onBackToCart: () => void
+  onPaymentSuccess: () => void
+  onPaymentFailed: (orderId: string) => void
+  onOpenProduct: (id: string) => void
+}
+
+function CheckoutSkeleton() {
+  return (
+    <div className="space-y-4 px-4">
+      <Skeleton className="h-8 w-1/4" />
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        <div className="space-y-3">
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    </div>
+  )
+}
+
+function CheckoutEmpty({ onAddAddress }: { onAddAddress: () => void }) {
+  return (
+    <Card className="p-8 text-center">
+      <AlertCircle className="mx-auto size-10 text-muted-foreground" />
+      <h3 className="mt-2 font-semibold">No delivery address</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Add an address to continue to payment.</p>
+      <Button className="mt-4" onClick={onAddAddress}>Add new address</Button>
+    </Card>
+  )
+}
+
+type Address = {
+  id: string
+  label: string
+  name: string
+  phone: string
+  email: string
+  line1: string
+  city: string
+  state: string
+  pincode: string
+}
+
+const SAVED_ADDRESSES: Address[] = [
+  {
+    id: "addr1",
+    label: "Home",
+    name: "Ananya Rao",
+    phone: "98765 43210",
+    email: "ananya.rao@example.com",
+    line1: "12 4th Block, Koramangala",
+    city: "Bengaluru",
+    state: "KA",
+    pincode: "560034",
+  },
+  {
+    id: "addr2",
+    label: "Office",
+    name: "Ananya Rao",
+    phone: "98765 43210",
+    email: "ananya.rao@example.com",
+    line1: "B-204, Hiranandani Estate",
+    city: "Thane",
+    state: "MH",
+    pincode: "400607",
+  },
+]
+
+function CheckoutView({ cart, cartTotal, onClose: _onClose, onBackToCart, onPaymentSuccess, onPaymentFailed }: CheckoutViewProps) {
+  const [selectedAddr, setSelectedAddr] = useState<string>(SAVED_ADDRESSES[0].id)
+  const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard")
+  const [showNewAddr, setShowNewAddr] = useState(false)
+  const [newAddr, setNewAddr] = useState<Partial<Address>>({})
+  const [paying, setPaying] = useState(false)
+  const [addrError, setAddrError] = useState<string | null>(null)
+
+  const shippingCost = shippingMethod === "express" ? 9900 : cartTotal > 149900 ? 0 : 4900
+  const tax = Math.round((cartTotal + shippingCost) * 0.18)
+  const total = cartTotal + shippingCost + tax
+
+  const handlePay = () => {
+    if (!selectedAddr && !showNewAddr) {
+      setAddrError("Select a delivery address")
+      return
+    }
+    setAddrError(null)
+    setPaying(true)
+    setTimeout(() => {
+      setPaying(false)
+      const ok = Math.random() > 0.28
+      const mockId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`
+      if (ok) onPaymentSuccess()
+      else onPaymentFailed(mockId)
+    }, 1400)
+  }
+
+  if (cart.length === 0) {
+    return (
+      <section className="px-4 pb-12">
+        <div className="mx-auto max-w-[1000px]">
+          <CheckoutEmpty onAddAddress={() => setShowNewAddr(true)} />
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="px-4 pb-12">
+      <div className="mx-auto max-w-[1000px] space-y-6">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold">Checkout</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Enter delivery details and complete payment with Razorpay.</p>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+          {/* LEFT */}
+          <div className="space-y-6">
+            {/* Address */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Delivery address</CardTitle>
+                <Button variant="outline" size="sm" onClick={() => setShowNewAddr((v) => !v)}>
+                  {showNewAddr ? "Cancel" : "Add new address"}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {addrError && <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{addrError}</div>}
+                {!showNewAddr ? (
+                  <div className="grid gap-3">
+                    {SAVED_ADDRESSES.map((a) => (
+                      <label
+                        key={a.id}
+                        className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${selectedAddr === a.id ? "border-primary bg-primary/5" : "hover:bg-muted/40"}`}
+                      >
+                        <input
+                          type="radio"
+                          name="addr"
+                          checked={selectedAddr === a.id}
+                          onChange={() => setSelectedAddr(a.id)}
+                          className="mt-1"
+                        />
+                        <div className="min-w-0 flex-1 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{a.label}</span>
+                            <Badge variant="outline" className="text-[11px]">{a.pincode}</Badge>
+                          </div>
+                          <div className="mt-1 font-medium">{a.name} · {a.phone}</div>
+                          <div className="text-xs text-muted-foreground">{a.email}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">{a.line1}, {a.city}, {a.state} — {a.pincode}</div>
+                          <div className="mt-2 flex gap-2">
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">Edit</Button>
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive">Remove</Button>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Full name</Label>
+                      <Input placeholder="Ananya Rao" value={newAddr.name || ""} onChange={(e) => setNewAddr((s) => ({ ...s, name: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Mobile</Label>
+                      <Input placeholder="98765 43210" value={newAddr.phone || ""} onChange={(e) => setNewAddr((s) => ({ ...s, phone: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs">Email</Label>
+                      <Input placeholder="you@example.com" value={newAddr.email || ""} onChange={(e) => setNewAddr((s) => ({ ...s, email: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs">Address</Label>
+                      <Input placeholder="House, street, area" value={newAddr.line1 || ""} onChange={(e) => setNewAddr((s) => ({ ...s, line1: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">City</Label>
+                      <Input placeholder="Bengaluru" value={newAddr.city || ""} onChange={(e) => setNewAddr((s) => ({ ...s, city: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">State</Label>
+                      <Input placeholder="KA" value={newAddr.state || ""} onChange={(e) => setNewAddr((s) => ({ ...s, state: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Pincode</Label>
+                      <Input placeholder="560034" value={newAddr.pincode || ""} onChange={(e) => setNewAddr((s) => ({ ...s, pincode: e.target.value }))} />
+                    </div>
+                    <div className="sm:col-span-2 flex gap-2 pt-2">
+                      <Button size="sm" onClick={() => { setSelectedAddr("new"); setShowNewAddr(false) }}>Save address</Button>
+                      <Button size="sm" variant="outline" onClick={() => setShowNewAddr(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Shipping */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Shipping method</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {[
+                  { id: "standard", title: "Standard delivery", eta: "3–5 days", cost: cartTotal > 149900 ? 0 : 4900 },
+                  { id: "express", title: "Express delivery", eta: "1–2 days", cost: 9900 },
+                ].map((m) => (
+                  <label
+                    key={m.id}
+                    className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 ${shippingMethod === m.id ? "border-primary bg-primary/5" : "hover:bg-muted/40"}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input type="radio" name="ship" checked={shippingMethod === m.id} onChange={() => setShippingMethod(m.id as any)} />
+                      <div>
+                        <div className="text-sm font-medium">{m.title}</div>
+                        <div className="text-xs text-muted-foreground">{m.eta} · {m.cost === 0 ? "Free" : formatPrice(m.cost)}</div>
+                      </div>
+                    </div>
+                    <Badge variant={shippingMethod === m.id ? "default" : "outline"}>{m.cost === 0 ? "Free" : formatPrice(m.cost)}</Badge>
+                  </label>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* RIGHT */}
+          <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Order summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2 max-h-40 overflow-auto pr-1">
+                  {cart.map((c) => {
+                    const p = mockProducts.find((x) => x.id === c.id)!
+                    return (
+                      <div key={c.id} className="flex justify-between text-xs">
+                        <span className="truncate pr-2 text-muted-foreground">{p.title} × {c.qty}</span>
+                        <span className="font-medium">{formatPrice(p.price_paise * c.qty)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <Separator />
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatPrice(cartTotal)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>{shippingCost === 0 ? "Free" : formatPrice(shippingCost)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Tax (18% GST)</span><span>{formatPrice(tax)}</span></div>
+                </div>
+                <Separator />
+                <div className="flex justify-between text-base font-semibold"><span>Total</span><span>{formatPrice(total)}</span></div>
+                <Button className="w-full" size="lg" onClick={handlePay} disabled={paying}>
+                  {paying ? <><Loader2 className="size-4 animate-spin" /> Processing…</> : <>Pay with Razorpay · {formatPrice(total)}</>}
+                </Button>
+                <Button variant="ghost" size="sm" className="w-full" onClick={onBackToCart}>Back to cart</Button>
+                <p className="text-center text-[11px] text-muted-foreground">Razorpay handles the payment securely — no card data stored here.</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-muted/40">
+              <CardContent className="p-4 space-y-2 text-xs">
+                <div className="flex items-center gap-2 font-medium"><ShieldCheck className="size-4 text-emerald-600" /> Secure payment</div>
+                <div className="flex items-center gap-2"><Truck className="size-3.5 text-muted-foreground" /> Fast delivery · 1–5 days</div>
+                <div className="flex items-center gap-2"><RotateCcw className="size-3.5 text-muted-foreground" /> 7-day easy returns</div>
+                <div className="flex items-center gap-2"><Headset className="size-3.5 text-muted-foreground" /> Support: support@razent.store · +91 80 1234 5678</div>
+                <div className="flex items-center gap-2"><PackageCheck className="size-3.5 text-muted-foreground" /> Track order anytime</div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             Payment Failed                                 */
+/* -------------------------------------------------------------------------- */
+
+interface PaymentFailedViewProps {
+  orderId: string
+  onRetry: () => void
+  onChangeMethod: () => void
+  onBackToCart: () => void
+  onOpenAI: () => void
+}
+
+function PaymentFailedView({ orderId, onRetry, onChangeMethod, onBackToCart, onOpenAI }: PaymentFailedViewProps) {
+  const amount = formatPrice(2499900)
+  const reason = "Payment declined by bank — insufficient funds or timeout."
+  const now = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+
+  return (
+    <section className="px-4 pb-12">
+      <div className="mx-auto max-w-[1000px] space-y-6">
+        {/* Failure summary */}
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-6 text-center">
+            <div className="mx-auto grid size-14 place-items-center rounded-full bg-destructive text-destructive-foreground">
+              <X className="size-7" />
+            </div>
+            <h1 className="mt-3 font-heading text-xl font-semibold text-destructive">Payment Failed</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Your payment could not be completed.</p>
+            <div className="mt-3 inline-flex flex-wrap items-center justify-center gap-2 text-xs">
+              <Badge variant="destructive">Failed</Badge>
+              <span className="font-mono">{orderId}</span>
+              <span>·</span>
+              <span className="font-semibold">{amount}</span>
+            </div>
+            <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground">{reason}</p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Button size="lg" onClick={onRetry}><RefreshCw className="size-4" /> Retry Payment</Button>
+              <Button size="lg" variant="outline" onClick={onChangeMethod}>Change Payment Method</Button>
+              <Button size="lg" variant="ghost" onClick={onBackToCart}>Go Back to Cart</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          {/* LEFT */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Order details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Order ID</span><span className="font-mono">{orderId}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-semibold">{amount}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Method tried</span><span>UPI / Card via Razorpay</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Time</span><span>{now}</span></div>
+                <Separator className="my-2" />
+                <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">Invoice pending · No tracking started — payment must succeed first.</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">What happened?</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs leading-5 text-muted-foreground">
+                <p>Your payment may have timed out, been declined by the bank, or been cancelled. No money was charged.</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Check your bank balance and daily limit.</li>
+                  <li>Try a different UPI ID or card.</li>
+                  <li>Retry — Razorpay will create a fresh attempt safely.</li>
+                </ul>
+                <p className="pt-1 font-medium text-foreground">You can retry safely — duplicate charges are prevented by Razorpay order ID.</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* RIGHT — support */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Need help?</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs">
+                <div className="flex items-center gap-2"><ShieldCheck className="size-4 text-emerald-600" /> Secure payment · Razorpay</div>
+                <div className="flex items-center gap-2"><Mail className="size-4 text-muted-foreground" /> support@razent.store</div>
+                <div className="flex items-center gap-2"><Phone className="size-4 text-muted-foreground" /> +91 80 1234 5678</div>
+                <Separator />
+                <Button size="sm" className="w-full" onClick={onOpenAI}><Sparkles className="size-4" /> Ask AI for help</Button>
+                <p className="text-center text-[11px] text-muted-foreground">AI can check order, suggest alternate payment, or contact support.</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-muted/40">
+              <CardContent className="p-4 text-xs leading-5 text-muted-foreground">
+                Order not completed · Invoice will generate only after successful payment · Tracking begins after shipment.
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function PaymentSuccessView({ orderId, onContinue }: { orderId: string; onContinue: () => void }) {
+  return (
+    <section className="px-4 pb-12">
+      <div className="mx-auto max-w-[640px]">
+        <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
+          <CardContent className="p-8 text-center">
+            <div className="mx-auto grid size-14 place-items-center rounded-full bg-emerald-600 text-white">
+              <Check className="size-7" />
+            </div>
+            <h1 className="mt-3 font-heading text-xl font-semibold text-emerald-700 dark:text-emerald-300">Payment successful</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Order {orderId} confirmed. Invoice emailed.</p>
+            <Button className="mt-4" onClick={onContinue}>Continue shopping</Button>
+          </CardContent>
+        </Card>
       </div>
     </section>
   )
