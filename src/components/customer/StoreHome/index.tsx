@@ -2078,8 +2078,11 @@ interface OrderData {
 }
 
 function generateMockOrder(orderId: string, mobile: string, email: string): OrderData | null {
-  // deterministic mock: only return a valid order for specific test values
-  const isValid = orderId.startsWith("ORD") && mobile.length >= 10 && email.includes("@")
+  // accept ORD- / ord_ / ORD_ / any ID >= 6 chars, case-insensitive — matches mockOrders (ord_2026_...) and checkout IDs (ORD-...)
+  const cleanId = orderId.trim()
+  const cleanMobile = mobile.replace(/\D/g, "")
+  const cleanEmail = email.trim().toLowerCase()
+  const isValid = cleanId.length >= 6 && cleanMobile.length >= 10 && cleanEmail.includes("@")
   if (!isValid) return null
 
   const product = mockProducts[0]
@@ -2203,6 +2206,7 @@ function OrderTimeline({ currentStage }: { currentStage: TrackStageKey }) {
 }
 
 function TrackOrder({ onClose, onOpenAI }: TrackOrderProps) {
+  const { storeProfile } = useSettings()
   const [orderId, setOrderId] = useState("")
   const [mobile, setMobile] = useState("")
   const [email, setEmail] = useState("")
@@ -2214,18 +2218,25 @@ function TrackOrder({ onClose, onOpenAI }: TrackOrderProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setSubmitted(true)
     setLoading(true)
     setTimeout(() => {
-      const data = generateMockOrder(orderId.trim(), mobile.trim(), email.trim())
-      setLoading(false)
-      if (data) {
+      try {
+        const data = generateMockOrder(orderId.trim(), mobile.trim(), email.trim())
         setOrderData(data)
-        setSubmitted(true)
-      } else {
-        setSubmitted(true)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong")
         setOrderData(null)
+      } finally {
+        setLoading(false)
       }
     }, 800)
+  }
+
+  if (submitted) {
+    if (loading) return <TrackOrderSkeleton />
+    if (error) return <TrackOrderError message={error} onRetry={() => { setSubmitted(false); setError(null); setLoading(false) }} />
+    if (!orderData) return <TrackOrderEmpty onRetry={() => { setSubmitted(false); setError(null) }} />
   }
 
   if (!submitted) {
@@ -2301,11 +2312,7 @@ function TrackOrder({ onClose, onOpenAI }: TrackOrderProps) {
     )
   }
 
-  if (loading) return <TrackOrderSkeleton />
-  if (error) return <TrackOrderError message={error} onRetry={() => setSubmitted(false)} />
-  if (!orderData) return <TrackOrderEmpty onRetry={() => setSubmitted(false)} />
-
-  const { orderId: oid, customerName, productName, amount, paymentMethod, orderStatus, paymentStatus, invoiceNumber, invoiceDate, trackingStage, attemptTime, paymentReason } = orderData
+  const { orderId: oid, customerName, productName, amount, paymentMethod, orderStatus, paymentStatus, invoiceNumber, invoiceDate, trackingStage, attemptTime, paymentReason } = orderData!
 
   return (
     <section className="px-4 py-6">
