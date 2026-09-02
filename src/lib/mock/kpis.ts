@@ -8,9 +8,7 @@ import type { DashboardData } from "@/lib/types/kpi"
  */
 export const mockDashboard: DashboardData = (() => {
   const today = "2026-08-31"
-  const ordersToday = mockOrders.filter((o) =>
-    o.created_at.startsWith(today),
-  )
+  const ordersToday = mockOrders.filter((o) => o.created_at.startsWith(today))
 
   const pending = mockOrders.filter(
     (o) => o.status === "created" || o.shipping_status === "pending",
@@ -37,19 +35,22 @@ export const mockDashboard: DashboardData = (() => {
     {
       id: "need_2",
       title: `${pending} order${pending === 1 ? "" : "s"} awaiting payment`,
-      description: "Customers opened checkout but didn't complete Razorpay payment.",
+      description:
+        "Customers opened checkout but didn't complete Razorpay payment.",
       severity: "critical",
     },
     {
       id: "need_3",
       title: "1 refund processed in last 7 days",
-      description: "Mechanical Keyboard 75% — investigate product page for clarity.",
+      description:
+        "Mechanical Keyboard 75% — investigate product page for clarity.",
       severity: "info",
     },
     {
       id: "need_4",
       title: "AI Agent screen coming soon",
-      description: "Active conversations and AI insights will live here once the screen ships.",
+      description:
+        "Active conversations and AI insights will live here once the screen ships.",
       severity: "info",
     },
   ]

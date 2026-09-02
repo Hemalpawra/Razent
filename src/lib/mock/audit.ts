@@ -1,37 +1,100 @@
 import type { AuditSession } from "@/lib/types/audit"
 
 const baseEvents = [
-  { type: "Request Received", source: "store" as const, result: "Success" as const },
-  { type: "Products Searched", source: "AI Assistant" as const, result: "Success" as const },
-  { type: "Product Matched", source: "AI Assistant" as const, result: "Success" as const },
-  { type: "Approval Requested", source: "AI Agent" as const, result: "Success" as const },
-  { type: "Approval Received", source: "customer" as const, result: "Success" as const },
-  { type: "Razorpay Order Created", source: "Razorpay" as const, result: "Success" as const },
-  { type: "Payment Successful", source: "Razorpay" as const, result: "Success" as const },
-  { type: "Invoice Generated", source: "system" as const, result: "Success" as const },
-  { type: "Tracking Started", source: "system" as const, result: "Success" as const },
+  {
+    type: "Request Received",
+    source: "store" as const,
+    result: "Success" as const,
+  },
+  {
+    type: "Products Searched",
+    source: "AI Assistant" as const,
+    result: "Success" as const,
+  },
+  {
+    type: "Product Matched",
+    source: "AI Assistant" as const,
+    result: "Success" as const,
+  },
+  {
+    type: "Approval Requested",
+    source: "AI Agent" as const,
+    result: "Success" as const,
+  },
+  {
+    type: "Approval Received",
+    source: "customer" as const,
+    result: "Success" as const,
+  },
+  {
+    type: "Razorpay Order Created",
+    source: "Razorpay" as const,
+    result: "Success" as const,
+  },
+  {
+    type: "Payment Successful",
+    source: "Razorpay" as const,
+    result: "Success" as const,
+  },
+  {
+    type: "Invoice Generated",
+    source: "system" as const,
+    result: "Success" as const,
+  },
+  {
+    type: "Tracking Started",
+    source: "system" as const,
+    result: "Success" as const,
+  },
 ]
 
-function mkEvents(session_id: string, order_id: string | null, overrides: Partial<Record<string, string>> = {}): AuditSession["events"] {
+function mkEvents(
+  session_id: string,
+  order_id: string | null,
+  overrides: Partial<Record<string, string>> = {},
+): AuditSession["events"] {
   return baseEvents.slice(0, 7 + (session_id.charCodeAt(5) % 3)).map((b, i) => {
     const ts = new Date(Date.UTC(2025, 4, 27, 10, 10 + i * 4, 0)).toISOString()
     const actor =
-      i <= 1 ? "customer" : i <= 3 ? "AI Assistant" : i === 5 ? "system" : i === 6 ? "customer" : ("system" as const)
+      i <= 1
+        ? "customer"
+        : i <= 3
+          ? "AI Assistant"
+          : i === 5
+            ? "system"
+            : i === 6
+              ? "customer"
+              : "system" as const
     // inject one failed/critical session
     let result = b.result
-    if (session_id === "sess_9c2e10" && b.type === "Payment Successful") result = "Failed"
-    if (session_id === "sess_4b91ff" && b.type === "Razorpay Order Created") result = "Critical"
+    if (session_id === "sess_9c2e10" && b.type === "Payment Successful")
+      result = "Failed"
+    if (session_id === "sess_4b91ff" && b.type === "Razorpay Order Created")
+      result = "Critical"
     return {
       id: `${session_id}_evt_${i}`,
       type: b.type,
       timestamp: ts,
-      actor: (overrides.actor as never) ?? (actor as never),
+      actor: overrides.actor as never ?? actor as never,
       source: b.source,
       result,
-      reason: result === "Failed" ? "Payment declined by bank" : result === "Critical" ? "Order amount mismatch" : undefined,
+      reason:
+        result === "Failed"
+          ? "Payment declined by bank"
+          : result === "Critical"
+            ? "Order amount mismatch"
+            : undefined,
       request_id: `req_${session_id.slice(5, 9)}_${i}`,
-      payload_summary: JSON.stringify({ session_id, order_id, query: "air purifier under 20k" }, null, 2),
-      response_summary: JSON.stringify({ status: result.toLowerCase(), event: b.type }, null, 2),
+      payload_summary: JSON.stringify(
+        { session_id, order_id, query: "air purifier under 20k" },
+        null,
+        2,
+      ),
+      response_summary: JSON.stringify(
+        { status: result.toLowerCase(), event: b.type },
+        null,
+        2,
+      ),
       status_code: result === "Success" ? 200 : result === "Failed" ? 402 : 500,
       metadata: { ip: "203.0.113.42", region: "IN-KA" },
       related_product: "Air Purifier Pro",

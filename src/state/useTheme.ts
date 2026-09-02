@@ -43,8 +43,7 @@ export function initThemeListener() {
   const mql = window.matchMedia("(prefers-color-scheme: dark)")
   const apply = () => {
     const { mode } = useTheme.getState()
-    const resolved =
-      mode === "system" ? (mql.matches ? "dark" : "light") : mode
+    const resolved = mode === "system" ? (mql.matches ? "dark" : "light") : mode
     document.documentElement.classList.toggle("dark", resolved === "dark")
     useTheme.getState().setResolved(resolved)
   }

@@ -1,22 +1,6 @@
 import { create } from "zustand"
 
-export type Screen =
-  | "dashboard"
-  | "products"
-  | "product_import"
-  | "orders"
-  | "analytics"
-  | "ai_agent"
-  | "audit_trail"
-  | "settings"
-  | "order_detail"
-  | "product_detail"
-  | "conversation_detail"
-  | "audit_detail"
-  | "ai_agent_placeholder"
-  | "import_placeholder"
-  | "audit_placeholder"
-  | "settings_placeholder"
+export type Screen = "dashboard" | "products" | "product_import" | "orders" | "analytics" | "ai_agent" | "audit_trail" | "settings" | "order_detail" | "product_detail" | "conversation_detail" | "audit_detail" | "ai_agent_placeholder" | "import_placeholder" | "audit_placeholder" | "settings_placeholder"
 
 export type Role = "merchant" | "store"
 

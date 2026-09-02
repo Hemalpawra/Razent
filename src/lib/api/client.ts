@@ -23,7 +23,9 @@ export type ListProductsArgs = {
   status?: ProductStatus
 }
 
-export async function listProducts(args: ListProductsArgs = {}): Promise<Product[]> {
+export async function listProducts(
+  args: ListProductsArgs = {},
+): Promise<Product[]> {
   const { q, category, status } = args
   await delay(80) // simulate latency; remove when real
   return mockProducts.filter((p) => {
@@ -73,7 +75,9 @@ export async function deleteProduct(id: string): Promise<{ id: string }> {
 
 export async function listOrders(): Promise<Order[]> {
   await delay(80)
-  return mockOrders.slice().sort((a, b) => b.created_at.localeCompare(a.created_at))
+  return mockOrders
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
 export async function getOrder(id: string): Promise<Order | null> {

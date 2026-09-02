@@ -1,22 +1,37 @@
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
+
 import { AppShell } from "@/components/shared/AppShell"
+
 import ThemeProvider from "@/app/ThemeProvider"
+
 import { useUI } from "@/state/useUI"
 
 import DashboardScreen from "@/components/merchant/Dashboard"
+
 import ProductsScreen from "@/components/merchant/Products"
+
 import OrdersScreen from "@/components/merchant/Orders"
+
 import AnalyticsScreen from "@/components/merchant/Analytics"
+
 import AIAgentScreen from "@/components/merchant/AIAgent"
+
 import AuditTrailScreen from "@/components/merchant/AuditTrail"
+
 import ProductImportScreen from "@/components/merchant/ProductImport"
+
 import SettingsScreen from "@/components/merchant/Settings"
+
 import OrderDetailScreen from "@/components/merchant/Orders/OrderDetailScreen"
+
 import ProductDetailScreen from "@/components/merchant/Products/ProductDetailScreen"
+
 import ConversationDetailScreen from "@/components/merchant/AIAgent/ConversationDetailScreen"
+
 import AuditDetailScreen from "@/components/merchant/AuditTrail/AuditDetailScreen"
 
 import { EmptyState } from "@/components/shared/EmptyState"
+
 import { SparklesIcon } from "lucide-react"
 
 export default function App() {
@@ -24,17 +39,29 @@ export default function App() {
 
   const screenMap: Record<typeof activeScreen, React.ReactNode> = {
     dashboard: <DashboardScreen />,
+
     products: <ProductsScreen />,
+
     product_import: <ProductImportScreen />,
+
     orders: <OrdersScreen />,
+
     analytics: <AnalyticsScreen />,
+
     ai_agent: <AIAgentScreen />,
+
     audit_trail: <AuditTrailScreen />,
+
     settings: <SettingsScreen />,
+
     order_detail: <OrderDetailScreen />,
+
     product_detail: <ProductDetailScreen />,
+
     conversation_detail: <ConversationDetailScreen />,
+
     audit_detail: <AuditDetailScreen />,
+
     ai_agent_placeholder: (
       <EmptyState
         title="AI Agent"
@@ -42,14 +69,26 @@ export default function App() {
         icon={<SparklesIcon />}
       />
     ),
+
     import_placeholder: (
-      <EmptyState title="Product Import" description="Batch / CSV / URL import coming next per AI_RULES.md §1." />
+      <EmptyState
+        title="Product Import"
+        description="Batch / CSV / URL import coming next per AI_RULES.md §1."
+      />
     ),
+
     audit_placeholder: (
-      <EmptyState title="Audit Trail" description="Agent action + order event timeline — coming next." />
+      <EmptyState
+        title="Audit Trail"
+        description="Agent action + order event timeline — coming next."
+      />
     ),
+
     settings_placeholder: (
-      <EmptyState title="Settings" description="Store profile, Razorpay keys, AI tone, shipping policy — coming next." />
+      <EmptyState
+        title="Settings"
+        description="Store profile, Razorpay keys, AI tone, shipping policy — coming next."
+      />
     ),
   }
 
@@ -57,7 +96,10 @@ export default function App() {
     <ThemeProvider>
       <AppShell>
         {screenMap[activeScreen] ?? (
-          <EmptyState title="Unknown screen" description="Select a screen from the nav." />
+          <EmptyState
+            title="Unknown screen"
+            description="Select a screen from the nav."
+          />
         )}
       </AppShell>
     </ThemeProvider>

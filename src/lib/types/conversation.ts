@@ -1,13 +1,5 @@
 export type ConversationType = "human_customer" | "agent_to_agent"
-export type ConversationStatus =
-  | "active"
-  | "waiting_for_customer"
-  | "waiting_for_payment"
-  | "checkout_ready"
-  | "paid"
-  | "completed"
-  | "failed"
-  | "cancelled"
+export type ConversationStatus = "active" | "waiting_for_customer" | "waiting_for_payment" | "checkout_ready" | "paid" | "completed" | "failed" | "cancelled"
 
 export type ChatMessage = {
   id: string
@@ -27,11 +19,36 @@ export type Conversation = {
   updated_at: string
   order_id?: string
   messages: ChatMessage[]
-  products_recommended: { product_id: string; title: string; image_url: string; price_paise: number }[]
-  products_compared: { product_id: string; title: string; image_url: string; price_paise: number }[]
-  selected_product?: { product_id: string; title: string; image_url: string; price_paise: number }
-  upsell?: { product_id: string; title: string; image_url: string; price_paise: number }
+  products_recommended: {
+    product_id: string
+    title: string
+    image_url: string
+    price_paise: number
+  }[]
+  products_compared: {
+    product_id: string
+    title: string
+    image_url: string
+    price_paise: number
+  }[]
+  selected_product?: {
+    product_id: string
+    title: string
+    image_url: string
+    price_paise: number
+  }
+  upsell?: {
+    product_id: string
+    title: string
+    image_url: string
+    price_paise: number
+  }
   shipping_collected: boolean
-  shipping_address?: { full_name: string; phone: string; line1: string; city: string }
+  shipping_address?: {
+    full_name: string
+    phone: string
+    line1: string
+    city: string
+  }
   tracking_status?: string
 }

@@ -1,4 +1,4 @@
-"use client"
+"use client" /* Header */ /* Session header */ /* Timeline */ /* Bottom actions */
 
 import { ArrowLeft } from "lucide-react"
 import { Card } from "@/components/ui/card"
@@ -21,13 +21,20 @@ export default function AuditDetailScreen() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {}
       <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur bg-white">
-        <Button variant="ghost" size="icon" onClick={handleBack} className="p-1 rounded-md hover:bg-muted/30">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleBack}
+          className="p-1 rounded-md hover:bg-muted/30"
+        >
           <ArrowLeft className="size-4" />
         </Button>
         <span className="text-sm font-medium text-foreground">Audit Trail</span>
-        <span className="text-xs text-muted-foreground ml-auto">6 sessions</span>
+        <span className="text-xs text-muted-foreground ml-auto">
+          6 sessions
+        </span>
       </header>
 
       <div className="p-4 flex-1">
@@ -42,7 +49,7 @@ export default function AuditDetailScreen() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {/* Session header */}
+            {}
             <Card className="p-4 border-b">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/5 text-primary">
@@ -66,28 +73,40 @@ export default function AuditDetailScreen() {
               </div>
             </Card>
 
-            {/* Timeline */}
+            {}
             <div className="space-y-3">
               {session.events?.map((event, idx) => (
                 <Card key={event.id} className="p-3 border-t border-border/50">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span>{event.type}: {event.message}</span>
+                    <span>
+                      {event.type}: {event.message}
+                    </span>
                   </div>
                   <div className="mt-1 flex justify-between text-[10px]">
-                    <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
+                    <span>
+                      {new Date(event.timestamp).toLocaleTimeString()}
+                    </span>
                     <span>—</span>
                   </div>
                 </Card>
               ))}
             </div>
 
-            {/* Bottom actions */}
+            {}
             <div className="flex gap-2 pt-3">
-              <Button variant="outline" className="flex-1 rounded-full bg-card text-xs">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-full bg-card text-xs"
+              >
                 View Session Details
               </Button>
-              <Button variant="destructive" className="flex-1 rounded-full text-xs">Delete Session</Button>
+              <Button
+                variant="destructive"
+                className="flex-1 rounded-full text-xs"
+              >
+                Delete Session
+              </Button>
             </div>
           </div>
         )}

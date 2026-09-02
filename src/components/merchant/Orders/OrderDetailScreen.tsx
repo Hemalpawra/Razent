@@ -1,4 +1,4 @@
-"use client"
+"use client" /* Header */ /* Amount Paid */ /* Order Items */ /* Actions */ /* Customer Details */ /* Payment Details */ /* Order Timeline */ /* Bottom Actions */
 
 import { useEffect } from "react"
 import {
@@ -32,7 +32,9 @@ export default function OrderDetailScreen() {
   const setActiveScreen = useUI((s) => s.setActiveScreen)
   const drawerId = useUI((s) => s.drawerOrderId)
   const closeDrawer = useUI((s) => s.closeOrderDrawer)
-  const order = drawerId ? mockOrders.find((o) => o.id === drawerId) ?? null : null
+  const order = drawerId
+    ? (mockOrders.find((o) => o.id === drawerId) ?? null)
+    : null
 
   const paymentMethod = order?.via_ai ? "UPI" : "Card"
   const paidOn = order?.paid_at
@@ -45,7 +47,7 @@ export default function OrderDetailScreen() {
   const getTrackingLocation = (keyword: string) => {
     if (!order?.tracking?.events) return undefined
     const ev = order.tracking.events.find((e) =>
-      e.status.toLowerCase().includes(keyword.toLowerCase())
+      e.status.toLowerCase().includes(keyword.toLowerCase()),
     )
     return ev?.location
   }
@@ -95,7 +97,7 @@ export default function OrderDetailScreen() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {}
       <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur">
         <Button
           variant="ghost"
@@ -122,7 +124,7 @@ export default function OrderDetailScreen() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {/* Amount Paid */}
+            {}
             <Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Amount Paid
@@ -132,14 +134,17 @@ export default function OrderDetailScreen() {
               </p>
             </Card>
 
-            {/* Order Items */}
+            {}
             <Card className="p-4">
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
                 Order Items
               </h3>
               <div className="space-y-3">
                 {order.items.map((item) => (
-                  <div key={item.product_id} className="flex items-center gap-3">
+                  <div
+                    key={item.product_id}
+                    className="flex items-center gap-3"
+                  >
                     <img
                       src={item.image_url}
                       alt={item.title}
@@ -162,7 +167,7 @@ export default function OrderDetailScreen() {
               </div>
             </Card>
 
-            {/* Actions */}
+            {}
             <Button variant="default" className="w-full">
               <FileTextIcon className="size-4" />
               View Invoice
@@ -170,7 +175,7 @@ export default function OrderDetailScreen() {
 
             <Separator />
 
-            {/* Customer Details */}
+            {}
             <Card className="p-4">
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
                 Customer Details
@@ -178,20 +183,26 @@ export default function OrderDetailScreen() {
               <div className="space-y-2.5">
                 <div className="flex items-center gap-2">
                   <UserIcon className="size-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm">{order.shipping_address.full_name}</span>
+                  <span className="text-sm">
+                    {order.shipping_address.full_name}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <MailIcon className="size-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm truncate">{order.shipping_address.email}</span>
+                  <span className="text-sm truncate">
+                    {order.shipping_address.email}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <PhoneIcon className="size-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm">{order.shipping_address.phone}</span>
+                  <span className="text-sm">
+                    {order.shipping_address.phone}
+                  </span>
                 </div>
               </div>
             </Card>
 
-            {/* Payment Details */}
+            {}
             <Card className="p-4">
               <h3 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
                 <CreditCardIcon className="size-4 text-muted-foreground" />
@@ -205,7 +216,9 @@ export default function OrderDetailScreen() {
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Razorpay Order ID</span>
+                  <span className="text-muted-foreground">
+                    Razorpay Order ID
+                  </span>
                   <span className="font-medium text-xs truncate max-w-[55%] text-right">
                     {order.razorpay_order_id}
                   </span>
@@ -216,12 +229,14 @@ export default function OrderDetailScreen() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Paid On</span>
-                  <span className="font-medium text-xs text-right">{paidOn}</span>
+                  <span className="font-medium text-xs text-right">
+                    {paidOn}
+                  </span>
                 </div>
               </div>
             </Card>
 
-            {/* Order Timeline */}
+            {}
             <Card className="p-4">
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-4">
                 Order Timeline
@@ -242,7 +257,9 @@ export default function OrderDetailScreen() {
                         <CircleIcon className="size-2.5" />
                       )}
                     </span>
-                    <p className="text-sm font-medium leading-tight">{step.label}</p>
+                    <p className="text-sm font-medium leading-tight">
+                      {step.label}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {step.at
                         ? new Date(step.at).toLocaleString("en-IN", {
@@ -252,14 +269,16 @@ export default function OrderDetailScreen() {
                         : "Pending"}
                     </p>
                     {step.location ? (
-                      <p className="text-xs text-muted-foreground">{step.location}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {step.location}
+                      </p>
                     ) : null}
                   </div>
                 ))}
               </div>
             </Card>
 
-            {/* Bottom Actions */}
+            {}
             <Card className="p-4 space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline">View Conversation</Button>

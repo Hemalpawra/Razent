@@ -350,7 +350,7 @@ export const mockOrders: Order[] = [
         {
           at: "2026-08-25T10:00:00Z",
           status: "Returned to merchant",
-        location: "Warehouse",
+          location: "Warehouse",
         },
         {
           at: "2026-08-23T15:00:00Z",

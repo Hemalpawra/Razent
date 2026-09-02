@@ -35,10 +35,22 @@ export const mockAnalytics: AnalyticsData = (() => {
   })
 
   const orders_by_status: AnalyticsData["orders_by_status"] = [
-    { status: "paid", count: mockOrders.filter((o) => o.status === "paid").length },
-    { status: "created", count: mockOrders.filter((o) => o.status === "created").length },
-    { status: "failed", count: mockOrders.filter((o) => o.status === "failed").length },
-    { status: "refunded", count: mockOrders.filter((o) => o.status === "refunded").length },
+    {
+      status: "paid",
+      count: mockOrders.filter((o) => o.status === "paid").length,
+    },
+    {
+      status: "created",
+      count: mockOrders.filter((o) => o.status === "created").length,
+    },
+    {
+      status: "failed",
+      count: mockOrders.filter((o) => o.status === "failed").length,
+    },
+    {
+      status: "refunded",
+      count: mockOrders.filter((o) => o.status === "refunded").length,
+    },
   ]
 
   // Top categories by revenue from paid orders.
@@ -47,7 +59,10 @@ export const mockAnalytics: AnalyticsData = (() => {
     for (const item of o.items) {
       const product = mockProducts.find((p) => p.id === item.product_id)
       const category = product?.category ?? "Other"
-      catTotals.set(category, (catTotals.get(category) ?? 0) + item.unit_price_paise * item.qty)
+      catTotals.set(
+        category,
+        (catTotals.get(category) ?? 0) + item.unit_price_paise * item.qty,
+      )
     }
   }
   const top_categories = Array.from(catTotals.entries())
@@ -78,7 +93,8 @@ export const mockAnalytics: AnalyticsData = (() => {
     {
       id: "ins_3",
       title: "Refund rate steady at 1.4%",
-      detail: "Mechanical Keyboard 75% accounts for 1 of 1 refunds in the last 14 days.",
+      detail:
+        "Mechanical Keyboard 75% accounts for 1 of 1 refunds in the last 14 days.",
     },
     {
       id: "ins_4",

@@ -31,7 +31,10 @@ import {
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 
-const navGroups: { label: string; items: { label: string; key: Screen; icon: typeof LayoutDashboard }[] }[] = [
+const navGroups: {
+  label: string
+  items: { label: string key: Screen icon: typeof LayoutDashboard }[]
+}[] = [
   {
     label: "Overview",
     items: [
@@ -94,7 +97,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               Store
             </button>
           </div>
-          <span className="hidden text-xs text-muted-foreground lg:inline">Customer storefront — full width</span>
+          <span className="hidden text-xs text-muted-foreground lg:inline">
+            Customer storefront — full width
+          </span>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
           </div>
@@ -106,61 +111,79 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider style={{ ["--sidebar-width" as string]: "14.5rem" }}>
-      <Sidebar variant="sidebar" collapsible="offcanvas" className="border-sidebar-border">
+      <Sidebar
+        variant="sidebar"
+        collapsible="offcanvas"
+        className="border-sidebar-border"
+      >
         <SidebarHeader className="border-b border-sidebar-border px-3 py-3">
           <div className="flex items-center gap-2 px-1">
             <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Shield className="size-4" />
             </div>
             <div className="leading-none">
-              <div className="text-sm font-semibold text-sidebar-foreground">Razent</div>
-              <div className="text-[11px] text-muted-foreground">Merchant AI Gateway</div>
+              <div className="text-sm font-semibold text-sidebar-foreground">
+                Razent
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                Merchant AI Gateway
+              </div>
             </div>
           </div>
           {/* Merchant / Store switch — now in sidebar, slim fixed */}
-<div className="mt-3 inline-flex w-full rounded-lg border bg-muted p-1">
-    <button
-      type="button"
-      onClick={() => {
-        if (drawerOrderId) closeOrderDrawer()
-        if (drawerProductId) closeProductDrawer()
-        setRole("merchant")
-      }}
-      className={
-        "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
-        (role === "merchant" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
-      }
-    >
-      <Store className="size-3.5" />
-      Merchant
-    </button>
-    <button
-      type="button"
-      onClick={() => {
-        if (drawerOrderId) closeOrderDrawer()
-        if (drawerProductId) closeProductDrawer()
-        setRole("store")
-      }}
-      className={
-        "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
-        (role === "store" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
-      }
-    >
-      <ShoppingCart className="size-3.5" />
-      Store
-    </button>
-  </div>
+          <div className="mt-3 inline-flex w-full rounded-lg border bg-muted p-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (drawerOrderId) closeOrderDrawer()
+                if (drawerProductId) closeProductDrawer()
+                setRole("merchant")
+              }}
+              className={
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
+                (role === "merchant"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground")
+              }
+            >
+              <Store className="size-3.5" />
+              Merchant
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (drawerOrderId) closeOrderDrawer()
+                if (drawerProductId) closeProductDrawer()
+                setRole("store")
+              }}
+              className={
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
+                (role === "store"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground")
+              }
+            >
+              <ShoppingCart className="size-3.5" />
+              Store
+            </button>
+          </div>
         </SidebarHeader>
 
         <SidebarContent className="gap-0">
           {navGroups.map((group) => (
             <SidebarGroup key={group.label}>
-              <SidebarGroupLabel className="text-[11px] uppercase tracking-wider">{group.label}</SidebarGroupLabel>
+              <SidebarGroupLabel className="text-[11px] uppercase tracking-wider">
+                {group.label}
+              </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {group.items.map(({ label, key, icon: Icon }) => (
                     <SidebarMenuItem key={key}>
-                      <SidebarMenuButton isActive={activeScreen === key} onClick={() => handleScreenChange(key)} tooltip={label}>
+                      <SidebarMenuButton
+                        isActive={activeScreen === key}
+                        onClick={() => handleScreenChange(key)}
+                        tooltip={label}
+                      >
                         <Icon />
                         <span>{label}</span>
                       </SidebarMenuButton>
@@ -178,8 +201,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               MS
             </div>
             <div className="min-w-0 flex-1 leading-none">
-              <div className="truncate text-xs font-semibold text-sidebar-foreground">Merchant Store</div>
-              <div className="truncate text-[11px] text-muted-foreground">Super Admin</div>
+              <div className="truncate text-xs font-semibold text-sidebar-foreground">
+                Merchant Store
+              </div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                Super Admin
+              </div>
             </div>
           </div>
         </SidebarFooter>
@@ -190,7 +217,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="h-6" />
-          <span className="text-sm font-medium text-foreground capitalize">{String(activeScreen).replace(/_/g, " ")}</span>
+          <span className="text-sm font-medium text-foreground capitalize">
+            {String(activeScreen).replace(/_/g, " ")}
+          </span>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
           </div>
@@ -202,7 +231,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <footer className="border-t bg-background/40 py-3 text-center text-xs text-muted-foreground">
           <div className="mx-auto flex max-w-[1360px] flex-col items-center justify-between gap-2 px-4 md:flex-row">
-            <p>© 2026 Merchant AI Gateway — shadcn base-mira · Figma 1920WLight.</p>
+            <p>
+              © 2026 Merchant AI Gateway — shadcn base-mira · Figma 1920WLight.
+            </p>
             <p className="font-mono text-[11px]">C:\Users\hemal\Ragent</p>
           </div>
         </footer>

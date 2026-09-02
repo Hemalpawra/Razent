@@ -23,43 +23,28 @@ function DrawerContent({
   className?: string
 }) {
   return (
-    <DrawerPortal>
+    <DrawerPrimitive.Portal>
       <DrawerPrimitive.Popup
         data-slot="drawer-content"
         className={cn(
-          "fixed right-0 top-0 h-full w-[25vw] min-w-[380px] max-w-[420px] z-50 flex flex-col bg-popover p-6 transition-opacity ease-in-out data-[state=closed]:opacity-0 data-[state=open]:opacity-100",
-          className
+          "fixed right-0 top-0 h-full w-[25vw] min-w-[380px] max-w-[420px] z-40 flex flex-col bg-popover text-popover-foreground border-l border-border overflow-hidden",
+          "transition-transform duration-200 ease-in-out",
+          "data-[state=open]:translate-x-0 data-[state=closed]:translate-x-full",
+          className,
         )}
         {...props}
       >
         {children}
-        <DrawerClose>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 p-1 rounded-md hover:bg-muted/30"
-          >
-            <XIcon />
-          </Button>
-        </DrawerClose>
       </DrawerPrimitive.Popup>
-    </DrawerPortal>
+    </DrawerPrimitive.Portal>
   )
-}
-
-function DrawerPortal({ children }: { children: React.ReactNode }) {
-  return <div>{children}</div>
-}
-
-function DrawerClose({ children }: { children: React.ReactNode }) {
-  return <div>{children}</div>
 }
 
 function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="drawer-header"
-      className={cn("flex flex-col gap-2 p-0", className)}
+      className={cn("flex flex-col gap-2 p-0 shrink-0", className)}
       {...props}
     />
   )
@@ -69,16 +54,16 @@ function DrawerTitle({ className, ...props }: React.ComponentProps<"h3">) {
   return (
     <h3
       data-slot="drawer-title"
-      className={cn("font-heading text-lg font-medium text-foreground", className)}
+      className={cn(
+        "font-heading text-lg font-medium text-foreground",
+        className,
+      )}
       {...props}
     />
   )
 }
 
-function DrawerDescription({
-  className,
-  ...props
-}: React.ComponentProps<"p">) {
+function DrawerDescription({ className, ...props }: React.ComponentProps<"p">) {
   return (
     <p
       data-slot="drawer-description"
@@ -88,11 +73,21 @@ function DrawerDescription({
   )
 }
 
+function DrawerBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="drawer-body"
+      className={cn("flex-1 overflow-y-auto", className)}
+      {...props}
+    />
+  )
+}
+
 function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="drawer-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-0", className)}
+      className={cn("mt-auto flex flex-col gap-2 p-0 shrink-0", className)}
       {...props}
     />
   )
@@ -105,5 +100,6 @@ export {
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
+  DrawerBody,
   DrawerFooter,
 }

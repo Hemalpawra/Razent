@@ -10,13 +10,36 @@ import {
   LayoutGrid,
   ArrowUpRight,
 } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Cell } from "recharts"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Pie,
+  PieChart,
+  Cell,
+} from "recharts"
 
 // Strict shadcn — every visual is a shadcn primitive, layout is 1:1 Figma 1920WLight
 // Theme-aware: uses bg-card / text-foreground / muted / primary tokens so .dark toggles correctly
@@ -35,13 +58,20 @@ const chartConfig = {
   revenue: { label: "Revenue", color: "var(--chart-2)" },
 }
 
-const dateRanges = ["May 20 - May 27", "May 13 - May 19", "Last 7 days", "Last 30 days"] as const
+const dateRanges = [
+  "May 20 - May 27",
+  "May 13 - May 19",
+  "Last 7 days",
+  "Last 30 days",
+] as const
 
 export default function DashboardScreen() {
   const [rangeIdx, setRangeIdx] = useState(0)
 
   const handleExport = () => {
-    const csv = ["Revenue,Orders", "124560,18", "110000,15", "88000,12"].join("\n")
+    const csv = ["Revenue,Orders", "124560,18", "110000,15", "88000,12"].join(
+      "\n",
+    )
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -74,7 +104,11 @@ export default function DashboardScreen() {
             {dateRanges[rangeIdx]}
             <ChevronDown className="size-4 opacity-60" />
           </Button>
-          <Button variant="outline" className="h-9 rounded-lg bg-card" onClick={handleExport}>
+          <Button
+            variant="outline"
+            className="h-9 rounded-lg bg-card"
+            onClick={handleExport}
+          >
             <Download className="size-4" />
             Export
           </Button>
@@ -83,11 +117,36 @@ export default function DashboardScreen() {
 
       {/* KPI strip — 5 cards — tighter gap + padding */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard icon={<IndianRupee className="size-4" />} label="Revenue Generated" value="₹1,000.00" delta="↑ 18.6% vs May 13 - May 19" />
-        <KpiCard icon={<ShoppingCart className="size-4" />} label="Orders Created" value="256" delta="↑ 16.2% vs May 13 - May 19" />
-        <KpiCard icon={<Bot className="size-4" />} label="AI Conversion Rate" value="24.5%" delta="↑ 5.3% vs May 13 - May 19" />
-        <KpiCard icon={<TrendingUp className="size-4" />} label="Upsell Revenue" value="₹1,24,560" delta="↑ 22.8% vs May 13 - May 19" />
-        <KpiCard icon={<Wallet className="size-4" />} label="Avg. Order Value" value="₹3,419" delta="↑ 2.7% vs May 13 - May 19" />
+        <KpiCard
+          icon={<IndianRupee className="size-4" />}
+          label="Revenue Generated"
+          value="₹1,000.00"
+          delta="↑ 18.6% vs May 13 - May 19"
+        />
+        <KpiCard
+          icon={<ShoppingCart className="size-4" />}
+          label="Orders Created"
+          value="256"
+          delta="↑ 16.2% vs May 13 - May 19"
+        />
+        <KpiCard
+          icon={<Bot className="size-4" />}
+          label="AI Conversion Rate"
+          value="24.5%"
+          delta="↑ 5.3% vs May 13 - May 19"
+        />
+        <KpiCard
+          icon={<TrendingUp className="size-4" />}
+          label="Upsell Revenue"
+          value="₹1,24,560"
+          delta="↑ 22.8% vs May 13 - May 19"
+        />
+        <KpiCard
+          icon={<Wallet className="size-4" />}
+          label="Avg. Order Value"
+          value="₹3,419"
+          delta="↑ 2.7% vs May 13 - May 19"
+        />
       </div>
 
       {/* Main grid: left (Overview + AI Performance), right (Needs Attention + Recent Activity) — tighter + closer side cards */}
@@ -127,10 +186,16 @@ function KpiCard({
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <CardDescription className="text-[13px] font-medium text-muted-foreground">{label}</CardDescription>
-          <div className="mt-1 text-xl font-semibold leading-6 text-foreground">{value}</div>
+          <CardDescription className="text-[13px] font-medium text-muted-foreground">
+            {label}
+          </CardDescription>
+          <div className="mt-1 text-xl font-semibold leading-6 text-foreground">
+            {value}
+          </div>
           <div className="mt-1 text-[10px] leading-3">
-            <span className="font-medium text-emerald-600 dark:text-emerald-400">{up} </span>
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+              {up}{" "}
+            </span>
             <span className="text-muted-foreground">vs {rest}</span>
           </div>
         </div>
@@ -152,12 +217,32 @@ function OverviewCard() {
       <CardContent className="grid gap-3 lg:grid-cols-[1.55fr_1fr]">
         {/* Sales Overview chart — shadcn Chart + Recharts */}
         <div>
-          <div className="text-sm font-semibold text-foreground">Sales Overview</div>
-          <CardDescription className="text-xs">Revenue generated from AI assisted orders</CardDescription>
-          <ChartContainer config={chartConfig} className="mt-4 h-[200px] w-full">
-            <AreaChart data={revenueData} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
-              <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} dy={8} />
+          <div className="text-sm font-semibold text-foreground">
+            Sales Overview
+          </div>
+          <CardDescription className="text-xs">
+            Revenue generated from AI assisted orders
+          </CardDescription>
+          <ChartContainer
+            config={chartConfig}
+            className="mt-4 h-[200px] w-full"
+          >
+            <AreaChart
+              data={revenueData}
+              margin={{ left: 0, right: 12, top: 8, bottom: 0 }}
+            >
+              <CartesianGrid
+                vertical={false}
+                strokeDasharray="3 3"
+                className="stroke-border/50"
+              />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11 }}
+                dy={8}
+              />
               <YAxis
                 tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`}
                 tickLine={false}
@@ -181,12 +266,22 @@ function OverviewCard() {
 
         {/* Revenue Breakdown — donut via PieChart with ChartTooltip */}
         <div className="border-t pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-          <div className="text-sm font-semibold text-foreground">Revenue Breakdown</div>
+          <div className="text-sm font-semibold text-foreground">
+            Revenue Breakdown
+          </div>
           {(() => {
             const donutData = [
-              { name: "AI Conversations", value: 82750, fill: "var(--primary)" },
+              {
+                name: "AI Conversations",
+                value: 82750,
+                fill: "var(--primary)",
+              },
               { name: "Direct Sales", value: 31200, fill: "var(--chart-2)" },
-              { name: "Upsell & Cross-sell", value: 10610, fill: "var(--chart-4)" },
+              {
+                name: "Upsell & Cross-sell",
+                value: 10610,
+                fill: "var(--chart-4)",
+              },
             ]
             const donutConfig = {
               ai: { label: "AI Conversations", color: "var(--primary)" },
@@ -198,7 +293,16 @@ function OverviewCard() {
                 <div className="relative size-[130px]">
                   <ChartContainer config={donutConfig} className="size-full">
                     <PieChart>
-                      <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={2} stroke="none" isAnimationActive={false}>
+                      <Pie
+                        data={donutData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={42}
+                        outerRadius={62}
+                        paddingAngle={2}
+                        stroke="none"
+                        isAnimationActive={false}
+                      >
                         {donutData.map((e) => (
                           <Cell key={e.name} fill={e.fill} />
                         ))}
@@ -209,8 +313,12 @@ function OverviewCard() {
                             hideLabel
                             formatter={(value, name) => (
                               <div className="flex w-full justify-between gap-6">
-                                <span className="text-muted-foreground">{String(name)}</span>
-                                <span className="font-medium tabular-nums text-foreground">₹{Number(value).toLocaleString("en-IN")}</span>
+                                <span className="text-muted-foreground">
+                                  {String(name)}
+                                </span>
+                                <span className="font-medium tabular-nums text-foreground">
+                                  ₹{Number(value).toLocaleString("en-IN")}
+                                </span>
                               </div>
                             )}
                           />
@@ -219,19 +327,26 @@ function OverviewCard() {
                     </PieChart>
                   </ChartContainer>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="text-[13px] font-bold leading-none text-foreground">₹1,24,560</div>
-                    <div className="text-[10px] leading-none text-muted-foreground">Total Revenue</div>
+                    <div className="text-[13px] font-bold leading-none text-foreground">
+                      ₹1,24,560
+                    </div>
+                    <div className="text-[10px] leading-none text-muted-foreground">
+                      Total Revenue
+                    </div>
                   </div>
                 </div>
                 <div className="mt-4 w-full space-y-1 text-xs leading-4 text-muted-foreground">
                   <div className="flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-primary" /> AI Conversations — ₹82,750 (66%)
+                    <span className="size-2 rounded-full bg-primary" /> AI
+                    Conversations — ₹82,750 (66%)
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-chart-2" /> Direct Sales — ₹31,200 (25%)
+                    <span className="size-2 rounded-full bg-chart-2" /> Direct
+                    Sales — ₹31,200 (25%)
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-chart-4" /> Upsell & Cross-sell — ₹10,610 (9%)
+                    <span className="size-2 rounded-full bg-chart-4" /> Upsell &
+                    Cross-sell — ₹10,610 (9%)
                   </div>
                 </div>
               </div>
@@ -248,17 +363,37 @@ function AiPerformanceCard() {
     <Card className="rounded-xl bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-base">AI Performance</CardTitle>
-        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold text-primary hover:text-primary">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs font-bold text-primary hover:text-primary"
+        >
           View Analytics
         </Button>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <div className="col-span-2 grid grid-cols-2 gap-3">
-            <MetricMini label="Conversations" value="156" delta="↑ 12% vs yesterday" />
-            <MetricMini label="Products Shown" value="432" delta="↑ 18% vs yesterday" />
-            <MetricMini label="Orders Created" value="18" delta="↑ 20% vs yesterday" />
-            <MetricMini label="Conversion Rate" value="24.5%" delta="↑ 6.2% vs yesterday" />
+            <MetricMini
+              label="Conversations"
+              value="156"
+              delta="↑ 12% vs yesterday"
+            />
+            <MetricMini
+              label="Products Shown"
+              value="432"
+              delta="↑ 18% vs yesterday"
+            />
+            <MetricMini
+              label="Orders Created"
+              value="18"
+              delta="↑ 20% vs yesterday"
+            />
+            <MetricMini
+              label="Conversion Rate"
+              value="24.5%"
+              delta="↑ 6.2% vs yesterday"
+            />
           </div>
           <div className="col-span-2 lg:col-span-3 rounded-xl border bg-card p-3">
             <div className="flex items-center justify-between pb-2 text-sm font-semibold text-foreground">
@@ -288,11 +423,26 @@ function AiPerformanceCard() {
               <div className="col-span-3 flex items-center justify-center">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <svg viewBox="0 0 177 139" className="h-[110px] w-[140px] cursor-default">
-                      <path d="M0 0 L177 0 L140 40 L37 40 Z" fill="var(--primary)" />
-                      <path d="M37 40 L140 40 L120 80 L57 80 Z" fill="var(--chart-2)" />
-                      <path d="M57 80 L120 80 L105 110 L72 110 Z" fill="var(--chart-1)" />
-                      <path d="M72 110 L105 110 L95 139 L82 139 Z" fill="var(--chart-3)" />
+                    <svg
+                      viewBox="0 0 177 139"
+                      className="h-[110px] w-[140px] cursor-default"
+                    >
+                      <path
+                        d="M0 0 L177 0 L140 40 L37 40 Z"
+                        fill="var(--primary)"
+                      />
+                      <path
+                        d="M37 40 L140 40 L120 80 L57 80 Z"
+                        fill="var(--chart-2)"
+                      />
+                      <path
+                        d="M57 80 L120 80 L105 110 L72 110 Z"
+                        fill="var(--chart-1)"
+                      />
+                      <path
+                        d="M72 110 L105 110 L95 139 L82 139 Z"
+                        fill="var(--chart-3)"
+                      />
                     </svg>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
@@ -319,42 +469,86 @@ function AiPerformanceCard() {
   )
 }
 
-function MetricMini({ label, value, delta }: { label: string; value: string; delta: string }) {
+function MetricMini({
+  label,
+  value,
+  delta,
+}: {
+  label: string
+  value: string
+  delta: string
+}) {
   return (
     <Card className="rounded-lg bg-card p-3 shadow-none">
       <CardDescription className="text-xs font-medium">{label}</CardDescription>
       <div className="mt-1 text-xl font-semibold text-foreground">{value}</div>
-      <div className="mt-1 text-[10px] leading-3 text-emerald-600 dark:text-emerald-400">{delta}</div>
+      <div className="mt-1 text-[10px] leading-3 text-emerald-600 dark:text-emerald-400">
+        {delta}
+      </div>
     </Card>
   )
 }
 
 function NeedsAttentionCard() {
   const items = [
-    { icon: LayoutGrid, title: "Waiting for Payment", desc: "Orders pending payment", count: 7 },
-    { icon: ShoppingCart, title: "Missing Shipping Details", desc: "Customer details incomplete", count: 4 },
-    { icon: TrendingUp, title: "Out of Stock Products", desc: "Products out of stock", count: 3 },
-    { icon: ArrowUpRight, title: "Abandoned High Value Chats", desc: "Potential revenue at risk", count: 5 },
-    { icon: Bot, title: "Human Support Needed", desc: "Customer requested support", count: 2 },
+    {
+      icon: LayoutGrid,
+      title: "Waiting for Payment",
+      desc: "Orders pending payment",
+      count: 7,
+    },
+    {
+      icon: ShoppingCart,
+      title: "Missing Shipping Details",
+      desc: "Customer details incomplete",
+      count: 4,
+    },
+    {
+      icon: TrendingUp,
+      title: "Out of Stock Products",
+      desc: "Products out of stock",
+      count: 3,
+    },
+    {
+      icon: ArrowUpRight,
+      title: "Abandoned High Value Chats",
+      desc: "Potential revenue at risk",
+      count: 5,
+    },
+    {
+      icon: Bot,
+      title: "Human Support Needed",
+      desc: "Customer requested support",
+      count: 2,
+    },
   ] as const
 
   return (
     <Card className="rounded-xl bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="text-base">Needs Attention</CardTitle>
-        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold text-primary hover:text-primary">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs font-bold text-primary hover:text-primary"
+        >
           View All
         </Button>
       </CardHeader>
       <CardContent className="space-y-1">
         {items.map((it) => (
-          <div key={it.title} className="flex items-center justify-between rounded-lg p-2 hover:bg-muted/40">
+          <div
+            key={it.title}
+            className="flex items-center justify-between rounded-lg p-2 hover:bg-muted/40"
+          >
             <div className="flex items-center gap-3">
               <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <it.icon className="size-4" />
               </div>
               <div>
-                <div className="text-sm font-semibold text-foreground">{it.title}</div>
+                <div className="text-sm font-semibold text-foreground">
+                  {it.title}
+                </div>
                 <div className="text-xs text-muted-foreground">{it.desc}</div>
               </div>
             </div>
@@ -369,8 +563,16 @@ function NeedsAttentionCard() {
 function RecentActivityCard() {
   const activities = [
     { time: "10:32 AM", label: "Order Created", status: "Success" as const },
-    { time: "10:28 AM", label: "Payment Successful", status: "Success" as const },
-    { time: "10:24 AM", label: "Products Compared", status: "Success" as const },
+    {
+      time: "10:28 AM",
+      label: "Payment Successful",
+      status: "Success" as const,
+    },
+    {
+      time: "10:24 AM",
+      label: "Products Compared",
+      status: "Success" as const,
+    },
     { time: "10:20 AM", label: "Upsell Shown", status: "Success" as const },
     { time: "10:16 AM", label: "Payment Failed", status: "Failed" as const },
   ]
@@ -379,16 +581,27 @@ function RecentActivityCard() {
     <Card className="rounded-xl bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="text-base">Recent Activity</CardTitle>
-        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold text-primary hover:text-primary">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs font-bold text-primary hover:text-primary"
+        >
           View All
         </Button>
       </CardHeader>
       <CardContent className="divide-y">
         {activities.map((a) => (
           <div key={a.time + a.label} className="flex items-center gap-3 py-3">
-            <span className="w-[55px] shrink-0 text-[10px] text-muted-foreground">{a.time}</span>
-            <span className="flex-1 text-xs font-medium text-foreground">{a.label}</span>
-            <Badge variant={a.status === "Success" ? "success" : "destructive"} className="rounded-full px-2 py-0 text-[11px]">
+            <span className="w-[55px] shrink-0 text-[10px] text-muted-foreground">
+              {a.time}
+            </span>
+            <span className="flex-1 text-xs font-medium text-foreground">
+              {a.label}
+            </span>
+            <Badge
+              variant={a.status === "Success" ? "success" : "destructive"}
+              className="rounded-full px-2 py-0 text-[11px]"
+            >
               {a.status}
             </Badge>
           </div>

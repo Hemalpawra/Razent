@@ -25,7 +25,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       className={cn(
         "flex h-7 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-2 py-1 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50 data-[placeholder]:text-muted-foreground [&_svg]:size-3.5",
-        className
+        className,
       )}
       {...props}
     >
@@ -49,7 +49,7 @@ function SelectContent({
           data-slot="select-content"
           className={cn(
             "relative z-50 max-h-60 min-w-32 overflow-hidden rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
-            className
+            className,
           )}
           {...props}
         >
@@ -64,11 +64,17 @@ function SelectContent({
   )
 }
 
-function SelectLabel({ className, ...props }: SelectPrimitive.GroupLabel.Props) {
+function SelectLabel({
+  className,
+  ...props
+}: SelectPrimitive.GroupLabel.Props) {
   return (
     <SelectPrimitive.GroupLabel
       data-slot="select-label"
-      className={cn("px-2 py-1 text-[11px] font-medium text-muted-foreground", className)}
+      className={cn(
+        "px-2 py-1 text-[11px] font-medium text-muted-foreground",
+        className,
+      )}
       {...props}
     />
   )
@@ -84,11 +90,13 @@ function SelectItem({
       data-slot="select-item"
       className={cn(
         "relative flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none select-none focus:bg-accent focus:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground [&_svg]:size-3",
-        className
+        className,
       )}
       {...props}
     >
-      <SelectPrimitive.ItemText className="flex-1 text-left">{children}</SelectPrimitive.ItemText>
+      <SelectPrimitive.ItemText className="flex-1 text-left">
+        {children}
+      </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator>
         <CheckIcon className="size-3" />
       </SelectPrimitive.ItemIndicator>
@@ -96,7 +104,10 @@ function SelectItem({
   )
 }
 
-function SelectSeparator({ className, ...props }: SelectPrimitive.Separator.Props) {
+function SelectSeparator({
+  className,
+  ...props
+}: SelectPrimitive.Separator.Props) {
   return (
     <SelectPrimitive.Separator
       data-slot="select-separator"
