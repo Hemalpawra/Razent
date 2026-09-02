@@ -208,7 +208,7 @@ function KpiCard({ icon, label, value, sub, valueIsAmount }: { icon: React.React
   return (
     <Card className="rounded-xl bg-card p-5 shadow-sm py-5">
       <div className="flex gap-3">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary">{icon}</div>
+        <div className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary sm:flex">{icon}</div>
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-medium leading-5 text-muted-foreground">{label}</div>
           <div className={valueIsAmount ? "mt-0.5 text-lg font-semibold leading-6 text-foreground" : "mt-0.5 font-heading text-[22px] font-semibold leading-7 text-foreground"}>{value}</div>

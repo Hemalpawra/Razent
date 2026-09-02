@@ -412,7 +412,7 @@ function KpiCard({ icon, label, value, delta }: { icon: React.ReactNode; label: 
   return (
     <Card className="rounded-xl bg-card p-5 shadow-sm">
       <div className="flex gap-3">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">{icon}</div>
+        <div className="hidden size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:flex">{icon}</div>
         <div className="min-w-0 flex-1">
           <CardDescription className="text-[13px] font-medium text-muted-foreground">{label}</CardDescription>
           <div className="mt-1 text-xl font-semibold leading-6 tracking-tight text-foreground">{value}</div>

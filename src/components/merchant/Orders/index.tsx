@@ -517,7 +517,7 @@ function KpiCard({
   return (
     <Card className="rounded-xl bg-card p-5 shadow-sm py-5">
       <div className="flex gap-3">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
+        <div className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary sm:flex">
           {icon}
         </div>
         <div className="min-w-0 flex-1">
