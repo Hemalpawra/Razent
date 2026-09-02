@@ -317,7 +317,7 @@ export default function ProductImportScreen() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="rounded-xl bg-card p-5 shadow-sm"><div className="flex gap-3"><div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><Package className="size-4" /></div><div><div className="text-xs text-muted-foreground">Total Imported</div><div className="text-2xl font-semibold">{summary.total}</div><div className="text-[11px] text-muted-foreground">All rows processed</div></div></div></Card>
         <Card className="rounded-xl bg-card p-5 shadow-sm"><div className="flex gap-3"><div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="size-4" /></div><div><div className="text-xs text-muted-foreground">Valid Products</div><div className="text-2xl font-semibold text-emerald-600">{summary.valid}</div><div className="text-[11px] text-muted-foreground">Ready to publish</div></div></div></Card>
         <Card className="rounded-xl bg-card p-5 shadow-sm"><div className="flex gap-3"><div className="flex size-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive"><AlertTriangle className="size-4" /></div><div><div className="text-xs text-muted-foreground">Failed Rows</div><div className="text-2xl font-semibold text-destructive">{summary.failed}</div><div className="text-[11px] text-muted-foreground">Need fixes</div></div></div></Card>

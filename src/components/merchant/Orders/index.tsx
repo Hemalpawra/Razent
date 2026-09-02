@@ -190,7 +190,7 @@ export default function OrdersScreen() {
       </div>
 
       {/* KPI row — 5 cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard icon={<ShoppingCart className="size-4" />} label="Total Orders" value={String(kpis.total)} sub="All time Orders" />
         <KpiCard
           icon={<ShoppingCart className="size-4" />}

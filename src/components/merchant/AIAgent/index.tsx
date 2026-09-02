@@ -50,7 +50,7 @@ export default function AIAgentScreen({ loading, error }: { loading?: boolean; e
     return (
       <div className="space-y-4 bg-muted/30 -m-6 p-6">
         <div className="flex justify-between"><Skeleton className="h-10 w-64" /><Skeleton className="h-9 w-32" /></div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
         <Skeleton className="h-72 rounded-xl" />
       </div>
     )
@@ -110,7 +110,7 @@ export default function AIAgentScreen({ loading, error }: { loading?: boolean; e
       </div>
 
       {/* KPI — 5 cards (AI Status removed, Customers helped + Conversion added) */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard icon={<Users className="size-4" />} label="Customers Helped" value={String(customersHelped)} sub="today · 98% without handoff" />
         <KpiCard icon={<TrendingUp className="size-4" />} label="Conversion Rate" value={conversionRate} sub="↑ 5.3% vs yesterday" />
         <KpiCard icon={<MessageCircle className="size-4" />} label="Active Conversations" value={String(activeCount)} sub="Waiting or active now" />

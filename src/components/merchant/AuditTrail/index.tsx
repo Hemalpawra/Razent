@@ -88,7 +88,7 @@ export default function AuditTrailScreen() {
       </div>
 
       {/* KPI 5 cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Kpi label="Total Sessions" value={String(totalSessions)} sub="All sessions" />
         <Kpi label="Total Events" value={String(totalEvents)} sub="Logged events" />
         <Kpi label="Success Events" value={String(success)} sub="Completed successfully" tone="success" />

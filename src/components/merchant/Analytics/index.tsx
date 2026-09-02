@@ -143,7 +143,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
             <Skeleton className="h-9 w-24 rounded-xl" />
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <Card key={i} className="rounded-xl bg-card p-5">
               <Skeleton className="h-11 w-11 rounded-xl" />
@@ -216,7 +216,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
       </div>
 
       {/* KPI strip — 5 cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard icon={<IndianRupee className="size-4" />} label="Revenue Generated" value={formatPrice(totalRevenuePaise)} delta="↑ 18.6% vs May 13 - May 19" />
         <KpiCard icon={<ShoppingCart className="size-4" />} label="Orders Created" value={String(totalOrders || 256)} delta="↑ 16.2% vs May 13 - May 19" />
         <KpiCard icon={<Bot className="size-4" />} label="AI Conversion Rate" value={`${a.conversion_rate_pct}%`} delta="↑ 5.3% vs May 13 - May 19" />

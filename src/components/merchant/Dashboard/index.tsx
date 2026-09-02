@@ -70,7 +70,7 @@ export default function DashboardScreen() {
       </div>
 
       {/* KPI strip — 5 cards — Figma Container12 */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard icon={<IndianRupee className="size-4" />} label="Revenue Generated" value="₹1,000.00" delta="↑ 18.6% vs May 13 - May 19" />
         <KpiCard icon={<ShoppingCart className="size-4" />} label="Orders Created" value="256" delta="↑ 16.2% vs May 13 - May 19" />
         <KpiCard icon={<Bot className="size-4" />} label="AI Conversion Rate" value="24.5%" delta="↑ 5.3% vs May 13 - May 19" />

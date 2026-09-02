@@ -126,7 +126,7 @@ export default function ProductsScreen() {
       </div>
 
       {/* KPI strip — 5 cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard icon={<IndianRupee className="size-4" />} label="Total Products" value={String(kpi.total)} sub="All Products in catalog" />
         <KpiCard icon={<ShoppingCart className="size-4" />} label="Active Products" value={String(kpi.active)} sub="Visible to customers" />
         <KpiCard icon={<TrendingUp className="size-4" />} label="Low stock" value={String(kpi.low)} sub="Need attention" />
