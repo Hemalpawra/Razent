@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -52,6 +54,11 @@ import {
   Tag as TagIcon,
   Check,
   Eye,
+  Heart,
+  Share2,
+  Maximize2,
+  Image as ImageIcon,
+  GalleryThumbnails,
 } from "lucide-react"
 
 type StoreView = "home" | "listing" | "detail"
@@ -846,51 +853,16 @@ export default function StoreHome() {
           )}
 
           {view === "detail" && selectedProduct && (
-            <section className="px-4 py-4">
-              <Card className="overflow-hidden">
-                <CardContent className="grid gap-6 p-6 md:grid-cols-2">
-                  <img src={selectedProduct.image_url} alt={selectedProduct.title} className="aspect-square w-full rounded-lg object-cover" />
-                  <div>
-                    <Badge variant="outline">{selectedProduct.category}</Badge>
-                    <h1 className="mt-2 font-heading text-xl font-semibold leading-tight">{selectedProduct.title}</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">{selectedProduct.description}</p>
-                    <div className="mt-3 flex items-center gap-2 text-sm">
-                      <span className="text-lg font-semibold">{formatPrice(selectedProduct.price_paise)}</span>
-                      <Badge variant={selectedProduct.stock > 0 ? "secondary" : "destructive"}>{selectedProduct.stock > 0 ? "In stock" : "Out of stock"}</Badge>
-                    </div>
-                    <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-                      <Star className="size-3 fill-amber-400 text-amber-400" /> 4.7 · 86 reviews · SKU {selectedProduct.id.slice(0, 8)}
-                    </div>
-                    <Separator className="my-4" />
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="lg" disabled={selectedProduct.stock === 0} onClick={() => addToCart(selectedProduct.id)}>
-                        <ShoppingCart className="size-4" /> Add to cart
-                      </Button>
-                      <Button variant="outline" size="lg" onClick={() => { addToCart(selectedProduct.id); setCartOpen(true) }}>
-                        Buy now
-                      </Button>
-                      <Button variant="ghost" size="lg" onClick={() => setView("listing")}>
-                        Back to products
-                      </Button>
-                    </div>
-                    <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-                      <div className="rounded-md bg-muted p-2">
-                        <Truck className="mx-auto size-4" />
-                        <div className="mt-1 font-medium">Fast delivery</div>
-                      </div>
-                      <div className="rounded-md bg-muted p-2">
-                        <ShieldCheck className="mx-auto size-4" />
-                        <div className="mt-1 font-medium">Razorpay secure</div>
-                      </div>
-                      <div className="rounded-md bg-muted p-2">
-                        <RotateCcw className="mx-auto size-4" />
-                        <div className="mt-1 font-medium">7-day returns</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </section>
+            <ProductDetail
+              product={selectedProduct}
+              onClose={() => setView("listing")}
+              onAddToCart={addToCart}
+              onBuyNow={(id) => { addToCart(id); setCartOpen(true) }}
+              onOpenAI={() => setAiOpen(true)}
+              onOpenRelated={openProduct}
+              loading={false}
+              error={null}
+            />
           )}
 
           {/* Footer — hidden in Ask AI workspace so split stays clean */}
@@ -1392,5 +1364,608 @@ function ListRow({ p, onOpen, onAdd, onBuy }: { p: (typeof mockProducts)[number]
         </div>
       </div>
     </Card>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Product Detail                                */
+/* -------------------------------------------------------------------------- */
+
+interface ProductDetailProps {
+  product: (typeof mockProducts)[number]
+  onClose: () => void
+  onAddToCart: (id: string) => void
+  onBuyNow: (id: string) => void
+  onOpenAI: () => void
+  onOpenRelated: (id: string) => void
+  loading?: boolean
+  error?: string | null
+}
+
+// Generate deterministic product-specific data
+function generateSpecs(p: typeof mockProducts) {
+  const base = {
+    "Home Security": ["Resolution", "Night Vision", "Field of View", "Storage", "Connectivity"],
+    "Computing": ["Processor", "RAM", "Storage", "Display", "Graphics"],
+    "Audio": ["Driver Size", "Frequency Response", "Battery Life", "Connectivity", "Noise Cancellation"],
+    "Networking": ["Standard", "Speed", "Bands", "Ports", "Coverage"],
+    "Lighting": ["Brightness", "Color Temp", "Smart Protocol", "Dimmable", "Lifespan"],
+    "Furniture": ["Material", "Dimensions", "Weight Capacity", "Finish", "Assembly"],
+    "Wearables": ["Display", "Sensors", "Battery", "Water Resistance", "Compatibility"],
+    "Fitness": ["Metrics", "Battery", "Water Resistance", "Connectivity", "App Support"],
+  }
+  const keys = base[p.category as keyof typeof base] || ["Feature 1", "Feature 2", "Feature 3", "Feature 4", "Feature 5"]
+  const vals = p.id.split("").map((c, i) => {
+    const opts = [
+      ["1080p", "4K", "2K", "720p"],
+      ["30m", "50m", "100m"],
+      ["110°", "130°", "160°", "180°"],
+      ["Cloud", "Local SD", "NVR"],
+      ["Wi-Fi 6", "Wi-Fi 5", "Ethernet"],
+      ["Intel i5", "Intel i7", "AMD Ryzen 5", "Apple M2"],
+      ["8GB", "16GB", "32GB"],
+      ["256GB SSD", "512GB SSD", "1TB SSD"],
+      ["14\" FHD", "15.6\" 4K", "13.3\" Retina"],
+      ["Integrated", "RTX 3050", "RTX 4060"],
+      ["40mm", "50mm", "10mm dynamic"],
+      ["20Hz-20kHz", "10Hz-40kHz"],
+      ["20h", "30h", "50h", "60h"],
+      ["Bluetooth 5.3", "Bluetooth 5.0", "Wireless 2.4GHz"],
+      ["ANC", "ENC", "Passive"],
+      ["Wi-Fi 6", "Wi-Fi 6E", "Wi-Fi 7"],
+      ["AX3000", "AX5400", "BE11000"],
+      ["Dual-band", "Tri-band"],
+      ["4× Gigabit", "2.5G WAN"],
+      ["2500 sq ft", "3500 sq ft"],
+      ["800 lm", "1200 lm", "1600 lm"],
+      ["2700K-6500K", "RGBIC"],
+      ["Matter", "Zigbee", "Wi-Fi"],
+      ["Yes", "No"],
+      ["25,000h", "50,000h"],
+      ["Engineered wood", "Solid wood", "Metal"],
+      ["120×60×75cm", "80×80×75cm"],
+      ["100kg", "150kg"],
+      ["Matte", "Gloss", "Natural"],
+      ["Required", "Tool-free"],
+      ["1.4\" AMOLED", "1.8\" LTPO", "1.3\" LCD"],
+      ["HR, SpO2, GPS", "HR, Sleep, Stress"],
+      ["7 days", "14 days", "30 days"],
+      ["5ATM", "IP68", "IP67"],
+      ["iOS/Android", "Wear OS", "watchOS"],
+      ["Steps, HR, Sleep", "VO2, Recovery, ECG"],
+      ["10 days", "21 days"],
+      ["5ATM", "IP68"],
+      ["Bluetooth", "ANT+"],
+      ["App A", "App B", "Native"],
+    ]
+    return opts[i % opts.length][c.charCodeAt(0) % opts[i % opts.length].length]
+  })
+  return keys.map((k, i) => ({ key: k, value: vals[i % vals.length] }))
+}
+
+function productDescription(p: typeof mockProducts) {
+  const descs: Record<string, string> = {
+    "Home Security": "Keep your home safe with intelligent monitoring. This smart camera combines AI-powered motion detection with crystal-clear video, so you never miss a moment — day or night.",
+    "Computing": "Built for performance and portability. Whether you're creating, coding, or streaming, this laptop delivers the speed and reliability you need in a premium design.",
+    "Audio": "Experience sound the way it was meant to be heard. Premium drivers, adaptive noise cancellation, and all-day battery life make this your perfect audio companion.",
+    "Networking": "Eliminate dead zones and buffer-free streaming. Next-generation Wi-Fi with intelligent mesh technology covers every corner of your home.",
+    "Lighting": "Transform any space with millions of colors and tunable white. Voice control, schedules, and scenes — all without a hub.",
+    "Furniture": "Thoughtfully designed for modern living. Durable materials, ergonomic comfort, and timeless style that fits your space.",
+    "Wearables": "Stay connected and informed at a glance. Health tracking, notifications, and apps — all on your wrist.",
+    "Fitness": "Your personal coach on your wrist. Advanced metrics, guided workouts, and recovery insights help you train smarter.",
+  }
+  return descs[p.category] || "Premium quality product designed for everyday use. Reliable performance meets thoughtful design."
+}
+
+function productFeatures(p: typeof mockProducts) {
+  const feats: Record<string, string[]> = {
+    "Home Security": [
+      "AI person/vehicle/package detection reduces false alerts",
+      "Color night vision up to 30 meters",
+      "Two-way audio with noise cancellation",
+      "Local storage (microSD up to 256GB) + optional cloud",
+      "Weatherproof IP66 — works in rain, heat, and cold",
+      "Works with Alexa, Google Assistant, and Matter",
+    ],
+    "Computing": [
+      "Latest-generation processor for seamless multitasking",
+      "High-refresh display with factory color calibration",
+      "All-day battery with fast charge (0-50% in 30 min)",
+      "Precision keyboard with per-key RGB",
+      "Thunderbolt 4, USB-C, HDMI — all the ports you need",
+      "Military-grade durability (MIL-STD-810H)",
+    ],
+    "Audio": [
+      "Hi-Res Audio certified with LDAC support",
+      "Adaptive ANC adjusts to your environment in real-time",
+      "Multipoint Bluetooth — connect two devices at once",
+      "Speak-to-chat auto-pauses when you start talking",
+      "Quick charge: 5 min = 60 min playback",
+      "Comfortable for all-day wear with memory-foam tips",
+    ],
+    "Networking": [
+      "Wi-Fi 7 / 6E ready for future-proof speed",
+      "Dedicated gaming port prioritizes traffic automatically",
+      "AiMesh compatible — add nodes for whole-home coverage",
+      "Commercial-grade security with AiProtection Pro",
+      "Easy setup and management via mobile app",
+      "VPN server/client built-in for secure remote access",
+    ],
+    "Lighting": [
+      "16 million colors + tunable white (2200K-6500K)",
+      "Matter over Thread — no hub, instant response",
+      "Music sync and dynamic scenes",
+      "Circadian lighting follows your sleep schedule",
+      "Group control and per-bulb customization",
+      "Energy Star certified, 25,000-hour lifespan",
+    ],
+    "Furniture": [
+      "Sustainably sourced FSC-certified materials",
+      "Ergonomic design tested for 8+ hour comfort",
+      "Cable management built into the frame",
+      "Adjustable height / recline / lumbar",
+      "Easy 15-minute assembly with included tools",
+      "10-year warranty on frame, 5-year on mechanisms",
+    ],
+    "Wearables": [
+      "Always-on display with 1000 nits brightness",
+      "Comprehensive health: HR, SpO2, stress, sleep stages",
+      "Built-in GPS + GLONASS + Galileo",
+      "Contactless payments and transit",
+      "100+ workout modes with auto-detection",
+      "Water resistant to 50m — swim ready",
+    ],
+    "Fitness": [
+      "Advanced training metrics: VO2 max, recovery, load",
+      "Built-in maps and turn-by-turn navigation",
+      "Solar charging extends battery indefinitely",
+      "Grade-adjusted pace for trail running",
+      "Dive computer mode to 40m",
+      "Garmin Connect ecosystem with challenges",
+    ],
+  }
+  return feats[p.category] || [
+    "Premium build quality with attention to detail",
+    "Designed for reliability and long-term use",
+    "Easy setup and intuitive controls",
+    "Backed by comprehensive warranty",
+  ]
+}
+
+function productShipping(p: typeof mockProducts) {
+  return [
+    { title: "Standard Delivery", desc: "3–5 business days", price: "Free over ₹1,499" },
+    { title: "Express Delivery", desc: "1–2 business days", price: "₹199" },
+    { title: "Same Day (select cities)", desc: "Order before 12 PM", price: "₹399" },
+    { title: "Installation Available", desc: "For appliances & furniture", price: "From ₹499" },
+  ]
+}
+
+function productReturns() {
+  return [
+    "7-day easy returns — no questions asked",
+    "Free return pickup for eligible items",
+    "Refund to original payment method within 5–7 days",
+    "Items must be unused with original packaging",
+    "Extended 30-day returns for members",
+  ]
+}
+
+function productWarranty(p: typeof mockProducts) {
+  const base = {
+    "Home Security": "2-year manufacturer warranty + 1-year extended on registration",
+    "Computing": "1-year international warranty + accidental damage protection optional",
+    "Audio": "1-year warranty + 6-month cable replacement",
+    "Networking": "3-year warranty with 24/7 technical support",
+    "Lighting": "2-year warranty on electronics, 1-year on bulbs",
+    "Furniture": "10-year structural warranty, 5-year mechanisms, 1-year fabric",
+    "Wearables": "1-year international warranty",
+    "Fitness": "2-year warranty + 1-year battery guarantee",
+  }
+  return base[p.category] || "1-year standard manufacturer warranty"
+}
+
+function productReviews(p: typeof mockProducts) {
+  const r = productRating(p)
+  const count = Math.floor(p.id.length * 13) + 24
+  const reviews = [
+    { name: "Rahul S.", rating: Math.min(5, Math.ceil(r)), date: "2 days ago", text: "Exactly what I needed. Setup was breeze and performance is solid.", verified: true },
+    { name: "Priya M.", rating: Math.min(5, Math.ceil(r + 0.3)), date: "1 week ago", text: "Great value for money. The AI features actually work well.", verified: true },
+    { name: "Amit K.", rating: Math.max(3, Math.floor(r - 0.5)), date: "2 weeks ago", text: "Good product but delivery took a day longer than promised.", verified: true },
+    { name: "Sneha R.", rating: 5, date: "3 weeks ago", text: "Love it! The build quality feels premium. Highly recommend.", verified: true },
+    { name: "Vikram T.", rating: Math.min(5, Math.ceil(r - 0.2)), date: "1 month ago", text: "Works as advertised. Customer support was helpful when I had a query.", verified: false },
+  ]
+  return { rating: r, count, reviews }
+}
+
+function relatedProducts(p: typeof mockProducts) {
+  // Same category, different products
+  const sameCat = mockProducts.filter((x) => x.status === "active" && x.category === p.category && x.id !== p.id).slice(0, 8)
+  if (sameCat.length >= 4) return sameCat
+  // Fallback: other categories
+  return mockProducts.filter((x) => x.status === "active" && x.id !== p.id).slice(0, 8)
+}
+
+function ProductSkeleton() {
+  return (
+    <div className="space-y-6 px-4">
+      <Skeleton className="h-8 w-1/3" />
+      <Skeleton className="h-4 w-1/2" />
+      <div className="grid gap-6 md:grid-cols-2">
+        <Skeleton className="aspect-square w-full rounded-lg" />
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-3/4" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-1/2" />
+          <Skeleton className="h-10 w-1/3" />
+        </div>
+      </div>
+      <Skeleton className="h-64 w-full rounded-lg" />
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-1/4" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    </div>
+  )
+}
+
+function ProductError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <Card className="border-destructive/50 mx-4 mt-4">
+      <CardContent className="p-8 text-center">
+        <AlertCircle className="mx-auto size-12 text-destructive" />
+        <h3 className="mt-3 font-semibold">Unable to load product</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+        <Button className="mt-4" onClick={onRetry}>
+          <RefreshCw className="size-4 mr-2" /> Try again
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProductEmpty({ onBack }: { onBack: () => void }) {
+  return (
+    <Card className="border-destructive/50 mx-4 mt-4">
+      <CardContent className="p-8 text-center">
+        <PackageCheck className="mx-auto size-12 text-muted-foreground" />
+        <h3 className="mt-3 font-semibold">Product unavailable</h3>
+        <p className="mt-1 text-sm text-muted-foreground">This product is no longer available or has been removed.</p>
+        <Button className="mt-4" variant="outline" onClick={onBack}>
+          <ArrowRight className="size-4 mr-2" /> Back to products
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProductDetail({ product, onClose, onAddToCart, onBuyNow, onOpenAI, onOpenRelated, loading = false, error = null }: ProductDetailProps) {
+  const [qty, setQty] = useState(1)
+  const [activeThumb, setActiveThumb] = useState(0)
+  const [activeTab, setActiveTab] = useState<string>("description")
+  const specs = generateSpecs(product)
+  const desc = productDescription(product)
+  const feats = productFeatures(product)
+  const shipping = productShipping(product)
+  const returns = productReturns()
+  const warranty = productWarranty(product)
+  const { rating, count, reviews } = productReviews(product)
+  const related = relatedProducts(product)
+
+  if (loading) return <ProductSkeleton />
+  if (error) return <ProductError message={error} onRetry={() => window.location.reload()} />
+  if (!product) return <ProductEmpty onBack={onClose} />
+
+  const thumbs = [product.image_url, ...(product.tags.includes("bundle") ? ["https://picsum.photos/seed/thumb1/400/400", "https://picsum.photos/seed/thumb2/400/400"] : [])]
+
+  return (
+    <section className="px-4 pb-12">
+      {/* Breadcrumb handled by parent */}
+
+      {/* Main content grid */}
+      <div className="mx-auto max-w-[1280px]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+          {/* LEFT: Image + Detail Tabs */}
+          <div className="space-y-6">
+            {/* Image Gallery */}
+            <Card className="overflow-hidden">
+              <div className="aspect-square relative overflow-hidden">
+                <img src={thumbs[activeThumb]} alt={product.title} className="w-full h-full object-cover transition-opacity duration-300" />
+                {thumbs.length > 1 && (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {thumbs.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setActiveThumb(i)}
+                        className={`size-2 rounded-full transition ${
+                          i === activeThumb ? "bg-white" : "bg-white/50 hover:bg-white"
+                        }`}
+                        aria-label={`View image ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              {thumbs.length > 1 && (
+                <div className="p-3 border-t flex gap-2 overflow-x-auto">
+                  {thumbs.map((t, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveThumb(i)}
+                      className={`flex-shrink-0 size-16 rounded-md overflow-hidden border-2 transition ${
+                        i === activeThumb ? "border-primary" : "border-transparent hover:border-muted"
+                      }`}
+                    >
+                      <img src={t} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Key Highlights */}
+            <Card>
+              <CardContent className="pt-4">
+                <h3 className="font-semibold text-sm">Why buy from us</h3>
+                <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5">
+                  {[
+                    { icon: Truck, label: "Free delivery", desc: "Over ₹1,499" },
+                    { icon: RotateCcw, label: "7-day returns", desc: "No questions" },
+                    { icon: ShieldCheck, label: "Razorpay secure", desc: "Protected payments" },
+                    { icon: PackageCheck, label: "Original product", desc: "Brand authorized" },
+                    { icon: Headset, label: "24/7 support", desc: "Chat & call" },
+                  ].map((h, i) => (
+                    <div key={i} className="text-center text-xs">
+                      <div className="mx-auto size-8 flex items-center justify-center rounded-full bg-muted">
+                        <h.icon className="size-4 text-primary" />
+                      </div>
+                      <div className="mt-1 font-medium">{h.label}</div>
+                      <div className="text-[10px] text-muted-foreground">{h.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Detail Tabs */}
+            <Card>
+              <CardContent className="pt-4">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
+                    <TabsTrigger value="description">Description</TabsTrigger>
+                    <TabsTrigger value="features">Features</TabsTrigger>
+                    <TabsTrigger value="specs">Specifications</TabsTrigger>
+                    <TabsTrigger value="shipping">Shipping</TabsTrigger>
+                    <TabsTrigger value="returns">Returns</TabsTrigger>
+                    <TabsTrigger value="warranty">Warranty</TabsTrigger>
+                    <TabsTrigger value="reviews">Reviews ({count})</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="description" className="prose prose-sm max-w-none text-muted-foreground mt-4">
+                    <p>{desc}</p>
+                    <p className="mt-4">Key benefits:</p>
+                    <ul className="mt-2 list-disc pl-5 space-y-1">
+                      {feats.slice(0, 4).map((f, i) => (
+                        <li key={i}>{f}</li>
+                      ))}
+                    </ul>
+                  </TabsContent>
+
+                  <TabsContent value="features" className="mt-4 space-y-2">
+                    {feats.map((f, i) => (
+                      <div key={i} className="flex gap-3 text-sm">
+                        <Check className="size-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>{f}</span>
+                      </div>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="specs" className="mt-4">
+                    <table className="w-full text-sm">
+                      <tbody>
+                        {specs.map((s, i) => (
+                          <tr key={i} className="border-t last:border-b">
+                            <td className="py-2 text-muted-foreground">{s.key}</td>
+                            <td className="py-2 text-right font-medium">{s.value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </TabsContent>
+
+                  <TabsContent value="shipping" className="mt-4 space-y-3">
+                    {shipping.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 rounded-md bg-muted/50">
+                        <div>
+                          <div className="font-medium">{s.title}</div>
+                          <div className="text-xs text-muted-foreground">{s.desc}</div>
+                        </div>
+                        <span className="font-medium text-primary">{s.price}</span>
+                      </div>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="returns" className="mt-4 space-y-2">
+                    {returns.map((r, i) => (
+                      <div key={i} className="flex gap-2 text-sm">
+                        <RotateCcw className="size-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>{r}</span>
+                      </div>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="warranty" className="mt-4 text-sm text-muted-foreground">
+                    <p>{warranty}</p>
+                    <p className="mt-2">Warranty covers manufacturing defects. Register your product within 30 days to activate extended coverage.</p>
+                  </TabsContent>
+
+                  <TabsContent value="reviews" className="mt-4 space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="text-4xl font-bold">{rating.toFixed(1)}</div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex">
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} className={`size-4 ${i < Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                            ))}
+                          </div>
+                          <span className="text-sm text-muted-foreground">{count} reviews</span>
+                        </div>
+                        <div className="mt-2 h-2 w-full bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500" style={{ width: `${(rating / 5) * 100}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                    <Separator />
+                    {reviews.map((rev, i) => (
+                      <Card key={i} className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium">{rev.name}</div>
+                            {rev.verified && <Badge variant="secondary" className="text-[10px]">Verified</Badge>}
+                          </div>
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <span>{rev.date}</span>
+                            <div className="flex">
+                              {[...Array(5)].map((_, j) => (
+                                <Star key={j} className={`size-3 ${j < rev.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-sm">{rev.text}</p>
+                      </Card>
+                    ))}
+                    <Button variant="outline" className="w-full">View all reviews</Button>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* Related Products */}
+            {related.length > 0 && (
+              <Card>
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold">You may also like</h3>
+                    <Button variant="ghost" size="sm" onClick={() => onClose()}>View all</Button>
+                  </div>
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                    {related.map((rp) => (
+                      <Card key={rp.id} className="overflow-hidden">
+                        <button onClick={() => onOpenRelated(rp.id)} className="block overflow-hidden">
+                          <img src={rp.image_url} alt={rp.title} className="aspect-[4/3] w-full object-cover transition hover:scale-[1.02]" />
+                        </button>
+                        <CardContent className="p-3 space-y-2">
+                          <div className="truncate text-sm font-medium">{rp.title}</div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold">{formatPrice(rp.price_paise)}</span>
+                            <Badge variant="outline" className="text-[10px]">{rp.category}</Badge>
+                          </div>
+                          <Button size="sm" className="w-full" onClick={(e) => { e.stopPropagation(); onAddToCart(rp.id) }}>
+                            Add to cart
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* RIGHT: Summary Panel — sticky */}
+          <div className="hidden lg:block lg:sticky lg:top-24 lg:self-start space-y-4">
+            <Card>
+              <CardContent className="p-5 space-y-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <Badge variant="outline">{product.category}</Badge>
+                    <h1 className="mt-2 font-heading text-lg font-semibold leading-tight">{product.title}</h1>
+                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="shrink-0"><Heart className="size-4" /></Button>
+                </div>
+
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Star className="size-3.5 fill-amber-400 text-amber-400" /> {rating.toFixed(1)} · {count} reviews
+                </div>
+
+                <div className="flex items-baseline gap-3">
+                  <span className="text-2xl font-semibold">{formatPrice(product.price_paise)}</span>
+                  <span className="text-sm text-muted-foreground">inclusive of all taxes</span>
+                </div>
+
+                <Badge variant={product.stock > 0 ? "secondary" : "destructive"} className="text-sm">
+                  {product.stock > 0 ? `In stock · ${product.stock} available` : "Out of stock"}
+                </Badge>
+
+                <Separator />
+
+                {/* Qty selector */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Quantity</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Button variant="outline" size="icon" onClick={() => setQty((v) => Math.max(1, v - 1))} disabled={qty <= 1}><Minus className="size-4" /></Button>
+                    <Input type="number" value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))} className="w-16 text-center" min={1} max={product.stock} inputMode="numeric" />
+                    <Button variant="outline" size="icon" onClick={() => setQty((v) => Math.min(product.stock, v + 1))} disabled={qty >= product.stock}><Plus className="size-4" /></Button>
+                    <span className="text-xs text-muted-foreground ml-2">Max {product.stock}</span>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Action buttons */}
+                <div className="space-y-2">
+                  <Button size="lg" className="w-full" onClick={() => onAddToCart(product.id)} disabled={product.stock === 0}>
+                    <ShoppingCart className="size-4 mr-2" /> Add to cart
+                  </Button>
+                  <Button variant="default" size="lg" className="w-full bg-primary" onClick={() => onBuyNow(product.id)} disabled={product.stock === 0}>
+                    <Zap className="size-4 mr-2" /> Buy now
+                  </Button>
+                  <Button variant="outline" size="lg" className="w-full" onClick={onOpenAI}>
+                    <Sparkles className="size-4 mr-2" /> Ask AI
+                  </Button>
+                </div>
+
+                <Separator />
+
+                {/* Share */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Share:</span>
+                  <Button variant="ghost" size="icon" className="size-8"><Share2 className="size-4" /></Button>
+                  <Button variant="ghost" size="icon" className="size-8"><ImageIcon className="size-4" /></Button>
+                  <Button variant="ghost" size="icon" className="size-8"><GalleryThumbnails className="size-4" /></Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Trust badges sticky card */}
+            <Card>
+              <CardContent className="p-4 space-y-3 text-xs">
+                {[
+                  { icon: Truck, title: "Fast delivery", desc: "Arrives in 1–3 days" },
+                  { icon: ShieldCheck, title: "Secure payment", desc: "Powered by Razorpay" },
+                  { icon: RotateCcw, title: "Easy returns", desc: "7-day no-questions" },
+                  { icon: Headset, title: "24/7 support", desc: "Chat, email, call" },
+                ].map((t, i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className="grid size-8 place-items-center rounded-lg bg-muted">
+                      <t.icon className="size-4 text-primary" />
+                    </div>
+                    <div>
+                      <div className="font-medium">{t.title}</div>
+                      <div className="text-muted-foreground">{t.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
