@@ -531,6 +531,7 @@ export default function OrdersScreen() {
                         <button
                           onClick={() => {
                             if (isMobile) {
+                              openDrawer(order.id)
                               setActiveScreen("order_detail")
                             } else {
                               openDrawer(order.id)
@@ -595,6 +596,7 @@ export default function OrdersScreen() {
                             aria-label="View details"
                             onClick={() => {
                               if (isMobile) {
+                                openDrawer(order.id)
                                 setActiveScreen("order_detail")
                               } else {
                                 openDrawer(order.id)
@@ -621,6 +623,7 @@ export default function OrdersScreen() {
                               <DropdownMenuItem
                                 onClick={() => {
                                   if (isMobile) {
+                                    openDrawer(order.id)
                                     setActiveScreen("order_detail")
                                   } else {
                                     openDrawer(order.id)

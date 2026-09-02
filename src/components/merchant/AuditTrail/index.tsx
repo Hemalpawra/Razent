@@ -42,6 +42,8 @@ import { mockAuditSessions } from "@/lib/mock/audit"
 import type { AuditResult, AuditSession, AuditEvent } from "@/lib/types/audit"
 
 import AuditDrawer from "./AuditDrawer"
+import { useUI } from "@/state/useUI"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 function variant(
   r: AuditResult,
@@ -73,6 +75,12 @@ export default function AuditTrailScreen() {
   const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null)
 
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  const isMobile = useIsMobile()
+  const setActiveScreen = useUI((s) => s.setActiveScreen)
+  const openAuditDrawer = useUI((s) => s.openAuditDrawer)
+  const closeAuditDrawer = useUI((s) => s.closeAuditDrawer)
+  const drawerAuditSessionId = useUI((s) => s.drawerAuditSessionId)
 
   const totalSessions = mockAuditSessions.length
 
@@ -126,7 +134,12 @@ export default function AuditTrailScreen() {
 
     setSelectedEvent(e)
 
-    setDrawerOpen(true)
+    if (isMobile) {
+      openAuditDrawer(s.session_id)
+      setActiveScreen("audit_detail")
+    } else {
+      setDrawerOpen(true)
+    }
   }
 
   return (

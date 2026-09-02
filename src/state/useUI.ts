@@ -15,6 +15,9 @@ type UIStore = {
   drawerProductId: string | null
   openProductDrawer: (productId: string | null) => void
   closeProductDrawer: () => void
+  drawerAuditSessionId: string | null
+  openAuditDrawer: (sessionId: string) => void
+  closeAuditDrawer: () => void
 }
 
 export const useUI = create<UIStore>((set) => ({
@@ -28,4 +31,7 @@ export const useUI = create<UIStore>((set) => ({
   drawerProductId: null,
   openProductDrawer: (productId) => set({ drawerProductId: productId }),
   closeProductDrawer: () => set({ drawerProductId: null }),
+  drawerAuditSessionId: null,
+  openAuditDrawer: (sessionId) => set({ drawerAuditSessionId: sessionId }),
+  closeAuditDrawer: () => set({ drawerAuditSessionId: null }),
 }))

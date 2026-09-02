@@ -10,12 +10,15 @@ import { formatPrice } from "@/lib/types/product"
 
 export default function AuditDetailScreen() {
   const setActiveScreen = useUI((s) => s.setActiveScreen)
-  const closeDrawer = useUI((s) => s.closeOrderDrawer)
+  const closeAuditDrawer = useUI((s) => s.closeAuditDrawer)
+  const drawerAuditSessionId = useUI((s) => s.drawerAuditSessionId)
 
-  const session = mockAuditSessions[0] ?? null
+  const session = drawerAuditSessionId
+    ? (mockAuditSessions.find((s) => s.session_id === drawerAuditSessionId) ?? null)
+    : null
 
   const handleBack = () => {
-    closeDrawer()
+    closeAuditDrawer()
     setActiveScreen("audit_trail")
   }
 

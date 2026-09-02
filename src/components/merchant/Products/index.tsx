@@ -130,6 +130,7 @@ export default function ProductsScreen() {
   function handleProductClick(p: Product) {
     if (isMobile) {
       setActiveScreen("product_detail")
+      openProductDrawer(p.id)
     } else {
       setSelected(p)
       setDrawerOpen(true)
@@ -321,7 +322,7 @@ export default function ProductsScreen() {
                   <TableRow
                     key={p.id}
                     className="cursor-pointer hover:bg-muted/30 even:bg-muted/10"
-                    onClick={() => openDrawer(p)}
+                    onClick={() => handleProductClick(p)}
                   >
                     <TableCell
                       className="px-2.5 py-2"
