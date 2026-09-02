@@ -4,10 +4,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
 import { Bubble } from "@/components/ui/bubble"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useSettings } from "@/state/useSettings"
 import { mockProducts } from "@/lib/mock/products"
 import { formatPrice } from "@/lib/types/product"
@@ -38,6 +40,18 @@ import {
   Plus,
   Minus,
   Trash2,
+  SlidersHorizontal,
+  LayoutGrid,
+  Rows3,
+  Loader2,
+  AlertCircle,
+  RefreshCw,
+  Tag,
+  Zap,
+  Truck as TruckIcon,
+  Tag as TagIcon,
+  Check,
+  Eye,
 } from "lucide-react"
 
 type StoreView = "home" | "listing" | "detail"
@@ -68,6 +82,16 @@ const SAMPLE_PROMPTS = [
   "Air purifier under ₹20,000",
 ]
 
+// Deterministic pseudo-rating so cards display consistent stars without a real reviews field
+function productRating(p: { id: string }): number {
+  let h = 0
+  for (let i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) | 0
+  return 3.6 + ((Math.abs(h) % 14) / 10) // 3.6 – 5.0
+}
+
+const ALL_BRANDS = ["Razent", "PureSense", "JBL", "Anker", "Boat", "Sony", "Apple", "Xiaomi", "LG"]
+const ALL_CATEGORIES = Array.from(new Set(mockProducts.map((p) => p.category))).sort()
+
 export default function StoreHome() {
   const { storeProfile } = useSettings()
   const [view, setView] = useState<StoreView>("home")
@@ -85,6 +109,18 @@ export default function StoreHome() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [cartOpen, setCartOpen] = useState(false)
   const [sort, setSort] = useState<"relevance" | "low" | "high" | "rating">("relevance")
+  const [layout, setLayout] = useState<"grid" | "list">("grid")
+  const [brandFilters, setBrandFilters] = useState<string[]>([])
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([])
+  const [priceMin, setPriceMin] = useState<string>("")
+  const [priceMax, setPriceMax] = useState<string>("")
+  const [minRating, setMinRating] = useState<number>(0)
+  const [stockOnly, setStockOnly] = useState(false)
+  const [offerFilter, setOfferFilter] = useState(false)
+  const [fastDelivery, setFastDelivery] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   const activeProducts = useMemo(() => mockProducts.filter((p) => p.status === "active"), [])
 
@@ -97,6 +133,23 @@ export default function StoreHome() {
       if (def) list = list.filter((p) => def.match.includes(p.category))
       else list = list.filter((p) => p.category === activeCat)
     }
+    if (categoryFilters.length > 0) {
+      list = list.filter((p) => categoryFilters.includes(p.category))
+    }
+    if (brandFilters.length > 0) {
+      list = list.filter((p) => {
+        const tag = p.tags.find((t) => t.startsWith("brand:"))
+        return tag ? brandFilters.includes(tag.replace("brand:", "")) : false
+      })
+    }
+    const pmin = priceMin ? Number(priceMin) : null
+    const pmax = priceMax ? Number(priceMax) : null
+    if (pmin !== null) list = list.filter((p) => p.price_paise / 100 >= pmin)
+    if (pmax !== null) list = list.filter((p) => p.price_paise / 100 <= pmax)
+    if (minRating > 0) list = list.filter((p) => productRating(p) >= minRating)
+    if (stockOnly) list = list.filter((p) => p.stock > 0)
+    if (offerFilter) list = list.filter((p) => p.tags.includes("bestseller") || p.tags.includes("bundle") || p.tags.includes("new"))
+    if (fastDelivery) list = list.filter((p) => p.stock > 5)
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(
@@ -109,8 +162,9 @@ export default function StoreHome() {
     }
     if (sort === "low") list.sort((a, b) => a.price_paise - b.price_paise)
     if (sort === "high") list.sort((a, b) => b.price_paise - a.price_paise)
+    if (sort === "rating") list.sort((a, b) => productRating(b) - productRating(a))
     return list
-  }, [activeProducts, activeCat, search, sort])
+  }, [activeProducts, activeCat, search, sort, brandFilters, categoryFilters, priceMin, priceMax, minRating, stockOnly, offerFilter, fastDelivery])
 
   const selectedProduct = selectedId ? mockProducts.find((p) => p.id === selectedId) ?? null : null
   const cartCount = cart.reduce((s, c) => s + c.qty, 0)
@@ -122,7 +176,37 @@ export default function StoreHome() {
   function openCategory(name: string) {
     setActiveCat(name)
     setView("listing")
+    setCategoryFilters([])
+    setBrandFilters([])
     window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+  function clearAllFilters() {
+    setActiveCat(null)
+    setCategoryFilters([])
+    setBrandFilters([])
+    setPriceMin("")
+    setPriceMax("")
+    setMinRating(0)
+    setStockOnly(false)
+    setOfferFilter(false)
+    setFastDelivery(false)
+    setSearch("")
+    setSort("relevance")
+  }
+  function goToListing() {
+    setActiveCat(null)
+    setCategoryFilters([])
+    setBrandFilters([])
+    setView("listing")
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+  function simulateLoad() {
+    setError(null)
+    setLoading(true)
+    setTimeout(() => setLoading(false), 1100)
+  }
+  function simulateError() {
+    setError("Couldn't reach the storefront. Check your connection and try again.")
   }
   function openProduct(id: string) {
     setSelectedId(id)
@@ -238,7 +322,7 @@ export default function StoreHome() {
             <Button variant="ghost" size="sm" className="hidden lg:inline-flex" onClick={() => setView("listing")}>
               <Menu className="size-4" /> Categories
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => { setActiveCat(null); setView("listing") }}>
+            <Button variant="ghost" size="sm" onClick={goToListing}>
               Products
             </Button>
             <Button size="sm" onClick={() => setAiOpen((v) => !v)} className="hidden sm:inline-flex">
@@ -283,9 +367,19 @@ export default function StoreHome() {
                 Home
               </button>
               <ChevronRight className="size-3" />
-              <button onClick={() => setView("listing")} className="hover:text-foreground">
-                {activeCat ?? "Products"}
-              </button>
+              {activeCat ? (
+                <button onClick={goToListing} className="hover:text-foreground">
+                  Products
+                </button>
+              ) : (
+                <span className="font-medium text-foreground">Products</span>
+              )}
+              {activeCat && (
+                <>
+                  <ChevronRight className="size-3" />
+                  <span className="font-medium text-foreground">{activeCat}</span>
+                </>
+              )}
               {view === "detail" && selectedProduct && (
                 <>
                   <ChevronRight className="size-3" />
@@ -447,77 +541,306 @@ export default function StoreHome() {
           )}
 
           {view === "listing" && (
-            <section className="px-4 py-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm">
-                  <span className="font-semibold">{filtered.length}</span> <span className="text-muted-foreground">results for</span>{" "}
-                  <span className="font-medium">{activeCat ?? (search ? `"${search}"` : "All products")}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as never)}
-                    className="h-9 rounded-md border bg-card px-2 text-xs"
-                  >
-                    <option value="relevance">Relevance</option>
-                    <option value="low">Price: Low to High</option>
-                    <option value="high">Price: High to Low</option>
-                  </select>
-                  <Button variant="outline" size="sm" onClick={() => { setActiveCat(null); setSearch(""); setSort("relevance") }}>
-                    Clear filters
-                  </Button>
-                </div>
-              </div>
+            <section className="px-4 pb-8 pt-2">
+              <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+                {/* Filter sidebar — desktop */}
+                <FilterSidebar
+                  categoryFilters={categoryFilters}
+                  setCategoryFilters={setCategoryFilters}
+                  brandFilters={brandFilters}
+                  setBrandFilters={setBrandFilters}
+                  priceMin={priceMin}
+                  setPriceMin={setPriceMin}
+                  priceMax={priceMax}
+                  setPriceMax={setPriceMax}
+                  minRating={minRating}
+                  setMinRating={setMinRating}
+                  stockOnly={stockOnly}
+                  setStockOnly={setStockOnly}
+                  offerFilter={offerFilter}
+                  setOfferFilter={setOfferFilter}
+                  fastDelivery={fastDelivery}
+                  setFastDelivery={setFastDelivery}
+                  onClear={clearAllFilters}
+                  variant="desktop"
+                />
 
-              {(activeCat || search) && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {activeCat && (
-                    <Badge variant="secondary" className="gap-1">
-                      {activeCat} <button onClick={() => setActiveCat(null)}><X className="size-3" /></button>
-                    </Badge>
-                  )}
-                  {search && (
-                    <Badge variant="secondary" className="gap-1">
-                      “{search}” <button onClick={() => setSearch("")}><X className="size-3" /></button>
-                    </Badge>
-                  )}
-                </div>
-              )}
-
-              <Separator className="my-4" />
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.length === 0 ? (
-                  <Card className="col-span-full p-8 text-center">
-                    <Search className="mx-auto size-6 text-muted-foreground" />
-                    <div className="mt-2 text-sm font-medium">No products found</div>
-                    <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">Try changing filters or ask AI for help finding the right product.</p>
-                    <div className="mt-3 flex justify-center gap-2">
-                      <Button size="sm" variant="outline" onClick={() => { setActiveCat(null); setSearch("") }}>Reset filters</Button>
-                      <Button size="sm" onClick={() => setAiOpen(true)}><Sparkles className="size-4" /> Ask AI</Button>
+                {/* Right column */}
+                <div className="min-w-0">
+                  {/* Results bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm">
+                      <span className="font-semibold">{loading ? "…" : filtered.length}</span>{" "}
+                      <span className="text-muted-foreground">results for</span>{" "}
+                      <span className="font-medium">
+                        {activeCat ?? (search ? `"${search}"` : "All products")}
+                      </span>
                     </div>
-                  </Card>
-                ) : (
-                  filtered.map((p) => (
-                    <Card key={p.id} className="group flex flex-col overflow-hidden">
-                      <button onClick={() => openProduct(p.id)} className="text-left">
-                        <img src={p.image_url} alt={p.title} className="aspect-[4/3] w-full object-cover" />
-                      </button>
-                      <CardContent className="flex flex-1 flex-col gap-2 p-3">
-                        <div className="line-clamp-1 text-sm font-medium">{p.title}</div>
-                        <div className="text-xs text-muted-foreground line-clamp-1">{p.description}</div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-sm font-semibold">{formatPrice(p.price_paise)}</span>
-                          <span className="text-[11px] text-muted-foreground">{p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}</span>
-                        </div>
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openProduct(p.id)}>View details</Button>
-                          <Button size="sm" disabled={p.stock === 0} onClick={() => addToCart(p.id)}>Add to cart</Button>
-                        </div>
-                      </CardContent>
+                    <div className="flex items-center gap-2">
+                      {/* Mobile filter trigger */}
+                      <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+                        <SheetTrigger asChild>
+                          <Button variant="outline" size="sm" className="lg:hidden">
+                            <SlidersHorizontal className="size-4" /> Filters
+                            {(brandFilters.length + categoryFilters.length + (priceMin ? 1 : 0) + (priceMax ? 1 : 0) + (minRating > 0 ? 1 : 0) + (stockOnly ? 1 : 0) + (offerFilter ? 1 : 0) + (fastDelivery ? 1 : 0)) > 0 && (
+                              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                                {brandFilters.length + categoryFilters.length + (priceMin ? 1 : 0) + (priceMax ? 1 : 0) + (minRating > 0 ? 1 : 0) + (stockOnly ? 1 : 0) + (offerFilter ? 1 : 0) + (fastDelivery ? 1 : 0)}
+                              </Badge>
+                            )}
+                          </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-[320px] overflow-auto p-0 sm:w-[360px]">
+                          <SheetHeader className="border-b px-4 py-3">
+                            <SheetTitle>Filters</SheetTitle>
+                          </SheetHeader>
+                          <FilterSidebar
+                            categoryFilters={categoryFilters}
+                            setCategoryFilters={setCategoryFilters}
+                            brandFilters={brandFilters}
+                            setBrandFilters={setBrandFilters}
+                            priceMin={priceMin}
+                            setPriceMin={setPriceMin}
+                            priceMax={priceMax}
+                            setPriceMax={setPriceMax}
+                            minRating={minRating}
+                            setMinRating={setMinRating}
+                            stockOnly={stockOnly}
+                            setStockOnly={setStockOnly}
+                            offerFilter={offerFilter}
+                            setOfferFilter={setOfferFilter}
+                            fastDelivery={fastDelivery}
+                            setFastDelivery={setFastDelivery}
+                            onClear={clearAllFilters}
+                            onClose={() => setMobileFiltersOpen(false)}
+                            variant="mobile"
+                          />
+                        </SheetContent>
+                      </Sheet>
+
+                      <select
+                        value={sort}
+                        onChange={(e) => setSort(e.target.value as never)}
+                        className="h-9 rounded-md border bg-card px-2 text-xs"
+                      >
+                        <option value="relevance">Sort: Relevance</option>
+                        <option value="low">Price: Low to High</option>
+                        <option value="high">Price: High to Low</option>
+                        <option value="rating">Top Rated</option>
+                      </select>
+
+                      <div className="hidden items-center rounded-md border bg-card p-0.5 sm:flex">
+                        <button
+                          aria-label="Grid view"
+                          onClick={() => setLayout("grid")}
+                          className={"grid size-7 place-items-center rounded " + (layout === "grid" ? "bg-muted text-foreground" : "text-muted-foreground")}
+                        >
+                          <LayoutGrid className="size-3.5" />
+                        </button>
+                        <button
+                          aria-label="List view"
+                          onClick={() => setLayout("list")}
+                          className={"grid size-7 place-items-center rounded " + (layout === "list" ? "bg-muted text-foreground" : "text-muted-foreground")}
+                        >
+                          <Rows3 className="size-3.5" />
+                        </button>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="hidden lg:inline-flex"
+                        onClick={clearAllFilters}
+                      >
+                        Clear filters
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Active filter chips */}
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {activeCat && (
+                      <Badge variant="secondary" className="gap-1">
+                        Category: {activeCat}{" "}
+                        <button onClick={() => setActiveCat(null)} aria-label="Remove">
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {categoryFilters.map((c) => (
+                      <Badge key={c} variant="secondary" className="gap-1">
+                        {c}{" "}
+                        <button onClick={() => setCategoryFilters((s) => s.filter((x) => x !== c))}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    {brandFilters.map((b) => (
+                      <Badge key={b} variant="secondary" className="gap-1">
+                        Brand: {b}{" "}
+                        <button onClick={() => setBrandFilters((s) => s.filter((x) => x !== b))}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    {priceMin && (
+                      <Badge variant="secondary" className="gap-1">
+                        Min ₹{priceMin}{" "}
+                        <button onClick={() => setPriceMin("")}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {priceMax && (
+                      <Badge variant="secondary" className="gap-1">
+                        Max ₹{priceMax}{" "}
+                        <button onClick={() => setPriceMax("")}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {minRating > 0 && (
+                      <Badge variant="secondary" className="gap-1">
+                        {minRating}★ & up{" "}
+                        <button onClick={() => setMinRating(0)}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {stockOnly && (
+                      <Badge variant="secondary" className="gap-1">
+                        In stock only{" "}
+                        <button onClick={() => setStockOnly(false)}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {offerFilter && (
+                      <Badge variant="secondary" className="gap-1">
+                        Offers{" "}
+                        <button onClick={() => setOfferFilter(false)}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {fastDelivery && (
+                      <Badge variant="secondary" className="gap-1">
+                        Fast delivery{" "}
+                        <button onClick={() => setFastDelivery(false)}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {search && (
+                      <Badge variant="secondary" className="gap-1">
+                        “{search}”{" "}
+                        <button onClick={() => setSearch("")}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                  </div>
+
+                  <Separator className="my-4" />
+
+                  {/* State branch — skeleton / error / empty / grid */}
+                  {loading ? (
+                    <div
+                      className={
+                        layout === "grid"
+                          ? "grid grid-cols-2 gap-3 sm:grid-cols-3"
+                          : "space-y-3"
+                      }
+                    >
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <Card key={i} className={layout === "grid" ? "overflow-hidden" : "overflow-hidden"}>
+                          <Skeleton className={layout === "grid" ? "aspect-[4/3] w-full" : "h-32 w-full"} />
+                          <CardContent className="space-y-2 p-3">
+                            <Skeleton className="h-4 w-3/4" />
+                            <Skeleton className="h-3 w-1/2" />
+                            <Skeleton className="h-4 w-1/3" />
+                            <div className="mt-2 flex gap-2">
+                              <Skeleton className="h-8 flex-1" />
+                              <Skeleton className="h-8 flex-1" />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : error ? (
+                    <Card className="p-8 text-center">
+                      <AlertCircle className="mx-auto size-7 text-destructive" />
+                      <div className="mt-2 text-sm font-medium">Couldn't load products</div>
+                      <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">{error}</p>
+                      <div className="mt-3 flex justify-center gap-2">
+                        <Button size="sm" variant="outline" onClick={simulateLoad}>
+                          <RefreshCw className="size-4" /> Retry
+                        </Button>
+                        <Button size="sm" onClick={goToListing}>
+                          Reset filters
+                        </Button>
+                      </div>
                     </Card>
-                  ))
-                )}
+                  ) : filtered.length === 0 ? (
+                    <Card className="p-10 text-center">
+                      <Search className="mx-auto size-7 text-muted-foreground" />
+                      <div className="mt-2 text-sm font-medium">No products match your filters</div>
+                      <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                        Try removing filters or ask AI to find the right product for you.
+                      </p>
+                      <div className="mt-3 flex justify-center gap-2">
+                        <Button size="sm" variant="outline" onClick={clearAllFilters}>
+                          Reset filters
+                        </Button>
+                        <Button size="sm" onClick={() => setAiOpen(true)}>
+                          <Sparkles className="size-4" /> Ask AI
+                        </Button>
+                      </div>
+                    </Card>
+                  ) : layout === "grid" ? (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-3">
+                      {filtered.map((p) => (
+                        <ProductCard
+                          key={p.id}
+                          p={p}
+                          onOpen={() => openProduct(p.id)}
+                          onAdd={() => addToCart(p.id)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filtered.map((p) => (
+                        <ListRow
+                          key={p.id}
+                          p={p}
+                          onOpen={() => openProduct(p.id)}
+                          onAdd={() => addToCart(p.id)}
+                          onBuy={() => {
+                            addToCart(p.id)
+                            setCartOpen(true)
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Footer-of-listing: load more + state demo */}
+                  {!loading && !error && filtered.length > 0 && (
+                    <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        Showing {filtered.length} of {activeProducts.length} products
+                      </p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={simulateLoad}>
+                          <Loader2 className="size-4" /> Simulate loading
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={simulateError}>
+                          <AlertCircle className="size-4" /> Simulate error
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
           )}
@@ -787,5 +1110,287 @@ export default function StoreHome() {
         </SheetContent>
       </Sheet>
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  Filter                                    */
+/* -------------------------------------------------------------------------- */
+
+type FilterProps = {
+  categoryFilters: string[]
+  setCategoryFilters: (v: string[]) => void
+  brandFilters: string[]
+  setBrandFilters: (v: string[]) => void
+  priceMin: string
+  setPriceMin: (v: string) => void
+  priceMax: string
+  setPriceMax: (v: string) => void
+  minRating: number
+  setMinRating: (v: number) => void
+  stockOnly: boolean
+  setStockOnly: (v: boolean) => void
+  offerFilter: boolean
+  setOfferFilter: (v: boolean) => void
+  fastDelivery: boolean
+  setFastDelivery: (v: boolean) => void
+  onClear: () => void
+  onClose?: () => void
+  variant: "desktop" | "mobile"
+}
+
+function FilterSidebar(p: FilterProps) {
+  function toggle<T>(arr: T[], v: T, set: (a: T[]) => void) {
+    set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
+  }
+
+  const body = (
+    <div className="space-y-5 text-sm">
+      <FilterGroup title="Category" defaultOpen>
+        <div className="space-y-1.5">
+          {ALL_CATEGORIES.map((c) => {
+            const n = mockProducts.filter((x) => x.status === "active" && x.category === c).length
+            return (
+              <label key={c} className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+                <Checkbox
+                  checked={p.categoryFilters.includes(c)}
+                  onCheckedChange={() => toggle(p.categoryFilters, c, p.setCategoryFilters)}
+                />
+                <span className="flex-1 truncate">{c}</span>
+                <span className="text-[10px] text-muted-foreground">{n}</span>
+              </label>
+            )
+          })}
+        </div>
+      </FilterGroup>
+
+      <FilterGroup title="Brand" defaultOpen>
+        <div className="space-y-1.5">
+          {ALL_BRANDS.map((b) => (
+            <label key={b} className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+              <Checkbox
+                checked={p.brandFilters.includes(b)}
+                onCheckedChange={() => toggle(p.brandFilters, b, p.setBrandFilters)}
+              />
+              <span className="flex-1">{b}</span>
+            </label>
+          ))}
+        </div>
+      </FilterGroup>
+
+      <FilterGroup title="Price range" defaultOpen>
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            value={p.priceMin}
+            onChange={(e) => p.setPriceMin(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="Min ₹"
+            inputMode="numeric"
+            className="h-8 text-xs"
+          />
+          <Input
+            value={p.priceMax}
+            onChange={(e) => p.setPriceMax(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="Max ₹"
+            inputMode="numeric"
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {[
+            { label: "Under ₹5K", max: 5000 },
+            { label: "₹5K–20K", min: 5000, max: 20000 },
+            { label: "₹20K+", min: 20000 },
+          ].map((r) => (
+            <button
+              key={r.label}
+              onClick={() => {
+                p.setPriceMin(r.min ? String(r.min) : "")
+                p.setPriceMax(r.max ? String(r.max) : "")
+              }}
+              className="rounded-full border bg-card px-2.5 py-0.5 text-[11px] hover:bg-muted"
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </FilterGroup>
+
+      <FilterGroup title="Rating" defaultOpen>
+        <div className="space-y-1.5">
+          {[4, 3, 2, 0].map((r) => (
+            <label key={r} className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+              <input
+                type="radio"
+                name="rating"
+                checked={p.minRating === r}
+                onChange={() => p.setMinRating(r)}
+                className="size-3.5 accent-primary"
+              />
+              <span className="flex-1">
+                {r === 0 ? "All ratings" : `${r}★ & up`}
+              </span>
+            </label>
+          ))}
+        </div>
+      </FilterGroup>
+
+      <FilterGroup title="Availability">
+        <div className="space-y-1.5">
+          <label className="flex cursor-pointer items-center gap-2 text-xs">
+            <Checkbox checked={p.stockOnly} onCheckedChange={(v) => p.setStockOnly(!!v)} />
+            <span className="flex-1">In stock only</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-2 text-xs">
+            <Checkbox checked={p.fastDelivery} onCheckedChange={(v) => p.setFastDelivery(!!v)} />
+            <span className="flex-1">Fast delivery</span>
+          </label>
+        </div>
+      </FilterGroup>
+
+      <FilterGroup title="Offers">
+        <label className="flex cursor-pointer items-center gap-2 text-xs">
+          <Checkbox checked={p.offerFilter} onCheckedChange={(v) => p.setOfferFilter(!!v)} />
+          <span className="flex-1">Best deals & bundles</span>
+        </label>
+      </FilterGroup>
+
+      <div className="flex gap-2 pt-1">
+        <Button size="sm" variant="outline" className="flex-1" onClick={p.onClear}>
+          Clear all
+        </Button>
+        {p.onClose && (
+          <Button size="sm" className="flex-1" onClick={p.onClose}>
+            Apply
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+
+  if (p.variant === "desktop") {
+    return <aside className="hidden lg:block">{body}</aside>
+  }
+  return <div className="p-4">{body}</div>
+}
+
+function FilterGroup({ title, defaultOpen, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(!!defaultOpen)
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+      >
+        {title}
+        <ChevronRight className={"size-3.5 transition-transform " + (open ? "rotate-90" : "")} />
+      </button>
+      {open && <div className="mt-2">{children}</div>}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Product UI                                  */
+/* -------------------------------------------------------------------------- */
+
+function ProductCard({ p, onOpen, onAdd }: { p: (typeof mockProducts)[number]; onOpen: () => void; onAdd: () => void }) {
+  const r = productRating(p)
+  const isNew = p.tags.includes("new")
+  const isBest = p.tags.includes("bestseller") || p.tags.includes("bundle")
+  return (
+    <Card className="group flex flex-col overflow-hidden">
+      <button onClick={onOpen} className="relative block overflow-hidden">
+        <img src={p.image_url} alt={p.title} className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]" />
+        <div className="absolute left-2 top-2 flex flex-col gap-1">
+          {p.stock === 0 ? (
+            <Badge variant="destructive">Out of stock</Badge>
+          ) : p.stock < 10 ? (
+            <Badge className="bg-amber-500 text-white hover:bg-amber-500">Low stock</Badge>
+          ) : null}
+          {isBest && <Badge className="bg-emerald-500 text-white hover:bg-emerald-500"><Tag className="mr-1 size-3" />Deal</Badge>}
+          {isNew && <Badge variant="secondary">New</Badge>}
+        </div>
+      </button>
+      <CardContent className="flex flex-1 flex-col gap-2 p-3">
+        <div className="line-clamp-1 text-sm font-medium leading-tight">{p.title}</div>
+        <div className="text-xs text-muted-foreground line-clamp-1">{p.description}</div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <Star className="size-3 fill-amber-400 text-amber-400" /> {r.toFixed(1)}
+            <span className="text-muted-foreground/60">· {Math.floor(p.id.length * 13) + 24} reviews</span>
+          </span>
+          <span className="text-[10px] text-muted-foreground">{p.stock > 0 ? `${p.stock} in stock` : "Out"}</span>
+        </div>
+        <div className="mt-1 flex items-center justify-between">
+          <span className="text-sm font-semibold">{formatPrice(p.price_paise)}</span>
+          <Badge variant="outline" className="text-[11px]">
+            {p.category}
+          </Badge>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Button variant="outline" size="sm" onClick={onOpen}>
+            <Eye className="size-3.5" /> View
+          </Button>
+          <Button size="sm" disabled={p.stock === 0} onClick={onAdd}>
+            Add to cart
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ListRow({ p, onOpen, onAdd, onBuy }: { p: (typeof mockProducts)[number]; onOpen: () => void; onAdd: () => void; onBuy: () => void }) {
+  const r = productRating(p)
+  return (
+    <Card className="overflow-hidden">
+      <div className="grid grid-cols-[120px_1fr_auto] gap-3 p-3 sm:grid-cols-[160px_1fr_auto]">
+        <button onClick={onOpen} className="block overflow-hidden rounded-md">
+          <img src={p.image_url} alt={p.title} className="aspect-square w-full object-cover" />
+        </button>
+        <div className="min-w-0">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">{p.title}</div>
+              <div className="line-clamp-1 text-xs text-muted-foreground">{p.description}</div>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {p.stock === 0 ? (
+              <Badge variant="destructive">Out of stock</Badge>
+            ) : p.stock < 10 ? (
+              <Badge className="bg-amber-500 text-white hover:bg-amber-500">Low stock</Badge>
+            ) : (
+              <Badge variant="secondary">{p.stock} in stock</Badge>
+            )}
+            {p.tags.includes("bestseller") && <Badge className="bg-emerald-500 text-white hover:bg-emerald-500">Bestseller</Badge>}
+            {p.tags.includes("new") && <Badge variant="outline">New</Badge>}
+            <Badge variant="outline" className="text-[11px]">
+              {p.category}
+            </Badge>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <Star className="size-3 fill-amber-400 text-amber-400" /> {r.toFixed(1)} · {Math.floor(p.id.length * 13) + 24} reviews
+          </div>
+        </div>
+        <div className="flex flex-col items-end justify-between gap-2 text-right">
+          <div>
+            <div className="text-base font-semibold">{formatPrice(p.price_paise)}</div>
+            <div className="text-[11px] text-muted-foreground">inclusive of all taxes</div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onOpen}>
+              <Eye className="size-3.5" /> View
+            </Button>
+            <Button variant="outline" size="sm" disabled={p.stock === 0} onClick={onAdd}>
+              Add to cart
+            </Button>
+            <Button size="sm" disabled={p.stock === 0} onClick={onBuy}>
+              <Zap className="size-3.5" /> Buy now
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
   )
 }
