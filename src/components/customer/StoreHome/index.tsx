@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
 import { Bubble } from "@/components/ui/bubble"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { useSettings } from "@/state/useSettings"
 import { mockProducts } from "@/lib/mock/products"
 import { formatPrice } from "@/lib/types/product"
@@ -59,9 +59,12 @@ import {
   Maximize2,
   Image as ImageIcon,
   GalleryThumbnails,
+  Download,
+  Mail,
+  Phone,
 } from "lucide-react"
 
-type StoreView = "home" | "listing" | "detail"
+type StoreView = "home" | "listing" | "detail" | "track-order"
 
 type CartItem = { id: string; qty: number }
 
@@ -331,6 +334,9 @@ export default function StoreHome() {
             </Button>
             <Button variant="ghost" size="sm" onClick={goToListing}>
               Products
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setView("track-order")} className="hidden lg:inline-flex">
+              <PackageCheck className="size-4 mr-1" /> Track Order
             </Button>
             <Button size="sm" onClick={() => setAiOpen((v) => !v)} className="hidden sm:inline-flex">
               <Sparkles className="size-4" /> Ask AI
@@ -862,6 +868,13 @@ export default function StoreHome() {
               onOpenRelated={openProduct}
               loading={false}
               error={null}
+            />
+          )}
+
+          {view === "track-order" && (
+            <TrackOrder
+              onClose={() => setView("home")}
+              onOpenAI={() => setAiOpen(true)}
             />
           )}
 
@@ -1964,6 +1977,402 @@ function ProductDetail({ product, onClose, onAddToCart, onBuyNow, onOpenAI, onOp
               </CardContent>
             </Card>
           </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Track Order                                   */
+/* -------------------------------------------------------------------------- */
+
+interface TrackOrderProps {
+  onClose: () => void
+  onOpenAI: () => void
+}
+
+const TRACKING_STAGES = [
+  { key: "preparing", label: "Preparing", desc: "Order received & confirmed" },
+  { key: "packed", label: "Packed", desc: "Items packed & labelled" },
+  { key: "shipped", label: "Shipped", desc: "Handed to carrier" },
+  { key: "out-for-delivery", label: "Out for Delivery", desc: "On the way to you" },
+  { key: "delivered", label: "Delivered", desc: "Delivered to your door" },
+] as const
+
+type TrackStageKey = (typeof TRACKING_STAGES)[number]["key"]
+
+interface OrderData {
+  orderId: string
+  customerName: string
+  productName: string
+  amount: number
+  paymentMethod: string
+  orderStatus: "processing" | "confirmed" | "shipped" | "out-for-delivery" | "delivered" | "cancelled"
+  paymentStatus: "paid" | "pending" | "failed"
+  invoiceNumber: string
+  invoiceDate: string
+  trackingStage: TrackStageKey
+  attemptTime: string
+  paymentReason?: string
+}
+
+function generateMockOrder(orderId: string, mobile: string, email: string): OrderData | null {
+  // deterministic mock: only return a valid order for specific test values
+  const isValid = orderId.startsWith("ORD") && mobile.length >= 10 && email.includes("@")
+  if (!isValid) return null
+
+  const product = mockProducts[0]
+  const stageKeys: TrackStageKey[] = ["preparing", "packed", "shipped", "out-for-delivery", "delivered"]
+  const stageIdx = Math.abs(orderId.split("").reduce((a, c) => a + c.charCodeAt(0), 0)) % stageKeys.length
+  const paymentStatuses: OrderData["paymentStatus"][] = ["paid", "pending", "failed"]
+  const payIdx = Math.abs(orderId.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 0)) % paymentStatuses.length
+
+  return {
+    orderId,
+    customerName: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    productName: product.title,
+    amount: product.price_paise,
+    paymentMethod: "UPI",
+    orderStatus: "confirmed",
+    paymentStatus: paymentStatuses[payIdx],
+    invoiceNumber: `INV-${orderId.slice(-6)}`,
+    invoiceDate: new Date().toLocaleDateString("en-IN"),
+    trackingStage: stageKeys[stageIdx],
+    attemptTime: new Date(Date.now() - 1000 * 60 * 60 * 2).toLocaleString("en-IN"),
+    paymentReason: paymentStatuses[payIdx] === "failed" ? "Transaction declined by bank" : undefined,
+  }
+}
+
+function TrackOrderSkeleton() {
+  return (
+    <div className="space-y-4 px-4">
+      <Skeleton className="h-8 w-1/4" />
+      <Skeleton className="h-4 w-1/2" />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+      <Skeleton className="h-48 w-full" />
+      <Skeleton className="h-32 w-full" />
+    </div>
+  )
+}
+
+function TrackOrderError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <Card className="border-destructive/50">
+      <CardContent className="p-8 text-center">
+        <AlertCircle className="mx-auto size-12 text-destructive" />
+        <h3 className="mt-3 font-semibold">Unable to track order</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+        <Button className="mt-4" onClick={onRetry}>
+          <RefreshCw className="size-4 mr-2" /> Try again
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function TrackOrderEmpty({ onRetry }: { onRetry: () => void }) {
+  return (
+    <Card className="p-8 text-center">
+      <PackageCheck className="mx-auto size-12 text-muted-foreground" />
+      <h3 className="mt-3 font-semibold">No order found</h3>
+      <p className="mt-1 max-w-md mx-auto text-sm text-muted-foreground">
+        We couldn't find an order matching those details. Please check your Order ID, mobile number, and email address.
+      </p>
+      <Button className="mt-4" onClick={onRetry}>
+        <RefreshCw className="size-4 mr-2" /> Try again
+      </Button>
+    </Card>
+  )
+}
+
+function PaymentStatusBadge({ status }: { status: OrderData["paymentStatus"] }) {
+  const config = {
+    paid: { variant: "secondary" as const, icon: <PackageCheck className="size-3.5 text-emerald-600" />, label: "Paid" },
+    pending: { variant: "default" as const, icon: <Loader2 className="size-3.5 animate-spin text-amber-600" />, label: "Pending" },
+    failed: { variant: "destructive" as const, icon: <AlertCircle className="size-3.5" />, label: "Failed" },
+  }
+  const c = config[status]
+  return (
+    <Badge variant={c.variant} className="gap-1.5 text-sm">
+      {c.icon} {c.label}
+    </Badge>
+  )
+}
+
+function OrderTimeline({ currentStage }: { currentStage: TrackStageKey }) {
+  const idx = TRACKING_STAGES.findIndex((s) => s.key === currentStage)
+  return (
+    <div className="space-y-4">
+      {TRACKING_STAGES.map((stage, i) => {
+        const isActive = i <= idx
+        const isCurrent = i === idx
+        return (
+          <div key={stage.key} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div
+                className={`relative size-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                  isActive ? "bg-primary border-primary text-primary-foreground" : "bg-background border-muted"
+                }`}
+              >
+                {isActive ? (
+                  <Check className="size-4" />
+                ) : (
+                  <div className="size-2 rounded-full bg-muted" />
+                )}
+              </div>
+              {i < TRACKING_STAGES.length - 1 && (
+                <div className={`mt-1 size-0.5 flex-1 ${isActive ? "bg-primary" : "bg-muted"}`} />
+              )}
+            </div>
+            <div className="flex-1 pt-1">
+              <div className={`font-medium text-sm ${isActive ? "text-foreground" : "text-muted-foreground"}`}>
+                {stage.label}
+                {isCurrent && <span className="ml-2 text-xs bg-primary/10 text-primary px-1.5 rounded">Current</span>}
+              </div>
+              <div className="text-xs text-muted-foreground">{stage.desc}</div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function TrackOrder({ onClose, onOpenAI }: TrackOrderProps) {
+  const [orderId, setOrderId] = useState("")
+  const [mobile, setMobile] = useState("")
+  const [email, setEmail] = useState("")
+  const [submitted, setSubmitted] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [orderData, setOrderData] = useState<OrderData | null>(null)
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    setTimeout(() => {
+      const data = generateMockOrder(orderId.trim(), mobile.trim(), email.trim())
+      setLoading(false)
+      if (data) {
+        setOrderData(data)
+        setSubmitted(true)
+      } else {
+        setSubmitted(true)
+        setOrderData(null)
+      }
+    }, 800)
+  }
+
+  if (!submitted) {
+    return (
+      <section className="px-4 py-6">
+        <div className="mx-auto max-w-[600px] space-y-6">
+          <div className="text-center">
+            <h1 className="font-heading text-2xl font-semibold">Track Order</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Enter your order details to view payment, invoice, and delivery status.
+            </p>
+          </div>
+
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="orderId">Order ID</Label>
+                  <Input
+                    id="orderId"
+                    value={orderId}
+                    onChange={(e) => setOrderId(e.target.value)}
+                    placeholder="ORD-123456"
+                    required
+                    className="h-10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="mobile">Mobile Number</Label>
+                  <Input
+                    id="mobile"
+                    type="tel"
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    required
+                    className="h-10"
+                    inputMode="tel"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    className="h-10"
+                  />
+                </div>
+                <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                  {loading ? <Loader2 className="size-4 mr-2 animate-spin" /> : "Track Order"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="border-muted/50">
+            <CardContent className="p-4 text-center text-sm text-muted-foreground">
+              <div className="flex items-center justify-center gap-2 text-xs mb-2">
+                <ShieldCheck className="size-3.5 text-emerald-600" /> Secure payments powered by Razorpay
+              </div>
+              <div>Need help? <Button variant="ghost" size="sm" onClick={onOpenAI} className="p-0 h-auto">
+                <Sparkles className="size-3.5 mr-1" /> Ask AI
+              </Button></div>
+              <div className="mt-2">support@razent.com · +91 80 1234 5678</div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+    )
+  }
+
+  if (loading) return <TrackOrderSkeleton />
+  if (error) return <TrackOrderError message={error} onRetry={() => setSubmitted(false)} />
+  if (!orderData) return <TrackOrderEmpty onRetry={() => setSubmitted(false)} />
+
+  const { orderId: oid, customerName, productName, amount, paymentMethod, orderStatus, paymentStatus, invoiceNumber, invoiceDate, trackingStage, attemptTime, paymentReason } = orderData
+
+  return (
+    <section className="px-4 py-6">
+      <div className="mx-auto max-w-[900px] space-y-6">
+        {/* Failure summary if payment failed */}
+        {paymentStatus === "failed" && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="size-6 text-destructive shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h2 className="font-semibold text-destructive">Payment Failed</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Your payment could not be completed.</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
+                    <span><span className="font-medium">Order ID:</span> {oid}</span>
+                    <span><span className="font-medium">Amount:</span> {formatPrice(amount)}</span>
+                    {paymentReason && <span className="text-destructive/80">{paymentReason}</span>}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Result card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                Order Details
+                <Badge variant="outline" className="text-xs capitalize">{orderStatus}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2 text-sm">
+                <div><span className="text-muted-foreground">Order ID:</span> <span className="ml-2 font-mono">{oid}</span></div>
+                <div><span className="text-muted-foreground">Customer:</span> <span className="ml-2">{customerName}</span></div>
+                <div className="sm:col-span-2"><span className="text-muted-foreground">Product:</span> <span className="ml-2">{productName}</span></div>
+                <div><span className="text-muted-foreground">Amount:</span> <span className="ml-2 font-semibold">{formatPrice(amount)}</span></div>
+                <div><span className="text-muted-foreground">Payment method:</span> <span className="ml-2">{paymentMethod}</span></div>
+                <div><span className="text-muted-foreground">Order status:</span> <span className="ml-2 capitalize">{orderStatus}</span></div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Payment status card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Status</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <PaymentStatusBadge status={paymentStatus} />
+              {paymentStatus === "paid" && (
+                <div className="text-sm text-emerald-600">
+                  Payment confirmed on {attemptTime}
+                </div>
+              )}
+              {paymentStatus === "pending" && (
+                <div className="text-sm text-amber-600">
+                  Payment is being processed. Check back in a few minutes.
+                </div>
+              )}
+              {paymentStatus === "failed" && (
+                <div className="text-sm text-destructive">
+                  {paymentReason || "Payment was declined. Please try again or use a different method."}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Invoice card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              Invoice
+              <Badge variant="secondary" className="text-xs">Available</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2 text-sm">
+              <div><span className="text-muted-foreground">Invoice number:</span> <span className="ml-2 font-mono">{invoiceNumber}</span></div>
+              <div><span className="text-muted-foreground">Date:</span> <span className="ml-2">{invoiceDate}</span></div>
+              <div><span className="text-muted-foreground">Status:</span> <span className="ml-2">{paymentStatus === "paid" ? "Paid" : "Pending payment"}</span></div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm">
+                <Download className="size-3.5 mr-1.5" /> Download Invoice
+              </Button>
+              <Button variant="outline" size="sm">
+                <Eye className="size-3.5 mr-1.5" /> View Invoice
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Dummy tracking card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Delivery Tracking</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <OrderTimeline currentStage={trackingStage} />
+          </CardContent>
+        </Card>
+
+        {/* Support card */}
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4 space-y-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Headset className="size-4 text-primary" /> Need help?
+            </h3>
+            <div className="grid gap-2 sm:grid-cols-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2"><ShieldCheck className="size-3.5" /> Secure payments via Razorpay</div>
+              <div className="flex items-center gap-2"><RotateCcw className="size-3.5" /> 7-day easy returns</div>
+              <div className="flex items-center gap-2"><Mail className="size-3.5" /> {storeProfile.supportEmail}</div>
+              <div className="flex items-center gap-2"><Phone className="size-3.5" /> {storeProfile.supportPhone}</div>
+            </div>
+            <Button variant="outline" onClick={onOpenAI} className="w-full sm:w-auto">
+              <Sparkles className="size-3.5 mr-2" /> Ask AI Assistant
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Back button */}
+        <div className="text-center">
+          <Button variant="ghost" onClick={onClose}><ArrowRight className="size-4 mr-1" /> Back to Home</Button>
         </div>
       </div>
     </section>
