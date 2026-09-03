@@ -11,6 +11,7 @@ import {
   Download,
   LayoutGrid,
   ArrowUpRight,
+  Truck,
 } from "lucide-react"
 import {
   Card,
@@ -96,9 +97,19 @@ export default function DashboardScreen() {
       {/* Header — Dashboard title + subtitle left, controls right */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
-            Dashboard
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
+              Dashboard
+            </h1>
+            {/* Q18: per-store delivery promise (Blinkit/Swiggy) */}
+            <Badge
+              variant="secondary"
+              className="ml-1 gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+            >
+              <Truck className="size-3" />
+              10–30 min delivery
+            </Badge>
+          </div>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
             Get a real-time overview of your AI commerce performance.
           </p>

@@ -88,8 +88,12 @@ const defaults: Omit<SettingsState, "setStoreProfile" | "setAiDefaults" | "setBu
     },
     dummyShipping: {
       enabled: true,
-      defaultDeliveryTime: "3–5 days",
-      cutoffTime: "4:00 PM",
+      // Q18: per-store delivery promise. Grocery default mirrors
+      // Blinkit/Swiggy Instamart (10–30 min). Stored on profiles in SQL
+      // (delivery_promise_minutes); this is the local mirror that the UI
+      // reads until useMerchant (PR 5) replaces it with the live profile.
+      defaultDeliveryTime: "10–30 min",
+      cutoffTime: "11:00 PM",
       stages: [
         "Preparing",
         "Packed",
