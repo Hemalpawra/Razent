@@ -51,6 +51,7 @@ import {
   executeAgentCheckout,
   logAuditEvent,
 } from "@/lib/api/client"
+import { orderStore } from "@/lib/storage/orderStore"
 
 import { mockProducts } from "@/lib/mock/products"
 
@@ -3356,12 +3357,8 @@ function generateMockOrder(
   // The async path uses trackOrder (from client.ts); this sync wrapper
   // is kept for compatibility with the existing component contract.
   try {
-    // Direct import of the in-memory store is the fastest path;
-    // trackOrder() wraps this through the same store.
-    const { orderStore } = require("@/lib/storage/orderStore")
     const order = orderStore.get(orderId)
     if (!order) return null
-    // Minimal validation against user-provided mobile/email
     const cleanMobile = mobile.replace(/\D/g, "")
     const cleanEmail = email.trim().toLowerCase()
     if (cleanMobile.length < 10 || !cleanEmail.includes("@")) return null

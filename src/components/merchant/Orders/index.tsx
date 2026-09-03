@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import {
   Search,
@@ -236,22 +236,24 @@ export default function OrdersScreen() {
   }
 
   const kpis = useMemo(() => {
-    const total = mockOrders.length
+    const list = orders || []
 
-    const paid = mockOrders.filter((o) => o.status === "paid").length
+    const total = list.length
 
-    const pending = mockOrders.filter((o) => o.status === "created").length
+    const paid = list.filter((o) => o.status === "paid").length
 
-    const shipped = mockOrders.filter(
+    const pending = list.filter((o) => o.status === "created").length
+
+    const shipped = list.filter(
       (o) => o.shipping_status === "shipped",
     ).length
 
-    const revenuePaise = mockOrders
+    const revenuePaise = list
       .filter((o) => o.status === "paid")
       .reduce((sum, o) => sum + o.total_paise, 0)
 
     return { total, paid, pending, shipped, revenuePaise }
-  }, [])
+  }, [orders])
 
   return (
     <div className="space-y-3">
