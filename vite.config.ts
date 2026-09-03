@@ -38,6 +38,9 @@ export default defineConfig(({ mode }) => {
       figmaReactRefreshBoundaryFallback(),
 
       figmaMakeKitPlugin({ storiesGlob: "/src/**/*.stories.{ts,tsx,js,jsx}" }),
+      // ragentApiPlugin() removed in PR1: the AI agent now lives in a
+      // Supabase Edge Function (ragent-chat), per decision Q5. See
+      // supabase/functions/ragent-chat/index.ts (PR 4).
     ],
 
     resolve: {
@@ -452,6 +455,8 @@ function figmaReactRefreshBoundaryFallback(): Plugin {
  * builds (`vite build`) skip it entirely so the route doesn't leak
  * into shipped bundles.
  */
+
+
 
 function figmaMakeKitPlugin(options: {
   storiesGlob: string | string[]

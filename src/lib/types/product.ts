@@ -14,6 +14,10 @@ export type Product = {
   image_url: string
   category: string
   tags: string[]
+  images?: string[]
+  rating?: number
+  review_count?: number
+  merchant_id?: string
   created_at: string
   updated_at: string
 }

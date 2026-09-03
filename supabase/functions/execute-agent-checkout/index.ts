@@ -48,13 +48,10 @@ Deno.serve(async (req) => {
   }
 
   const authHeader = req.headers.get("authorization") ?? "";
-  const userClient = createClient(
-    SUPABASE_URL,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } },
-  );
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  const svc = createServiceClient();
 
-  const { data: userData } = await userClient.auth.getUser();
+  const { data: userData } = await svc.auth.getUser(token);
   if (!userData?.user) {
     return new Response(JSON.stringify({ error: "unauthenticated" }), {
       status: 401, headers: { "content-type": "application/json" },
@@ -69,7 +66,6 @@ Deno.serve(async (req) => {
   }
 
   const { order_id, mandate, approval_threshold_rupees, protocol = "ncpi_uap" } = req_body;
-  const svc = createServiceClient();
 
   // 1. Load the order
   const { data: order, error: oErr } = await svc

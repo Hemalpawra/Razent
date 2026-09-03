@@ -1,338 +1,269 @@
 import type { Conversation } from "@/lib/types/conversation"
 
+/**
+ * Mock conversations for grocery / quick-commerce demo.
+ * Covers: human_customer (default) and agent_to_agent (test).
+ * Mirrors the order data in mock/orders.ts.
+ */
 export const mockConversations: Conversation[] = [
   {
     id: "conv_2026_0001",
-    customer_name: "Ananya Rao",
+    customer_name: "Rahul Sharma",
     type: "human_customer",
+    agent_id: "agent_fruit_picker",
+    protocol: "acp",
     status: "paid",
-    last_message: "Payment completed — invoice generated",
-    amount_paise: 1699900,
-    created_at: "2026-08-31T10:16:00Z",
-    updated_at: "2026-08-31T10:32:00Z",
-    order_id: "ord_2026_0001",
-    messages: [
-      {
-        id: "m1",
-        role: "customer",
-        text: "I need an air purifier for a 2BHK, budget around 18k",
-        at: "2026-08-31T10:16:00Z",
-      },
-      {
-        id: "m2",
-        role: "ai",
-        text: "I searched your catalog and found 3 air purifiers. Comparing Air Purifier Pro, Compact and HEPA Mini…",
-        at: "2026-08-31T10:18:00Z",
-      },
-      {
-        id: "m3",
-        role: "ai",
-        text: "Recommended: Air Purifier Pro — HEPA-13, 99.97% removal, app control. Adding to cart.",
-        at: "2026-08-31T10:20:00Z",
-      },
-      {
-        id: "m4",
-        role: "customer",
-        text: "Go ahead, ship to Bengaluru",
-        at: "2026-08-31T10:24:00Z",
-      },
-      {
-        id: "m5",
-        role: "ai",
-        text: "Collected shipping details. Created Razorpay order ord_2026_0001. Share payment link.",
-        at: "2026-08-31T10:28:00Z",
-      },
-      { id: "m6", role: "customer", text: "Paid.", at: "2026-08-31T10:30:00Z" },
-      {
-        id: "m7",
-        role: "ai",
-        text: "Payment successful. Invoice generated. Tracking will start once shipped.",
-        at: "2026-08-31T10:32:00Z",
-      },
-    ],
-    products_recommended: [
-      {
-        product_id: "prod_air_purifier_pro",
-        title: "Air Purifier Pro",
-        image_url:
-          "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=240&q=70&auto=format&fit=crop",
-        price_paise: 1699900,
-      },
-      {
-        product_id: "prod_smart_bulb_pack",
-        title: "Smart Bulb 4-pack",
-        image_url:
-          "https://images.unsplash.com/photo-1558002038-1055907df827?w=240&q=70&auto=format&fit=crop",
-        price_paise: 249900,
-      },
-    ],
-    products_compared: [
-      {
-        product_id: "prod_air_purifier_pro",
-        title: "Air Purifier Pro",
-        image_url:
-          "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=240&q=70&auto=format&fit=crop",
-        price_paise: 1699900,
-      },
-      {
-        product_id: "prod_robot_vacuum_x",
-        title: "Robot Vacuum X",
-        image_url:
-          "https://images.unsplash.com/photo-1581578017093-cd30fce4f9d1?w=240&q=70&auto=format&fit=crop",
-        price_paise: 2499900,
-      },
-    ],
-    selected_product: {
-      product_id: "prod_air_purifier_pro",
-      title: "Air Purifier Pro",
-      image_url:
-        "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=240&q=70&auto=format&fit=crop",
-      price_paise: 1699900,
-    },
-    upsell: {
-      product_id: "prod_smart_bulb_pack",
-      title: "Smart Bulb 4-pack",
-      image_url:
-        "https://images.unsplash.com/photo-1558002038-1055907df827?w=240&q=70&auto=format&fit=crop",
-      price_paise: 249900,
-    },
-    shipping_collected: true,
-    shipping_address: {
-      full_name: "Ananya Rao",
-      phone: "+91 98765 43210",
-      line1: "12 4th Block, Koramangala",
-      city: "Bengaluru",
-    },
-    tracking_status: "Shipped — Delhivery (simulated)",
-  },
-  {
-    id: "conv_2026_0002",
-    customer_name: "Agent — ShopBot",
-    type: "agent_to_agent",
-    status: "active",
-    last_message: "Comparing laptops for customer request…",
-    created_at: "2026-08-31T09:40:00Z",
-    updated_at: "2026-08-31T09:44:00Z",
-    messages: [
-      {
-        id: "m1",
-        role: "customer",
-        text: "Find me a lightweight laptop under 60k with 16GB RAM",
-        at: "2026-08-31T09:40:00Z",
-      },
-      {
-        id: "m2",
-        role: "ai",
-        text: "Searching catalog… found 2 options. Comparing specs and price.",
-        at: "2026-08-31T09:42:00Z",
-      },
-    ],
-    products_recommended: [
-      {
-        product_id: "prod_portable_ssd",
-        title: "Portable SSD 1TB",
-        image_url:
-          "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?w=240&q=70&auto=format&fit=crop",
-        price_paise: 299900,
-      },
-    ],
-    products_compared: [
-      {
-        product_id: "prod_portable_ssd",
-        title: "Portable SSD 1TB",
-        image_url:
-          "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?w=240&q=70&auto=format&fit=crop",
-        price_paise: 299900,
-      },
-      {
-        product_id: "prod_keyboard_mech",
-        title: "Mechanical Keyboard 75%",
-        image_url:
-          "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=240&q=70&auto=format&fit=crop",
-        price_paise: 449900,
-      },
-    ],
-    shipping_collected: false,
-  },
-  {
-    id: "conv_2026_0003",
-    customer_name: "Rohan Mehta",
-    type: "human_customer",
-    status: "waiting_for_payment",
-    last_message: "Razorpay link sent — waiting for payment",
-    amount_paise: 899900,
-    created_at: "2026-08-31T08:20:00Z",
-    updated_at: "2026-08-31T08:28:00Z",
+    last_message: "Payment completed — order packed at dark store",
+    amount_paise: 14900,
+    created_at: "2026-08-30T18:32:00Z",
+    updated_at: "2026-08-30T18:43:00Z",
     order_id: "ord_2026_0002",
     messages: [
       {
         id: "m1",
         role: "customer",
-        text: "Show me smartwatches with ECG",
-        at: "2026-08-31T08:20:00Z",
+        text: "I need fruit for the week — bananas + apples, healthy stuff",
+        at: "2026-08-30T18:32:00Z",
       },
       {
         id: "m2",
         role: "ai",
-        text: "Found Smart Watch A2 — AMOLED, ECG, 14-day battery. Added to cart and created order.",
-        at: "2026-08-31T08:24:00Z",
-      },
-    ],
-    products_recommended: [
-      {
-        product_id: "prod_smart_watch_a2",
-        title: "Smart Watch A2",
-        image_url:
-          "https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=240&q=70&auto=format&fit=crop",
-        price_paise: 899900,
-      },
-    ],
-    products_compared: [],
-    selected_product: {
-      product_id: "prod_smart_watch_a2",
-      title: "Smart Watch A2",
-      image_url:
-        "https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=240&q=70&auto=format&fit=crop",
-      price_paise: 899900,
-    },
-    shipping_collected: true,
-    shipping_address: {
-      full_name: "Rohan Mehta",
-      phone: "+91 99887 76655",
-      line1: "B-204, Hiranandani Estate",
-      city: "Thane",
-    },
-    tracking_status: "Order Created — awaiting payment",
-  },
-  {
-    id: "conv_2026_0004",
-    customer_name: "Priya Nair",
-    type: "human_customer",
-    status: "waiting_for_customer",
-    last_message: "Asked for human support",
-    created_at: "2026-08-31T07:10:00Z",
-    updated_at: "2026-08-31T07:14:00Z",
-    messages: [
-      {
-        id: "m1",
-        role: "customer",
-        text: "This kettle is out of stock — when will it be back?",
-        at: "2026-08-31T07:10:00Z",
-      },
-      {
-        id: "m2",
-        role: "ai",
-        text: "Smart Temperature Kettle is currently out of stock. I can notify you or suggest Espresso Machine.",
-        at: "2026-08-31T07:12:00Z",
+        text: "I found 2 great options in stock: Robusta Bananas (6 pcs, ₹49) and Shimla Apples (4 pcs, ₹129). Bananas are at our HSR dark store, 10 min delivery.",
+        at: "2026-08-30T18:33:00Z",
       },
       {
         id: "m3",
         role: "customer",
-        text: "Talk to a human please",
-        at: "2026-08-31T07:14:00Z",
+        text: "Go with 2 banana packs and 1 apple pack. Ship to Indiranagar.",
+        at: "2026-08-30T18:36:00Z",
+      },
+      {
+        id: "m4",
+        role: "ai",
+        text: "Added 2× Banana Robusta + 1× Apple Shimla to your cart. Total ₹247. Need your full name, phone, and email for delivery.",
+        at: "2026-08-30T18:37:00Z",
+      },
+      {
+        id: "m5",
+        role: "customer",
+        text: "Rahul Sharma, +91 99887 76655, rahul.sharma@example.com, Flat 304 Indiranagar",
+        at: "2026-08-30T18:39:00Z",
+      },
+      {
+        id: "m6",
+        role: "ai",
+        text: "Shipping saved. Created Razorpay order ord_2026_0002. UAP mandate under your limit, so I'll auto-debit. Share payment link.",
+        at: "2026-08-30T18:41:00Z",
+      },
+      { id: "m7", role: "customer", text: "Paid.", at: "2026-08-30T18:42:00Z" },
+      {
+        id: "m8",
+        role: "ai",
+        text: "Payment successful via NPCI UAP. Order packed at Indiranagar dark store. ETA 12 minutes.",
+        at: "2026-08-30T18:43:00Z",
+      },
+    ],
+    products_recommended: [
+      {
+        product_id: "prod_banana_robusta",
+        title: "Banana - Robusta (6 pcs)",
+        image_url:
+          "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=240&q=70&auto=format&fit=crop",
+        price_paise: 4900,
+      },
+      {
+        product_id: "prod_apple_shimla",
+        title: "Apple - Shimla (4 pcs)",
+        image_url:
+          "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=240&q=70&auto=format&fit=crop",
+        price_paise: 12900,
+      },
+    ],
+    products_compared: [],
+    selected_product: {
+      product_id: "prod_banana_robusta",
+      title: "Banana - Robusta (6 pcs)",
+      image_url:
+        "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=240&q=70&auto=format&fit=crop",
+      price_paise: 4900,
+    },
+    shipping_collected: true,
+    shipping_address: {
+      full_name: "Rahul Sharma",
+      phone: "+91 99887 76655",
+      line1: "Flat 304, Sai Residency, Indiranagar",
+      city: "Bengaluru",
+    },
+    tracking_status: "shipped",
+  },
+  {
+    id: "conv_2026_0002",
+    customer_name: "Vikram Mehta",
+    type: "human_customer",
+    agent_id: "agent_household",
+    protocol: "x402",
+    status: "failed",
+    last_message: "Step-up authentication required for purchase over ₹2,000",
+    amount_paise: 44900,
+    created_at: "2026-08-31T12:00:00Z",
+    updated_at: "2026-08-31T12:05:00Z",
+    order_id: "ord_2026_0004",
+    messages: [
+      {
+        id: "m1",
+        role: "customer",
+        text: "Send me a 12-pack of toilet rolls",
+        at: "2026-08-31T12:00:00Z",
+      },
+      {
+        id: "m2",
+        role: "ai",
+        text: "Found Premium Toilet Roll (12 pcs) at ₹449. Adding to cart. Need shipping address.",
+        at: "2026-08-31T12:01:00Z",
+      },
+      {
+        id: "m3",
+        role: "customer",
+        text: "Tower 7, Prestige Shantiniketan, Whitefield. Same as last time.",
+        at: "2026-08-31T12:03:00Z",
+      },
+      {
+        id: "m4",
+        role: "ai",
+        text: "Order amount ₹449 exceeds your UAP auto-approve limit (₹2,000 with this payee). Triggering x402 step-up — please complete verification on the secure page.",
+        at: "2026-08-31T12:05:00Z",
+      },
+    ],
+    products_recommended: [
+      {
+        product_id: "prod_toilet_paper",
+        title: "Premium Toilet Roll (12 pcs)",
+        image_url:
+          "https://images.unsplash.com/photo-1584556812952-905ffd0c611a?w=240&q=70&auto=format&fit=crop",
+        price_paise: 44900,
+      },
+    ],
+    products_compared: [],
+    selected_product: {
+      product_id: "prod_toilet_paper",
+      title: "Premium Toilet Roll (12 pcs)",
+      image_url:
+        "https://images.unsplash.com/photo-1584556812952-905ffd0c611a?w=240&q=70&auto=format&fit=crop",
+      price_paise: 44900,
+    },
+    shipping_collected: true,
+    shipping_address: {
+      full_name: "Vikram Mehta",
+      phone: "+91 98456 11223",
+      line1: "Tower 7, Prestige Shantiniketan, Whitefield",
+      city: "Bengaluru",
+    },
+  },
+  {
+    id: "conv_2026_0003",
+    customer_name: "Meera Nair",
+    type: "human_customer",
+    agent_id: "agent_breakfast_run",
+    protocol: "ncpi_uap",
+    status: "paid",
+    last_message: "Auto-settled via NPCI UAP — packed",
+    amount_paise: 27400,
+    created_at: "2026-09-01T07:08:00Z",
+    updated_at: "2026-09-01T07:15:00Z",
+    order_id: "ord_2026_0005",
+    messages: [
+      {
+        id: "m1",
+        role: "customer",
+        text: "Need breakfast stuff for the week: milk, eggs, snacks, dishwash",
+        at: "2026-09-01T07:08:00Z",
+      },
+      {
+        id: "m2",
+        role: "ai",
+        text: "I can put together a quick cart: 2× Amul Milk (₹68 each), Farm Eggs 6-pack (₹75), Lay's Classic Salted (₹30), Vim Dishwash Bar (₹25). Total ₹274. All in stock at MG Road dark store.",
+        at: "2026-09-01T07:10:00Z",
+      },
+      {
+        id: "m3",
+        role: "customer",
+        text: "Perfect, ship to 303 Greenfield Apartments MG Road. Use my saved UAP mandate.",
+        at: "2026-09-01T07:13:00Z",
+      },
+      {
+        id: "m4",
+        role: "ai",
+        text: "Mandate verified, amount under auto-approve limit. Debiting via NPCI UAP. Order ord_2026_0005 created and paid.",
+        at: "2026-09-01T07:15:00Z",
+      },
+    ],
+    products_recommended: [
+      {
+        product_id: "prod_amul_toned_milk",
+        title: "Amul Toned Milk (1L)",
+        image_url:
+          "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=240&q=70&auto=format&fit=crop",
+        price_paise: 6800,
+      },
+      {
+        product_id: "prod_eggs_6pcs",
+        title: "Farm Fresh Eggs (6 pcs)",
+        image_url:
+          "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=240&q=70&auto=format&fit=crop",
+        price_paise: 7500,
+      },
+    ],
+    products_compared: [],
+    selected_product: {
+      product_id: "prod_amul_toned_milk",
+      title: "Amul Toned Milk (1L)",
+      image_url:
+          "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=240&q=70&auto=format&fit=crop",
+      price_paise: 6800,
+    },
+    upsell: {
+      product_id: "prod_dark_chocolate",
+      title: "Dark Chocolate Bar (70% Cocoa, 80g)",
+      image_url:
+        "https://images.unsplash.com/photo-1481391319762-47dff72954d9?w=240&q=70&auto=format&fit=crop",
+      price_paise: 19900,
+    },
+    shipping_collected: true,
+    shipping_address: {
+      full_name: "Meera Nair",
+      phone: "+91 98770 12340",
+      line1: "303, Greenfield Apartments, MG Road",
+      city: "Bengaluru",
+    },
+    tracking_status: "packed",
+  },
+  {
+    id: "conv_2026_0004",
+    customer_name: "SwiggyBot (Test Agent)",
+    type: "agent_to_agent",
+    agent_id: "swiggy_agent_v1",
+    protocol: "acp",
+    status: "active",
+    last_message: "Discovering your catalog for our quick-commerce aggregator",
+    amount_paise: undefined,
+    created_at: "2026-09-02T10:21:00Z",
+    updated_at: "2026-09-02T10:24:00Z",
+    messages: [
+      {
+        id: "m1",
+        role: "ai",
+        text: "Hello — I'm SwiggyBot, an agent-to-agent commerce client. I'd like to discover your catalog and place a test order for our integration suite.",
+        at: "2026-09-02T10:21:00Z",
+      },
+      {
+        id: "m2",
+        role: "ai",
+        text: "Welcome! I can share our /discover endpoint. Do you have specific SKUs in mind, or want me to send the full grocery catalog?",
+        at: "2026-09-02T10:23:00Z",
       },
     ],
     products_recommended: [],
     products_compared: [],
     shipping_collected: false,
-  },
-  {
-    id: "conv_2026_0005",
-    customer_name: "Agent — PriceHawk",
-    type: "agent_to_agent",
-    status: "completed",
-    last_message: "Order delivered · ₹15,999",
-    amount_paise: 1599900,
-    created_at: "2026-08-30T14:02:00Z",
-    updated_at: "2026-08-31T18:11:00Z",
-    order_id: "ord_2026_0003",
-    messages: [
-      {
-        id: "m1",
-        role: "customer",
-        text: "Bulk order: mesh wifi + 2 bulbs",
-        at: "2026-08-30T14:02:00Z",
-      },
-      {
-        id: "m2",
-        role: "ai",
-        text: "Bundle created. Applied savings. Order paid and shipped.",
-        at: "2026-08-31T18:11:00Z",
-      },
-    ],
-    products_recommended: [
-      {
-        product_id: "prod_mesh_wifi_3pack",
-        title: "Mesh Wi-Fi 3-pack",
-        image_url:
-          "https://images.unsplash.com/photo-1606857521015-7f9fcf423740?w=240&q=70&auto=format&fit=crop",
-        price_paise: 1599900,
-      },
-    ],
-    products_compared: [],
-    selected_product: {
-      product_id: "prod_mesh_wifi_3pack",
-      title: "Mesh Wi-Fi 3-pack",
-      image_url:
-        "https://images.unsplash.com/photo-1606857521015-7f9fcf423740?w=240&q=70&auto=format&fit=crop",
-      price_paise: 1599900,
-    },
-    shipping_collected: true,
-    shipping_address: {
-      full_name: "Karan Shah",
-      phone: "+91 91234 56789",
-      line1: "Plot 14, Sector 18",
-      city: "Gurugram",
-    },
-    tracking_status: "Delivered",
-  },
-  // extras for paging/realism
-  {
-    id: "conv_2026_0006",
-    customer_name: "Sana Ali",
-    type: "human_customer",
-    status: "checkout_ready",
-    last_message: "Cart ready — awaiting checkout",
-    amount_paise: 599900,
-    created_at: "2026-08-31T06:00:00Z",
-    updated_at: "2026-08-31T06:08:00Z",
-    messages: [
-      {
-        id: "m1",
-        role: "customer",
-        text: "Need an air fryer for family of 4",
-        at: "2026-08-31T06:00:00Z",
-      },
-      {
-        id: "m2",
-        role: "ai",
-        text: "Recommended Dual-Basket Air Fryer — 8L, 6 presets. Added to cart, shipping collected.",
-        at: "2026-08-31T06:04:00Z",
-      },
-    ],
-    products_recommended: [
-      {
-        product_id: "prod_airfryer_dual",
-        title: "Dual-Basket Air Fryer",
-        image_url:
-          "https://images.unsplash.com/photo-1626509653291-18d9a934b9db?w=240&q=70&auto=format&fit=crop",
-        price_paise: 599900,
-      },
-    ],
-    products_compared: [],
-    selected_product: {
-      product_id: "prod_airfryer_dual",
-      title: "Dual-Basket Air Fryer",
-      image_url:
-        "https://images.unsplash.com/photo-1626509653291-18d9a934b9db?w=240&q=70&auto=format&fit=crop",
-      price_paise: 599900,
-    },
-    shipping_collected: true,
-    shipping_address: {
-      full_name: "Sana Ali",
-      phone: "+91 90000 11111",
-      line1: "House 42, Jubilee Hills",
-      city: "Hyderabad",
-    },
   },
 ]

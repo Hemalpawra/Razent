@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       p_amount_paise: msg.amount_paise,
       p_transaction_id: `txn_${msg.npci_rrn}`,
       p_settlement_reference: settlementRef,
-      p_ncpi_rrn: msg.npci_stan,
+      p_ncpi_rrn: msg.npci_rrn,
       p_ncpi_stan: msg.npci_stan,
       p_order_external_id: msg.order_id,
     });

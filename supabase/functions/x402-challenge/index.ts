@@ -62,7 +62,13 @@ Deno.serve(async (req) => {
     `challenge_id="${challenge.challenge_id}", ` +
     `amount_paise="${challenge.amount_paise}", currency="INR", protocol="x402"`;
 
-  return new Response(JSON.stringify(challenge), {
+  const responsePayload = {
+    ...challenge,
+    accepts: ["x402", "ncpi_uap", "razorpay"],
+    realm: "razent",
+  };
+
+  return new Response(JSON.stringify(responsePayload), {
     status: 402,
     headers: {
       "content-type": "application/json",
