@@ -23,11 +23,11 @@ Used in the Razent (Merchant AI Gateway) project.
 - No `Backdrop`; width locked at `w-[25vw] min-w-[380px] max-w-[420px]`.
 - Mobile: `if (isMobile) return null` with separate full-screen page.
 
-## Model reference
-- Stable: `minimax/minimax-m3:free` (openrouter).
-- Code/review: `gemini-3.7-flash`.
-- `deepseek-v4-flash-free`: rate-limited (`:free` suffix).
-- Skip NVIDIA `build.nvidia.com` NIM (self-hosted GPU, 2×A100) — user rejected.
+## Model reference + session provider history
+- Stable: `minimax/minimax-m3:free` (openrouter); `gemini-3.7-flash` (good for review/code).
+- Active: `poolside/laguna-s-2.1:free` (current); also `z-ai/glm-5.2:free` active.
+- Rate-limited: `deepseek-v4-flash-free` (opencode-free; `:free` suffix often hits limits).
+- Skip NVIDIA `build.nvidia.com` NIM (self-hosted GPU, 2×A100) — user rejected; `agentic-commerce-uap` skill records exclusion.
 
 ## What NOT to change
 - Protocol order above.
