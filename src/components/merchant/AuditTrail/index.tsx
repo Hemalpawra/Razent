@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 
 import {
   SearchIcon,
@@ -81,6 +81,12 @@ export default function AuditTrailScreen() {
   const openAuditDrawer = useUI((s) => s.openAuditDrawer)
   const closeAuditDrawer = useUI((s) => s.closeAuditDrawer)
   const drawerAuditSessionId = useUI((s) => s.drawerAuditSessionId)
+
+  const [auditData, setAuditData] = useState<AuditSession[]>([])
+
+  useEffect(() => {
+    listAuditSessions().then(setAuditData).catch(() => setAuditData([]))
+  }, [])
 
   const totalSessions = auditData.length
 

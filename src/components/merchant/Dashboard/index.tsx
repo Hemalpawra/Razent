@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { getDashboard } from "@/lib/api/client"
+import type { DashboardData } from "@/lib/types/kpi"
 import {
   IndianRupee,
   ShoppingCart,
@@ -45,16 +46,6 @@ import {
 // Strict shadcn — every visual is a shadcn primitive, layout is 1:1 Figma 1920WLight
 // Theme-aware: uses bg-card / text-foreground / muted / primary tokens so .dark toggles correctly
 
-const revenueData = [
-  { date: "21 May", revenue: 40000 },
-  { date: "22 May", revenue: 75000 },
-  { date: "23 May", revenue: 62000 },
-  { date: "24 May", revenue: 88000 },
-  { date: "25 May", revenue: 52000 },
-  { date: "26 May", revenue: 110000 },
-  { date: "27 May", revenue: dashData?.revenue_month_paise ? dashData.revenue_month_paise / 100 : 124560 },
-]
-
 const chartConfig = {
   revenue: { label: "Revenue", color: "var(--chart-2)" },
 }
@@ -69,11 +60,21 @@ const dateRanges = [
 export default function DashboardScreen() {
   const [rangeIdx, setRangeIdx] = useState(0)
 
-  const [dashData, setDashData] = useState<any>(null)
+  const [dashData, setDashData] = useState<DashboardData | null>(null)
 
   useEffect(() => {
     getDashboard().then((d) => setDashData(d)).catch(() => setDashData(null))
   }, [])
+
+  const revenueData = useMemo(() => [
+    { date: "21 May", revenue: 40000 },
+    { date: "22 May", revenue: 75000 },
+    { date: "23 May", revenue: 62000 },
+    { date: "24 May", revenue: 88000 },
+    { date: "25 May", revenue: 52000 },
+    { date: "26 May", revenue: 110000 },
+    { date: "27 May", revenue: dashData?.revenue_month_paise ? dashData.revenue_month_paise / 100 : 124560 },
+  ], [dashData])
 
   const handleExport = () => {
     const csv = ["Revenue,Orders", "124560,18", "110000,15", "88000,12"].join(
@@ -160,7 +161,7 @@ export default function DashboardScreen() {
       <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
         {/* Left column — Overview + AI Performance */}
         <div className="space-y-3">
-          <OverviewCard />
+          <OverviewCard revenueData={revenueData} />
           <AiPerformanceCard />
         </div>
 
@@ -211,7 +212,11 @@ function KpiCard({
   )
 }
 
-function OverviewCard() {
+function OverviewCard({
+  revenueData = [],
+}: {
+  revenueData?: { date: string; revenue: number }[]
+}) {
   return (
     <Card className="rounded-xl bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

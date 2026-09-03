@@ -46,10 +46,10 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { formatPrice } from "@/lib/types/product"
-import { listConversations } from "@/lib/api/client"
-
-import type { ConversationStatus } from "@/lib/types/conversation"
-import { useState } from "react"
+import { listConversations, listOrders } from "@/lib/api/client"
+import type { Conversation, ConversationStatus } from "@/lib/types/conversation"
+import type { Order } from "@/lib/types/order"
+import { useState, useEffect } from "react"
 import ConversationDrawer from "@/components/merchant/AIAgent/ConversationDrawer"
 
 const statusVariant: Record<ConversationStatus, "success" | "secondary" | "warning" | "destructive" | "default"> =
@@ -128,6 +128,14 @@ export default function AIAgentScreen({
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
 
+  const [convData, setConvData] = useState<Conversation[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
+
+  useEffect(() => {
+    listConversations().then(setConvData).catch(() => setConvData([]))
+    listOrders().then(setOrders).catch(() => setOrders([]))
+  }, [])
+
   const selected = selectedId
     ? (convData.find((c) => c.id === selectedId) ?? null)
     : null
@@ -137,10 +145,10 @@ export default function AIAgentScreen({
       c.status === "waiting_for_customer" ||
       c.status === "waiting_for_payment",
   ).length
-  const ordersToday = mockOrders.filter((o) =>
+  const ordersToday = orders.filter((o) =>
     o.created_at.startsWith("2026-08-31"),
   ).length
-  const revenueToday = mockOrders
+  const revenueToday = orders
     .filter((o) => o.status === "paid" && o.created_at.startsWith("2026-08-31"))
     .reduce((s, o) => s + o.total_paise, 0)
   const customersHelped = 42
@@ -309,7 +317,7 @@ export default function AIAgentScreen({
       {!splitOpen ? (
         <div className="grid gap-3 lg:grid-cols-[70%_30%]">
           {/* Left — Live Conversations */}
-          <LiveConversationsCard onOpen={handleOpen} />
+          <LiveConversationsCard onOpen={handleOpen} convData={convData} />
           {/* Right — bundle + missed + needs attention */}
           <div className="space-y-3">
             <Card className="rounded-xl bg-card border-l-4 border-l-primary">
@@ -410,6 +418,7 @@ export default function AIAgentScreen({
               onOpen={handleOpen}
               selectedId={selectedId}
               splitMode
+              convData={convData}
             />
           </div>
 
@@ -672,10 +681,12 @@ function LiveConversationsCard({
   onOpen,
   selectedId,
   splitMode,
+  convData = [],
 }: {
   onOpen: (id: string) => void
   selectedId?: string | null
   splitMode?: boolean
+  convData?: Conversation[]
 }) {
   return (
     <Card className="overflow-hidden rounded-xl bg-card py-0 flex flex-col">
