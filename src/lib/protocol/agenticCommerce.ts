@@ -37,13 +37,25 @@ export interface X402Challenge {
 /* ------------------------------------------------------------------ */
 
 export function handleACPDiscovery(query: string): { results: string[]; protocol: "acp" } {
-  // Structured catalog query response for external LLM agents.
-  // In production: query against Product table via lib/api/client.
-  const keywords = query.toLowerCase().trim().split(/\s+/)
-  return {
-    protocol: "acp",
-    results: keywords.slice(0, 5), // stub: expand to real search
+  // Section 2 improvement: query the real product store so external agents
+  // get structured catalog results (not just split keywords).
+  const needle = query.toLowerCase().trim()
+  let results: string[] = []
+  try {
+    const { productStore } = require("@/lib/storage/productStore")
+    const products = productStore.list()
+    const matched = products.filter(
+      (p: any) =>
+        p.title.toLowerCase().includes(needle) ||
+        p.description?.toLowerCase().includes(needle) ||
+        p.category?.toLowerCase().includes(needle) ||
+        p.tags?.some((t: string) => t.toLowerCase().includes(needle)),
+    )
+    results = matched.slice(0, 5).map((p: any) => p.id)
+  } catch {
+    results = needle.split(/\s+/).filter(Boolean).slice(0, 5)
   }
+  return { protocol: "acp", results }
 }
 
 /* ------------------------------------------------------------------ */
@@ -59,7 +71,17 @@ export function verifyAP2Mandate(
   if (!mandate.mandate_id) {
     return { valid: false, reason: "mandate missing mandate_id", protocol: "ap2" }
   }
-  // Delegated limit check is handled separately by approveAuto(); this verifies identity only.
+  if (
+    mandate.delegated_limit_paise !== undefined &&
+    amount_paise > mandate.delegated_limit_paise
+  ) {
+    return {
+      valid: false,
+      reason: "Order amount exceeds customer delegated mandate cap",
+      protocol: "ap2",
+      mandate_id: mandate.mandate_id,
+    }
+  }
   return {
     valid: true,
     protocol: "ap2",
@@ -102,8 +124,8 @@ export function processUAPTransaction(
       id: `audit-checkout-initiated-${order.id}-${Date.now()}`,
       type: "checkout_initiated" as ProtocolEvent,
       timestamp: new Date().toISOString(),
-      actor: order.via_ai ? "AI Assistant" : "Customer",
-      source: order.via_ai ? "AI Agent" : "Store",
+      actor: order.via_ai ? "AI Assistant" : "customer",
+      source: order.via_ai ? "AI Agent" : "store",
       result: "Success",
       reason: "Mandate intent submitted; UAP settlement initiated",
       request_id: order.id,
