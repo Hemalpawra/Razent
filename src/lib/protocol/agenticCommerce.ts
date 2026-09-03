@@ -1,5 +1,7 @@
 "use client"
 
+import { productStore } from "@/lib/storage/productStore"
+
 /**
  * Agentic-commerce protocol engine for Razent.
  * Layered stack: ACP (discovery/cart) → AP2 (mandate verification) →
@@ -41,10 +43,8 @@ export function handleACPDiscovery(query: string): { results: string[]; protocol
   // get structured catalog results (not just split keywords).
   const needle = query.toLowerCase().trim()
   let results: string[] = []
-  try {
-    const { productStore } = require("@/lib/storage/productStore")
-    const products = productStore.list()
-    const matched = products.filter(
+  const products = productStore.list()
+  const matched = products.filter(
       (p: any) =>
         p.title.toLowerCase().includes(needle) ||
         p.description?.toLowerCase().includes(needle) ||
@@ -52,7 +52,7 @@ export function handleACPDiscovery(query: string): { results: string[]; protocol
         p.tags?.some((t: string) => t.toLowerCase().includes(needle)),
     )
     results = matched.slice(0, 5).map((p: any) => p.id)
-  } catch {
+  if (results.length === 0 && needle.split(/\s+/).filter(Boolean).length > 0) {
     results = needle.split(/\s+/).filter(Boolean).slice(0, 5)
   }
   return { protocol: "acp", results }
