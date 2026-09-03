@@ -286,6 +286,26 @@ export async function executeAgentCheckout(
   input: ExecuteAgentCheckoutInput,
 ): Promise<ExecuteAgentCheckoutResult> {
   const { order, mandate, approvalThresholdRupees, protocol = "ncpi_uap" } = input
+  const executeCheckoutUrl = import.meta.env.VITE_EXECUTE_AGENT_CHECKOUT_URL?.trim()
+
+  // If Edge Function URL is configured, delegate to it (keeps secrets server-side)
+  if (executeCheckoutUrl && isSupabaseEnabled()) {
+    try {
+      const { data, error } = await supabase!.functions.invoke("execute-agent-checkout", {
+        body: {
+          order_id: order.id,
+          protocol,
+          mandate,
+          approval_threshold_rupees: approvalThresholdRupees,
+        },
+      })
+      if (error) throw error
+      return data as ExecuteAgentCheckoutResult
+    } catch (err) {
+      console.warn("Edge Function execute-agent-checkout failed, falling back to client logic:", err)
+      // fall through to client logic below
+    }
+  }
 
   // 1. AP2 mandate verification (if provided)
   if (mandate) {
@@ -345,12 +365,72 @@ export async function executeAgentCheckout(
     }
   }
 
-  // 3. UAP settlement (autonomous path)
-  const uap = processUAPTransaction(order, mandate?.mandate_id)
+  // 3. UAP settlement (autonomous path) - either direct or via Edge Function
+  let uapResult: ReturnType<typeof processUAPTransaction>
+  const uapVerifierUrl = import.meta.env.VITE_UAP_VERIFIER_URL?.trim()
+  if (uapVerifierUrl && mandate?.mandate_id) {
+    // Call Edge Function for UAP verification + debit
+    try {
+      const uapPayload = {
+        type: "uap.debit",
+        mandate_id: mandate.mandate_id,
+        customer_id: order.shipping_address.email, // simplified; real impl would use customer_id
+        merchant_id: "current_merchant_id", // would come from JWT/context
+        amount_paise: order.total_paise,
+        order_id: order.id,
+        npci_rrn: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        npci_stan: Math.floor(Math.random() * 999999).toString().padStart(6, "0"),
+        npci_timestamp: new Date().toISOString(),
+      }
+
+      const verifyResp = await fetch(uapVerifierUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(uapPayload),
+      })
+
+      if (!verifyResp.ok) {
+        const errText = await verifyResp.text()
+        throw new Error(`UAP verifier failed: ${errText}`)
+      }
+
+      const verifyJson = await verifyResp.json()
+      if (!verifyJson.success) {
+        throw new Error(verifyJson.error ?? "UAP verification failed")
+      }
+
+      // Construct equivalent audit events
+      uapResult = {
+        protocol: "ncpi_uap",
+        settlement_reference: "razorpay_test",
+        order_id: order.id,
+        audit_events: [
+          {
+            id: `audit-uap-debit-${Date.now()}`,
+            type: "uap",
+            timestamp: new Date().toISOString(),
+            actor: "customer",
+            source: "NPCI UAP",
+            result: "Success",
+            reason: `debited via mandate ${mandate.mandate_id}`,
+            request_id: order.id,
+            payload_summary: `amount_paise=${order.total_paise} rrn=${verifyJson.rrn ?? verifyJson.npci_rrn}`,
+            status_code: 200,
+          },
+        ],
+      }
+    } catch (err) {
+      console.warn("UAP verifier Edge Function failed, falling back to client logic:", err)
+      // fall through to client logic
+      uapResult = processUAPTransaction(order, mandate?.mandate_id)
+    }
+  } else {
+    uapResult = processUAPTransaction(order, mandate?.mandate_id)
+  }
 
   // Persist each emitted audit event.
   let session_id = ""
-  for (const event of uap.audit_events) {
+  for (const event of uapResult.audit_events) {
     const s = await logAuditEvent({
       order_id: order.id,
       customer: order.shipping_address.full_name,
@@ -378,7 +458,7 @@ export async function executeAgentCheckout(
     order: settled,
     audit_session_id: session_id,
     settlement: "auto",
-    protocol: uap.protocol,
+    protocol: uapResult.protocol,
   }
 }
 

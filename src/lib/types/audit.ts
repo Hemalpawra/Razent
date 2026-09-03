@@ -2,7 +2,7 @@ export type AuditResult = "Success" | "Warning" | "Failed" | "Critical"
 export type AuditActor = "customer" | "AI Assistant" | "ChatGPT Assistant" | "merchant" | "system"
 export type ProtocolEvent = "mandate" | "checkout_initiated" | "checkout_completed" | "refund_initiated"
 
-export type AuditSource = "store" | "AI Agent" | "AI Assistant" | "Razorpay" | "system" | "customer"
+export type AuditSource = "store" | "AI Agent" | "AI Assistant" | "Razorpay" | "NPCI UAP" | "UAP Verifier" | "Edge Function" | "system" | "customer"
 
 export type AuditEvent = {
   id: string

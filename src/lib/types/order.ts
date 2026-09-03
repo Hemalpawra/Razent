@@ -4,6 +4,8 @@ export type OrderStatus = "created" | "paid" | "failed" | "refunded"
 
 export type ShippingStatus = "pending" | "packed" | "shipped" | "delivered" | "returned"
 
+export type CommerceProtocol = "ncpi_uap" | "acp" | "x402" | "direct_web"
+
 export type OrderItem = {
   product_id: string
   title: string
@@ -31,6 +33,8 @@ export type Order = {
   razorpay_order_id: string
   /** Razorpay payment id (pay_…) — populated after successful payment. */
   razorpay_payment_id?: string
+  /** Razorpay webhook signature for idempotent verification. */
+  razorpay_signature?: string
   status: OrderStatus
   shipping_status: ShippingStatus
   currency: Currency
@@ -45,6 +49,9 @@ export type Order = {
   conversation_id?: string
   mandate_id?: string
   checkout_session_id?: string
+  settlement_reference?: string
+  challenge_id?: string
+  commerce_protocol?: CommerceProtocol
   created_at: string
   paid_at?: string
   shipped_at?: string

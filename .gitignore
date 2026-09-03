@@ -18,3 +18,7 @@ logs/
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Supabase CLI temp files
+supabase/.temp/
+!.env.example
