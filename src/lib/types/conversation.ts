@@ -1,4 +1,5 @@
 export type ConversationType = "human_customer" | "agent_to_agent"
+export type CommerceProtocol = "ncpi_uap" | "acp" | "x402" | "direct_web"
 export type ConversationStatus = "active" | "waiting_for_customer" | "waiting_for_payment" | "checkout_ready" | "paid" | "completed" | "failed" | "cancelled"
 
 export type ChatMessage = {
@@ -13,6 +14,7 @@ export type Conversation = {
   customer_name: string
   type: ConversationType
   agent_id?: string
+  protocol?: "ncpi_uap" | "acp" | "x402" | "direct_web"
   status: ConversationStatus
   last_message: string
   amount_paise?: number

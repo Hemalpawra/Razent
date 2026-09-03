@@ -46,8 +46,8 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { formatPrice } from "@/lib/types/product"
-import { mockConversations } from "@/lib/mock/conversations"
-import { mockOrders } from "@/lib/mock/orders"
+import { listConversations } from "@/lib/api/client"
+
 import type { ConversationStatus } from "@/lib/types/conversation"
 import { useState } from "react"
 import ConversationDrawer from "@/components/merchant/AIAgent/ConversationDrawer"
@@ -129,9 +129,9 @@ export default function AIAgentScreen({
   const [inputValue, setInputValue] = useState("")
 
   const selected = selectedId
-    ? (mockConversations.find((c) => c.id === selectedId) ?? null)
+    ? (convData.find((c) => c.id === selectedId) ?? null)
     : null
-  const activeCount = mockConversations.filter(
+  const activeCount = convData.filter(
     (c) =>
       c.status === "active" ||
       c.status === "waiting_for_customer" ||
@@ -191,7 +191,7 @@ export default function AIAgentScreen({
     )
   }
 
-  const empty = mockConversations.length === 0
+  const empty = convData.length === 0
 
   if (empty) {
     return (
@@ -249,7 +249,7 @@ export default function AIAgentScreen({
           </Button>
           <Button
             className="h-9 rounded-lg"
-            onClick={() => handleOpen(mockConversations[0].id)}
+            onClick={() => handleOpen((convData[0]?.id ?? "demo"))}
           >
             Test AI
           </Button>
@@ -687,7 +687,7 @@ function LiveConversationsCard({
           </CardDescription>
         </div>
         <Badge variant="secondary" className="rounded-full text-[11px]">
-          5 of {mockConversations.length}
+          5 of {convData.length}
         </Badge>
       </CardHeader>
       <div className="overflow-x-auto">
@@ -715,7 +715,7 @@ function LiveConversationsCard({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {mockConversations.slice(0, 5).map((c) => (
+            {convData.slice(0, 5).map((c) => (
               <TableRow
                 key={c.id}
                 className={
@@ -781,12 +781,12 @@ function LiveConversationsCard({
         </Table>
       </div>
       <div className="flex items-center justify-between border-t bg-card px-4 py-3 text-xs text-muted-foreground">
-        <span>Showing 5 of {mockConversations.length} conversations</span>
+        <span>Showing 5 of {convData.length} conversations</span>
         <Button
           variant="outline"
           size="sm"
           className="h-7 rounded-full bg-card"
-          onClick={() => onOpen(mockConversations[0].id)}
+          onClick={() => onOpen((convData[0]?.id ?? "demo"))}
         >
           Open latest
         </Button>

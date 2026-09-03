@@ -37,7 +37,7 @@ import {
 
 import { Separator } from "@/components/ui/separator"
 
-import { mockAuditSessions } from "@/lib/mock/audit"
+import { listAuditSessions } from "@/lib/api/client"
 
 import type { AuditResult, AuditSession, AuditEvent } from "@/lib/types/audit"
 
@@ -82,22 +82,22 @@ export default function AuditTrailScreen() {
   const closeAuditDrawer = useUI((s) => s.closeAuditDrawer)
   const drawerAuditSessionId = useUI((s) => s.drawerAuditSessionId)
 
-  const totalSessions = mockAuditSessions.length
+  const totalSessions = auditData.length
 
-  const totalEvents = mockAuditSessions.reduce((a, s) => a + s.event_count, 0)
+  const totalEvents = auditData.reduce((a, s) => a + s.event_count, 0)
 
-  const success = mockAuditSessions
+  const success = auditData
     .filter((s) => s.status === "Success")
     .reduce((a, s) => a + s.event_count, 0)
 
-  const failed = mockAuditSessions.filter((s) => s.status === "Failed").length
+  const failed = auditData.filter((s) => s.status === "Failed").length
 
-  const critical = mockAuditSessions.filter(
+  const critical = auditData.filter(
     (s) => s.status === "Critical",
   ).length
 
   const filtered = useMemo(() => {
-    return mockAuditSessions.filter((s) => {
+    return auditData.filter((s) => {
       if (q.trim()) {
         const n = q.toLowerCase()
 

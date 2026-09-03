@@ -42,6 +42,7 @@ import {
   Eye,
 } from "lucide-react"
 import * as XLSX from "xlsx"
+import { upsertProduct } from "@/lib/api/client"
 
 // --- types ---
 type ProductField = "product_name" | "sku" | "category" | "price" | "stock" | "brand" | "description" | "image_url" | "tags" | "shipping_note" | "return_note" | "warranty_note" | "ai_visibility" | "related_products" | "__ignore"
@@ -345,12 +346,27 @@ function ImportWorkspace({
     setProgress(undefined)
     setImportedCount(0)
   }
-  const doImport = () => {
+  const doImport = async () => {
     doValidate()
     const errs = validate(rows, mapping)
     if (errs.length) {
       setIssues(errs)
       return
+    }
+    for (const r of rows) {
+      try {
+        await upsertProduct({
+          id: r.sku ?? r.product_name,
+          title: r.product_name,
+          description: r.description ?? "",
+          price_paise: Math.round(Number(r.price || 0) * 100),
+          stock: Number(r.stock || 0),
+          category: r.category ?? "General",
+          status: "active",
+          image_url: r.image_url ?? "https://picsum.photos/seed/" + (r.sku ?? r.product_name) + "/600/600",
+          tags: r.tags ? String(r.tags).split(",") : [],
+        } as any)
+      } catch { /* ignore individual errors */ }
     }
     setImportedCount(rows.length)
   }

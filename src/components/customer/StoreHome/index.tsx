@@ -1340,6 +1340,7 @@ export default function StoreHome() {
             <TrackOrder
               onClose={() => setView("home")}
               onOpenAI={() => setAiOpen(true)}
+              initialValues={trackPrefill}
             />
           )}
 
@@ -1363,14 +1364,11 @@ export default function StoreHome() {
               onClose={() => setView("cart")}
               onBackToCart={() => setView("cart")}
               onPaymentSuccess={(orderId, paymentId, invoiceNo) => {
+                setLastOrderId(orderId)
                 setFailedOrderId(orderId)
-
                 setLastPaymentId(paymentId)
-
                 setLastInvoiceNo(invoiceNo)
-
                 setLastOrderSnapshot([...cart])
-
                 setView("payment-success")
               }}
               onPaymentFailed={(orderId) => {
@@ -3301,8 +3299,8 @@ function ProductDetail({
 
 interface TrackOrderProps {
   onClose: () => void
-
   onOpenAI: () => void
+  initialValues?: { orderId?: string; mobile?: string; email?: string } | null
 }
 
 const TRACKING_STAGES = [
@@ -3534,14 +3532,12 @@ function OrderTimeline({ currentStage }: { currentStage: TrackStageKey }) {
   )
 }
 
-function TrackOrder({ onClose, onOpenAI }: TrackOrderProps) {
+function TrackOrder({ onClose, onOpenAI, initialValues }: TrackOrderProps) {
   const { storeProfile } = useSettings()
 
-  const [orderId, setOrderId] = useState("")
-
-  const [mobile, setMobile] = useState("")
-
-  const [email, setEmail] = useState("")
+  const [orderId, setOrderId] = useState(initialValues?.orderId ?? "")
+  const [mobile, setMobile] = useState(initialValues?.mobile ?? "")
+  const [email, setEmail] = useState(initialValues?.email ?? "")
 
   const [submitted, setSubmitted] = useState(false)
 
@@ -3572,11 +3568,23 @@ function TrackOrder({ onClose, onOpenAI }: TrackOrderProps) {
           productName: primaryItem?.title ?? "Unknown product",
           amount: result.total_paise,
           paymentMethod: result.via_ai ? "UPI" : (primaryItem ? "Card" : "UPI"),
-          orderStatus: (result.shipping_status as TrackStageKey) ?? "pending",
+          orderStatus: result.shipping_status === "delivered"
+            ? "delivered"
+            : result.shipping_status === "shipped"
+              ? "shipped"
+              : result.status === "failed"
+                ? "cancelled"
+                : "processing",
           paymentStatus: result.status === "paid" ? "paid" : (result.status === "failed" ? "failed" : "pending"),
           invoiceNumber: `INV-${result.id.slice(-6)}`,
           invoiceDate: new Date(result.created_at ?? Date.now()).toLocaleDateString("en-IN"),
-          trackingStage: (result.shipping_status as TrackStageKey) ?? "preparing",
+          trackingStage: result.shipping_status === "delivered"
+            ? "delivered"
+            : result.shipping_status === "shipped"
+              ? "shipped"
+              : result.shipping_status === "packed"
+                ? "packed"
+                : "preparing",
           attemptTime: new Date(result.created_at ?? Date.now()).toLocaleString("en-IN"),
           paymentReason: result.status === "failed" ? "Transaction declined by bank" : undefined,
         }
@@ -4414,19 +4422,29 @@ function CheckoutView({
         unit_price_paise: p?.price_paise ?? 0,
       }
     })
-    const shippingAddress = address
+    const rawAddr = address as (Address & { full_name?: string; country?: string; line2?: string }) | null
+    const shippingAddress: import("@/lib/types/order").Address = rawAddr
       ? {
-        full_name: address.full_name ?? "Customer",
-        phone: address.phone ?? "0000000000",
-        email: address.email ?? "customer@example.com",
-        line1: address.line1 ?? "",
-        line2: address.line2 ?? undefined,
-        city: address.city ?? "",
-        state: address.state ?? "",
-        pincode: address.pincode ?? "",
+        full_name: rawAddr.full_name ?? rawAddr.name ?? "Customer",
+        phone: rawAddr.phone ?? "0000000000",
+        email: rawAddr.email ?? "customer@example.com",
+        line1: rawAddr.line1 ?? "",
+        line2: rawAddr.line2,
+        city: rawAddr.city ?? "",
+        state: rawAddr.state ?? "",
+        pincode: rawAddr.pincode ?? "",
+        country: rawAddr.country ?? "IN",
+      }
+      : {
+        full_name: SAVED_ADDRESSES[0]?.name ?? "Customer",
+        phone: SAVED_ADDRESSES[0]?.phone ?? "0000000000",
+        email: SAVED_ADDRESSES[0]?.email ?? "customer@example.com",
+        line1: SAVED_ADDRESSES[0]?.line1 ?? "",
+        city: SAVED_ADDRESSES[0]?.city ?? "",
+        state: SAVED_ADDRESSES[0]?.state ?? "",
+        pincode: SAVED_ADDRESSES[0]?.pincode ?? "",
         country: "IN",
       }
-      : SAVED_ADDRESSES[0]
     const orderId = `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
     const order: import("@/lib/types/order").Order = {
       id: orderId,
@@ -4452,11 +4470,11 @@ function CheckoutView({
         protocol: "ncpi_uap",
       })
       if (result.settlement === "auto") {
-        onPaymentSuccess(result.order.id, result.order.razorpay_payment_id ?? `pay_${Date.now()}`, `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`)
-        setLastOrderId(result.order.id)
-        setLastPaymentId(result.order.id)
-        setLastInvoiceNo(`INV-${new Date().getFullYear()}-${orderId.slice(-6)}`)
-        setLastOrderSnapshot(cart)
+        onPaymentSuccess(
+          result.order.id,
+          result.order.razorpay_payment_id ?? `pay_${Date.now()}`,
+          `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
+        )
       } else {
         // Step-up / 402 challenge: treat as a failure for this MVP (Section 4 scope).
         onPaymentFailed(order.id)

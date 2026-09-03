@@ -243,17 +243,9 @@ export async function getDashboard(): Promise<DashboardData> {
   const revenueToday = ordersToday.filter((o) => o.status === "paid").reduce((s, o) => s + o.total_paise, 0)
   return {
     ...mockDashboard,
-    revenue_series: [
-      { month: "Jan", value: revenueToday / 100 },
-      { month: "Feb", value: (revenueToday / 100) * 0.95 },
-      { month: "Mar", value: (revenueToday / 100) * 1.1 },
-    ],
     orders_today: ordersToday.length,
     revenue_month_paise: revenueToday,
-    conversion_rate_pct: paidOrders.length ? Math.round((paidOrders.length / orders.length) * 100 * 10) / 10 : 0,
-    upsell_revenue_paise: ordersToday.filter((o) => o.via_ai).reduce((s, o) => s + o.total_paise, 0),
-    aov_paise: paidOrders.length ? Math.round(paidOrders.reduce((s, o) => s + o.total_paise, 0) / paidOrders.length) : 0,
-    recent_orders: orders.slice(0, 5).map((o) => ({ id: o.id, customer: o.shipping_address.full_name, amount_paise: o.total_paise, status: o.status })),
+    recent_orders: orders.slice(0, 5).map((o) => o.id),
   }
 }
 

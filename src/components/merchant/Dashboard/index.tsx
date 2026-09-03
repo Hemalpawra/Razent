@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { getDashboard } from "@/lib/api/client"
 import {
   IndianRupee,
   ShoppingCart,
@@ -51,7 +52,7 @@ const revenueData = [
   { date: "24 May", revenue: 88000 },
   { date: "25 May", revenue: 52000 },
   { date: "26 May", revenue: 110000 },
-  { date: "27 May", revenue: 124560 },
+  { date: "27 May", revenue: dashData?.revenue_month_paise ? dashData.revenue_month_paise / 100 : 124560 },
 ]
 
 const chartConfig = {
@@ -67,6 +68,12 @@ const dateRanges = [
 
 export default function DashboardScreen() {
   const [rangeIdx, setRangeIdx] = useState(0)
+
+  const [dashData, setDashData] = useState<any>(null)
+
+  useEffect(() => {
+    getDashboard().then((d) => setDashData(d)).catch(() => setDashData(null))
+  }, [])
 
   const handleExport = () => {
     const csv = ["Revenue,Orders", "124560,18", "110000,15", "88000,12"].join(

@@ -58,7 +58,7 @@ import { useUI } from "@/state/useUI"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 
-import { mockOrders } from "@/lib/mock/orders"
+import { listOrders } from "@/lib/api/client"
 
 import { formatPrice, type OrderStatus } from "@/lib/types/order"
 
@@ -147,7 +147,7 @@ export default function OrdersScreen() {
   const isMobile = useIsMobile()
 
   const selectedOrder = drawerId
-    ? (mockOrders.find((o) => o.id === drawerId) ?? null)
+    ? (orders.find((o) => o.id === drawerId) ?? null)
     : null
 
   const [q, setQ] = useState("")
