@@ -149,14 +149,20 @@ export async function trackOrder(args: TrackOrderArgs): Promise<Order | null> {
     const { data, error } = await supabase!
       .from("orders")
       .select("*")
-      .eq("id", args.orderId)
+      .eq("id", args.orderId.trim())
       .maybeSingle()
     if (!error && data) {
       const o = data as Order
-      const last5 = args.mobile.replace(/\D/g, "").slice(-5)
-      const phoneMatch = o.shipping_address.phone.replace(/\D/g, "").endsWith(last5)
-      const emailMatch = o.shipping_address.email.toLowerCase() === args.email.toLowerCase()
-      if (phoneMatch && emailMatch) return o
+      const last5 = args.mobile.replace(/\D/g, "")
+      const cleanEmail = args.email.trim().toLowerCase()
+      const phoneMatch =
+        last5.length >= 5 &&
+        o.shipping_address.phone.replace(/\D/g, "").endsWith(last5)
+      const emailMatch =
+        cleanEmail.length > 0 &&
+        o.shipping_address.email.toLowerCase() === cleanEmail
+      // Match if at least one of the secondary identifiers is provided + matches.
+      if (phoneMatch || emailMatch) return o
       return null
     }
   }

@@ -238,6 +238,7 @@ export default function StoreHome() {
   const [failedOrderId, setFailedOrderId] = useState<string | null>(null)
 
   const [lastPaymentId, setLastPaymentId] = useState<string | null>(null)
+  const [lastOrderId, setLastOrderId] = useState<string | null>(null)
   const [trackPrefill, setTrackPrefill] = useState<{ orderId?: string; mobile?: string; email?: string } | null>(null)
 
   const [lastInvoiceNo, setLastInvoiceNo] = useState<string | null>(null)
@@ -428,7 +429,7 @@ export default function StoreHome() {
         type: "checkout_initiated",
         timestamp: new Date().toISOString(),
         actor: "customer",
-        source: "Store",
+        source: "store",
         result: "Success",
         reason: `Added product ${id} to cart`,
         payload_summary: `action=add_to_cart product_id=${id}`,
@@ -1410,7 +1411,7 @@ export default function StoreHome() {
                 // Section 4: Pass the real order info to the tracking screen
                 // using the last known successful payment info from executeAgentCheckout.
                 setTrackPrefill({
-                  orderId: lastPaymentId ?? failedOrderId ?? `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+                  orderId: lastOrderId ?? lastPaymentId ?? failedOrderId ?? `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
                   mobile: SAVED_ADDRESSES[0]?.phone ?? "",
                   email: SAVED_ADDRESSES[0]?.email ?? "",
                 })
@@ -3567,7 +3568,7 @@ function TrackOrder({ onClose, onOpenAI }: TrackOrderProps) {
         const primaryItem = result.items?.[0]
         const data: OrderData = {
           orderId: result.id,
-          customerName: email.trim().split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          customerName: result.shipping_address?.full_name ?? email.trim().split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
           productName: primaryItem?.title ?? "Unknown product",
           amount: result.total_paise,
           paymentMethod: result.via_ai ? "UPI" : (primaryItem ? "Card" : "UPI"),
@@ -4452,6 +4453,7 @@ function CheckoutView({
       })
       if (result.settlement === "auto") {
         onPaymentSuccess(result.order.id, result.order.razorpay_payment_id ?? `pay_${Date.now()}`, `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`)
+        setLastOrderId(result.order.id)
         setLastPaymentId(result.order.id)
         setLastInvoiceNo(`INV-${new Date().getFullYear()}-${orderId.slice(-6)}`)
         setLastOrderSnapshot(cart)

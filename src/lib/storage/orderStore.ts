@@ -20,15 +20,23 @@ export const orderStore = {
   /**
    * Find an order for customer-facing Track Order lookup. Real backend
    * would scope by tenant + RLS; for the in-memory store we match by
-   * phone last 5 digits + email contains on shipping_address.
+   * any one of: full order ID, last 5 digits of phone, or exact email.
+   * Empty input fields are skipped (so a customer can look up with just
+   * order ID + one of the other two).
    */
   track(orderId: string, mobile: string, email: string): Order | null {
-    const order = store.get(orderId)
+    const order = store.get(orderId.trim())
     if (!order) return null
-    const last5 = mobile.replace(/\D/g, "").slice(-5)
-    const phoneMatch = order.shipping_address.phone.replace(/\D/g, "").endsWith(last5)
-    const emailMatch = order.shipping_address.email.toLowerCase() === email.toLowerCase()
-    if (phoneMatch && emailMatch) return order
+    const last5 = mobile.replace(/\D/g, "")
+    const cleanEmail = email.trim().toLowerCase()
+    const phoneMatch =
+      last5.length >= 5 &&
+      order.shipping_address.phone.replace(/\D/g, "").endsWith(last5)
+    const emailMatch =
+      cleanEmail.length > 0 &&
+      order.shipping_address.email.toLowerCase() === cleanEmail
+    // Match if ID resolves AND at least one of the other identifiers matches.
+    if (phoneMatch || emailMatch) return order
     return null
   },
   upsert(input: Order): Order {
