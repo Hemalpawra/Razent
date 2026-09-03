@@ -46,6 +46,11 @@ import { Bubble } from "@/components/ui/bubble"
 import { Label } from "@/components/ui/label"
 
 import { useSettings } from "@/state/useSettings"
+import {
+  trackOrder,
+  executeAgentCheckout,
+  logAuditEvent,
+} from "@/lib/api/client"
 
 import { mockProducts } from "@/lib/mock/products"
 
@@ -233,6 +238,7 @@ export default function StoreHome() {
   const [failedOrderId, setFailedOrderId] = useState<string | null>(null)
 
   const [lastPaymentId, setLastPaymentId] = useState<string | null>(null)
+  const [trackPrefill, setTrackPrefill] = useState<{ orderId?: string; mobile?: string; email?: string } | null>(null)
 
   const [lastInvoiceNo, setLastInvoiceNo] = useState<string | null>(null)
 
@@ -411,12 +417,23 @@ export default function StoreHome() {
   function addToCart(id: string) {
     setCart((prev) => {
       const f = prev.find((c) => c.id === id)
-
       if (f)
         return prev.map((c) => (c.id === id ? { ...c, qty: c.qty + 1 } : c))
-
       return [...prev, { id, qty: 1 }]
     })
+    // Audit event: product added to cart (real persistence via client.ts).
+    logAuditEvent({
+      event: {
+        id: `audit-cart-add-${id}-${Date.now()}`,
+        type: "checkout_initiated",
+        timestamp: new Date().toISOString(),
+        actor: "customer",
+        source: "Store",
+        result: "Success",
+        reason: `Added product ${id} to cart`,
+        payload_summary: `action=add_to_cart product_id=${id}`,
+      },
+    }).catch(() => {})
   }
 
   function updateQty(id: string, d: number) {
@@ -1389,7 +1406,16 @@ export default function StoreHome() {
               }
               cartSnapshot={lastOrderSnapshot || cart}
               cartTotal={cartTotal}
-              onTrackOrder={() => setView("track-order")}
+              onTrackOrder={() => {
+                // Section 4: Pass the real order info to the tracking screen
+                // using the last known successful payment info from executeAgentCheckout.
+                setTrackPrefill({
+                  orderId: lastPaymentId ?? failedOrderId ?? `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+                  mobile: SAVED_ADDRESSES[0]?.phone ?? "",
+                  email: SAVED_ADDRESSES[0]?.email ?? "",
+                })
+                setView("track-order")
+              }}
               onViewInvoice={() => setView("track-order")}
               onDownloadInvoice={() => {}}
               onContinueShopping={() => {
@@ -3326,76 +3352,42 @@ function generateMockOrder(
   orderId: string,
   mobile: string,
   email: string,
-): OrderData | null {
-  // accept ORD- / ord_ / ORD_ / any ID >= 6 chars, case-insensitive — matches mockOrders (ord_2026_...) and checkout IDs (ORD-...)
-
-  const cleanId = orderId.trim()
-
-  const cleanMobile = mobile.replace(/\D/g, "")
-
-  const cleanEmail = email.trim().toLowerCase()
-
-  const isValid =
-    cleanId.length >= 6 && cleanMobile.length >= 10 && cleanEmail.includes("@")
-
-  if (!isValid) return null
-
-  const product = mockProducts[0]
-
-  const stageKeys: TrackStageKey[] = [
-    "preparing",
-    "packed",
-    "shipped",
-    "out-for-delivery",
-    "delivered",
-  ]
-
-  const stageIdx =
-    Math.abs(orderId.split("").reduce((a, c) => a + c.charCodeAt(0), 0)) %
-    stageKeys.length
-
-  const paymentStatuses: OrderData["paymentStatus"][] = [
-    "paid",
-    "pending",
-    "failed",
-  ]
-
-  const payIdx =
-    Math.abs(orderId.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 0)) %
-    paymentStatuses.length
-
-  return {
-    orderId,
-
-    customerName: email
-      .split("@")[0]
-      .replace(/[._]/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase()),
-
-    productName: product.title,
-
-    amount: product.price_paise,
-
-    paymentMethod: "UPI",
-
-    orderStatus: "confirmed",
-
-    paymentStatus: paymentStatuses[payIdx],
-
-    invoiceNumber: `INV-${orderId.slice(-6)}`,
-
-    invoiceDate: new Date().toLocaleDateString("en-IN"),
-
-    trackingStage: stageKeys[stageIdx],
-
-    attemptTime: new Date(Date.now() - 1000 * 60 * 60 * 2).toLocaleString(
-      "en-IN",
-    ),
-
-    paymentReason:
-      paymentStatuses[payIdx] === "failed"
-        ? "Transaction declined by bank"
-        : undefined,
+): any | null {
+  // Section 4: Real tracking backed by the API seam.
+  // The async path uses trackOrder (from client.ts); this sync wrapper
+  // is kept for compatibility with the existing component contract.
+  try {
+    // Direct import of the in-memory store is the fastest path;
+    // trackOrder() wraps this through the same store.
+    const { orderStore } = require("@/lib/storage/orderStore")
+    const order = orderStore.get(orderId)
+    if (!order) return null
+    // Minimal validation against user-provided mobile/email
+    const cleanMobile = mobile.replace(/\D/g, "")
+    const cleanEmail = email.trim().toLowerCase()
+    if (cleanMobile.length < 10 || !cleanEmail.includes("@")) return null
+    // Derive display fields from real order data
+    const primaryItem = order.items?.[0]
+    const trackingStage = order.tracking?.events?.[0]?.status ?? "pending"
+    const paymentStatus = order.status === "paid" ? "paid" : (order.status === "failed" ? "failed" : "pending")
+    const invoiceNo = `INV-${order.id.slice(-6)}`
+    const invoiceDate = new Date(order.created_at ?? Date.now()).toLocaleDateString("en-IN")
+    return {
+      orderId: order.id,
+      customerName: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      productName: primaryItem?.title ?? "Unknown product",
+      amount: order.total_paise,
+      paymentMethod: order.via_ai ? "UPI" : (primaryItem ? "Card" : "UPI"),
+      orderStatus: order.shipping_status ?? "confirmed",
+      paymentStatus,
+      invoiceNumber: invoiceNo,
+      invoiceDate,
+      trackingStage: trackingStage.toLowerCase().replace(/\s+/g, "-"),
+      attemptTime: new Date().toLocaleString("en-IN"),
+      paymentReason: paymentStatus === "failed" ? "Transaction declined by bank" : undefined,
+    }
+  } catch {
+    return null
   }
 }
 
@@ -3558,32 +3550,45 @@ function TrackOrder({ onClose, onOpenAI }: TrackOrderProps) {
 
   const [orderData, setOrderData] = useState<OrderData | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     setError(null)
-
     setSubmitted(true)
-
     setLoading(true)
 
-    setTimeout(() => {
-      try {
-        const data = generateMockOrder(
-          orderId.trim(),
-          mobile.trim(),
-          email.trim(),
-        )
-
+    try {
+      // Section 4: Real order lookup through the API seam instead of synthetic generation.
+      const result = await trackOrder({
+        orderId: orderId.trim(),
+        mobile: mobile.trim(),
+        email: email.trim(),
+      })
+      if (result) {
+        const primaryItem = result.items?.[0]
+        const data: OrderData = {
+          orderId: result.id,
+          customerName: email.trim().split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          productName: primaryItem?.title ?? "Unknown product",
+          amount: result.total_paise,
+          paymentMethod: result.via_ai ? "UPI" : (primaryItem ? "Card" : "UPI"),
+          orderStatus: (result.shipping_status as TrackStageKey) ?? "pending",
+          paymentStatus: result.status === "paid" ? "paid" : (result.status === "failed" ? "failed" : "pending"),
+          invoiceNumber: `INV-${result.id.slice(-6)}`,
+          invoiceDate: new Date(result.created_at ?? Date.now()).toLocaleDateString("en-IN"),
+          trackingStage: (result.shipping_status as TrackStageKey) ?? "preparing",
+          attemptTime: new Date(result.created_at ?? Date.now()).toLocaleString("en-IN"),
+          paymentReason: result.status === "failed" ? "Transaction declined by bank" : undefined,
+        }
         setOrderData(data)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong")
-
+      } else {
         setOrderData(null)
-      } finally {
-        setLoading(false)
       }
-    }, 800)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
+      setOrderData(null)
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (submitted) {
@@ -4386,31 +4391,80 @@ function CheckoutView({
 
   const total = cartTotal + shippingCost + tax
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!selectedAddr && !showNewAddr) {
       setAddrError("Select a delivery address")
-
       return
     }
-
     setAddrError(null)
-
     setPaying(true)
 
-    setTimeout(() => {
+    // Build a real Order shape from cart + selected/new address + shipping.
+    const address = showNewAddr
+      ? (newAddr as { full_name?: string; phone?: string; line1?: string; city?: string; state?: string; pincode?: string; email?: string })
+      : SAVED_ADDRESSES.find((a) => a.id === selectedAddr)
+    const items = cart.map((c) => {
+      const p = mockProducts.find((x) => x.id === c.id)
+      return {
+        product_id: c.id,
+        title: p?.title ?? c.id,
+        image_url: p?.image_url ?? "",
+        qty: c.qty,
+        unit_price_paise: p?.price_paise ?? 0,
+      }
+    })
+    const shippingAddress = address
+      ? {
+        full_name: address.full_name ?? "Customer",
+        phone: address.phone ?? "0000000000",
+        email: address.email ?? "customer@example.com",
+        line1: address.line1 ?? "",
+        line2: address.line2 ?? undefined,
+        city: address.city ?? "",
+        state: address.state ?? "",
+        pincode: address.pincode ?? "",
+        country: "IN",
+      }
+      : SAVED_ADDRESSES[0]
+    const orderId = `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
+    const order: import("@/lib/types/order").Order = {
+      id: orderId,
+      razorpay_order_id: `rzp_order_${Date.now()}`,
+      status: "created",
+      shipping_status: "pending",
+      currency: "INR",
+      total_paise: total,
+      shipping_paise: shippingCost,
+      items: items as import("@/lib/types/order").OrderItem[],
+      shipping_address: shippingAddress,
+      via_ai: false,
+      notes: "Created via storefront checkout (Section 4)",
+      created_at: new Date().toISOString(),
+    }
+
+    try {
+      const settings = useSettings.getState()
+      const result = await executeAgentCheckout({
+        order,
+        mandate: undefined,
+        approvalThresholdRupees: settings.aiDefaults?.approvalThreshold ?? 15000,
+        protocol: "ncpi_uap",
+      })
+      if (result.settlement === "auto") {
+        onPaymentSuccess(result.order.id, result.order.razorpay_payment_id ?? `pay_${Date.now()}`, `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`)
+        setLastPaymentId(result.order.id)
+        setLastInvoiceNo(`INV-${new Date().getFullYear()}-${orderId.slice(-6)}`)
+        setLastOrderSnapshot(cart)
+      } else {
+        // Step-up / 402 challenge: treat as a failure for this MVP (Section 4 scope).
+        onPaymentFailed(order.id)
+      }
+    } catch {
+      // Any unexpected error falls back to simulated failure.
+      onPaymentFailed(order.id)
+    } finally {
       setPaying(false)
-
-      const ok = Math.random() > 0.28
-
-      const mockId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`
-
-      const payId = `pay_${Math.random().toString(36).slice(2, 10).toUpperCase()}${Math.floor(10 + Math.random() * 90)}`
-
-      const invNo = `INV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
-
-      if (ok) onPaymentSuccess(mockId, payId, invNo)
-      else onPaymentFailed(mockId)
-    }, 1400)
+    }
   }
 
   if (cart.length === 0) {
