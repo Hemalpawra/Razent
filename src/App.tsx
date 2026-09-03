@@ -1,4 +1,5 @@
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
+import { Toaster } from "@/components/shared/Toaster"
 
 import { AppShell } from "@/components/shared/AppShell"
 
@@ -94,6 +95,7 @@ export default function App() {
 
   return (
     <ThemeProvider>
+      <Toaster />
       <AppShell>
         {screenMap[activeScreen] ?? (
           <EmptyState
