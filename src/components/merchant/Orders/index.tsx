@@ -146,8 +146,15 @@ export default function OrdersScreen() {
 
   const isMobile = useIsMobile()
 
+  const [orders, setOrders] = useState<Order[] | null>(null)
+  useEffect(() => {
+    import("@/lib/api/client").then(({ listOrders }) =>
+      listOrders().then((o: Order[]) => setOrders(o)).catch(() => setOrders([] as Order[]))
+    )
+  }, [])
+
   const selectedOrder = drawerId
-    ? (orders.find((o) => o.id === drawerId) ?? null)
+    ? ((orders || []).find((o: Order) => o.id === drawerId) ?? null)
     : null
 
   const [q, setQ] = useState("")
@@ -163,9 +170,9 @@ export default function OrdersScreen() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
 
-    return mockOrders
+    return (orders || [])
 
-      .filter((o) => {
+      .filter((o: Order) => {
         if (filterStatus !== "all" && o.status !== filterStatus) return false
 
         if (!term) return true
