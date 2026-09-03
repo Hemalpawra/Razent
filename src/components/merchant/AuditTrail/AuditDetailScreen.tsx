@@ -63,11 +63,11 @@ export default function AuditDetailScreen() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-lg font-semibold text-foreground">
-                      {session.session_title}
+                      {session.customer} · {session.actor_label}
                     </span>
                   </div>
                   <div className="text-[10px] text-muted-foreground">
-                    Started {new Date(session.started_at).toLocaleDateString()}
+                    Started {new Date(session.created_at).toLocaleDateString()}
                   </div>
                 </div>
                 <Badge variant="secondary" className="rounded-full text-xs">
@@ -78,12 +78,12 @@ export default function AuditDetailScreen() {
 
             {}
             <div className="space-y-3">
-              {session.events?.map((event, idx) => (
+              {session.events?.map((event) => (
                 <Card key={event.id} className="p-3 border-t border-border/50">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                     <span>
-                      {event.type}: {event.message}
+                      {event.type}: {event.result}{event.reason ? ` (${event.reason})` : ""}
                     </span>
                   </div>
                   <div className="mt-1 flex justify-between text-[10px]">

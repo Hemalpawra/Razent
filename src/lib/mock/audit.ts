@@ -1,4 +1,4 @@
-import type { AuditSession } from "@/lib/types/audit"
+import type { AuditResult, AuditSession } from "@/lib/types/audit"
 
 const baseEvents = [
   {
@@ -66,7 +66,7 @@ function mkEvents(
               ? "customer"
               : "system" as const
     // inject one failed/critical session
-    let result = b.result
+    let result: AuditResult = b.result
     if (session_id === "sess_9c2e10" && b.type === "Payment Successful")
       result = "Failed"
     if (session_id === "sess_4b91ff" && b.type === "Razorpay Order Created")

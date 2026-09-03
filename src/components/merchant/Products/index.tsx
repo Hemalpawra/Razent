@@ -482,7 +482,7 @@ export default function ProductsScreen() {
               </span>
               <Select
                 value={String(pageSize)}
-                onValueChange={(v) => setPageSize(Number(v))}
+                onValueChange={(v: string | null) => setPageSize(Number(v))}
               >
                 <SelectTrigger className="h-8 w-[72px] rounded-md">
                   <SelectValue />

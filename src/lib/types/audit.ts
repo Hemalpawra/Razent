@@ -1,6 +1,6 @@
 export type AuditResult = "Success" | "Warning" | "Failed" | "Critical"
 export type AuditActor = "customer" | "AI Assistant" | "ChatGPT Assistant" | "merchant" | "system"
-export type AuditSource = "store" | "AI Agent" | "AI Assistant" | "Razorpay" | "system"
+export type AuditSource = "store" | "AI Agent" | "AI Assistant" | "Razorpay" | "system" | "customer"
 
 export type AuditEvent = {
   id: string

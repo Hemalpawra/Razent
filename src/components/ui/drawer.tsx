@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
 function Drawer({ ...props }: DrawerPrimitive.Root.Props) {
-  return <DrawerPrimitive.Root data-slot="drawer" {...props} />
+  // Non-modal drawer per shadcn base-ui spec: main page stays interactive
+  return <DrawerPrimitive.Root data-slot="drawer" modal={false} {...props} />
 }
 
 function DrawerTrigger({ ...props }: DrawerPrimitive.Trigger.Props) {

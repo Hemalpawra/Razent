@@ -422,28 +422,30 @@ function AiPerformanceCard() {
               </div>
               <div className="col-span-3 flex items-center justify-center">
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <svg
-                      viewBox="0 0 177 139"
-                      className="h-[110px] w-[140px] cursor-default"
-                    >
-                      <path
-                        d="M0 0 L177 0 L140 40 L37 40 Z"
-                        fill="var(--primary)"
+                  <TooltipTrigger
+                    render={
+                      <svg
+                        viewBox="0 0 177 139"
+                        className="h-[110px] w-[140px] cursor-default"
                       />
-                      <path
-                        d="M37 40 L140 40 L120 80 L57 80 Z"
-                        fill="var(--chart-2)"
-                      />
-                      <path
-                        d="M57 80 L120 80 L105 110 L72 110 Z"
-                        fill="var(--chart-1)"
-                      />
-                      <path
-                        d="M72 110 L105 110 L95 139 L82 139 Z"
-                        fill="var(--chart-3)"
-                      />
-                    </svg>
+                    }
+                  >
+                    <path
+                      d="M0 0 L177 0 L140 40 L37 40 Z"
+                      fill="var(--primary)"
+                    />
+                    <path
+                      d="M37 40 L140 40 L120 80 L57 80 Z"
+                      fill="var(--chart-2)"
+                    />
+                    <path
+                      d="M57 80 L120 80 L105 110 L72 110 Z"
+                      fill="var(--chart-1)"
+                    />
+                    <path
+                      d="M72 110 L105 110 L95 139 L82 139 Z"
+                      fill="var(--chart-3)"
+                    />
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
                     <div className="space-y-1">

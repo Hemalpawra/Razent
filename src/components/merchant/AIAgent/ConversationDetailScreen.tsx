@@ -1,16 +1,18 @@
-"use client" /* Header - ChatGPT style */ /* Conversation header */ /* Messages */ /* Input at bottom */ // reuse for screen tracking
+"use client"
 
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Bot, Send, User } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
+import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
+import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { useUI } from "@/state/useUI"
 import { mockConversations } from "@/lib/mock/conversations"
-import { formatPrice } from "@/lib/types/product"
 
 export default function ConversationDetailScreen() {
   const setActiveScreen = useUI((s) => s.setActiveScreen)
-  const drawerProductId = useUI((s) => s.drawerOrderId)
   const closeDrawer = useUI((s) => s.closeOrderDrawer)
 
   const conversation = mockConversations[0] ?? null
@@ -22,8 +24,7 @@ export default function ConversationDetailScreen() {
 
   return (
     <div className="min-h-screen bg-background">
-      {}
-      <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur bg-white">
+      <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur">
         <Button
           variant="ghost"
           size="icon"
@@ -33,7 +34,7 @@ export default function ConversationDetailScreen() {
           <ArrowLeft className="size-4" />
         </Button>
         <span className="text-sm font-medium text-foreground">
-          {conversation?.title ?? "Chat"}
+          {conversation?.customer_name ?? "Conversation"}
         </span>
         <span className="text-xs text-muted-foreground ml-auto">Active</span>
       </header>
@@ -50,7 +51,6 @@ export default function ConversationDetailScreen() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {}
             <Card className="p-4 border-b">
               <div className="flex items-center gap-3">
                 <Avatar className="size-8">
@@ -61,67 +61,73 @@ export default function ConversationDetailScreen() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-lg font-semibold text-foreground">
-                      {conversation.title}
+                      {conversation.customer_name}
                     </span>
                     <Badge
-                      variant="success"
+                      variant="default"
                       className="rounded-full px-2 py-0 text-[10px]"
                     >
-                      Active
+                      {conversation.status}
                     </Badge>
                   </div>
                   <div className="text-[10px] text-muted-foreground">
-                    Started {conversation.started_at ?? "Today"}
+                    Started {new Date(conversation.created_at).toLocaleDateString()}
                   </div>
                 </div>
                 <Badge variant="secondary" className="rounded-full text-[10px]">
-                  AI Assistant
+                  {conversation.type === "agent_to_agent" ? "AI Agent" : "AI Assistant"}
                 </Badge>
               </div>
             </Card>
 
-            {}
             <div className="space-y-3">
-              {conversation.messages?.map((msg, idx) => (
-                <Message
-                  key={idx}
-                  align={msg.role === "user" ? "end" : "start"}
-                >
-                  <MessageAvatar>
-                    <Avatar
-                      className={`size-6 ${
-                        msg.role === "user" ? "bg-muted" : "bg-primary"
-                      }`}
-                    >
-                      <AvatarFallback
-                        className={`bg-${
-                          msg.role === "user"
-                            ? "text-muted-foreground"
-                            : "text-primary-foreground"
-                        } ${msg.role === "user" ? "User" : "Bot"}`}
-                      />
-                    </Avatar>
-                  </MessageAvatar>
-                  <MessageContent
-                    className={
-                      msg.role === "start" ? "items-start" : "items-end"
-                    }
+              {conversation.messages?.map((msg, idx) => {
+                const isCustomer = msg.role === "customer"
+                return (
+                  <Message
+                    key={msg.id ?? idx}
+                    align={isCustomer ? "end" : "start"}
                   >
-                    <Bubble
-                      variant={msg.role === "user" ? "muted" : "tinted"}
-                      align={msg.role === "user" ? "end" : "start"}
+                    <MessageAvatar>
+                      <Avatar
+                        className={`size-6 ${
+                          isCustomer ? "bg-muted" : "bg-primary"
+                        }`}
+                      >
+                        <AvatarFallback
+                          className={
+                            isCustomer
+                              ? "bg-muted text-muted-foreground"
+                              : "bg-primary text-primary-foreground"
+                          }
+                        >
+                          {isCustomer ? <User className="size-3.5" /> : <Bot className="size-3.5" />}
+                        </AvatarFallback>
+                      </Avatar>
+                    </MessageAvatar>
+                    <MessageContent
+                      className={isCustomer ? "items-end" : "items-start"}
                     >
-                      <BubbleContent>{msg.content}</BubbleContent>
-                    </Bubble>
-                    <span className="text-[10px] text-muted-foreground">
-                      {msg.time ?? "—"}
-                    </span>
-                  </MessageContent>
-                </Message>
-              ))}
+                      <Bubble
+                        variant={isCustomer ? "muted" : "tinted"}
+                        align={isCustomer ? "end" : "start"}
+                      >
+                        <BubbleContent>{msg.text}</BubbleContent>
+                      </Bubble>
+                      <span className="text-[10px] text-muted-foreground">
+                        {msg.at
+                          ? new Date(msg.at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </span>
+                    </MessageContent>
+                  </Message>
+                )
+              })}
             </div>
 
-            {}
             <div className="flex gap-2 pt-3">
               <Input
                 placeholder="Type a message…"

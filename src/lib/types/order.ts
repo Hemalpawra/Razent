@@ -51,7 +51,7 @@ export type Order = {
     carrier: string
     tracking_number: string
     /** Demo-only simulated timeline. Real carrier integration is out of scope (AI_RULES §5). */
-    events: { at: string status: string location: string }[]
+    events: { at: string; status: string; location: string }[]
   }
   notes?: string
 }

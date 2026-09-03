@@ -33,7 +33,7 @@ import { Separator } from "@/components/ui/separator"
 
 const navGroups: {
   label: string
-  items: { label: string key: Screen icon: typeof LayoutDashboard }[]
+  items: { label: string; key: Screen; icon: typeof LayoutDashboard }[]
 }[] = [
   {
     label: "Overview",
@@ -158,7 +158,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               }}
               className={
                 "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
-                (role === "store"
+                ((role as string) === "store"
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground")
               }

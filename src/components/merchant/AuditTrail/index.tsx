@@ -224,7 +224,7 @@ export default function AuditTrailScreen() {
                 className="h-9 rounded-lg bg-card pl-9 text-sm"
               />
             </div>
-            <Select value={eventFilter} onValueChange={setEventFilter}>
+            <Select value={eventFilter} onValueChange={(v) => setEventFilter(v ?? "all")}>
               <SelectTrigger className="h-9 w-[160px] rounded-lg bg-card text-xs">
                 <SelectValue placeholder="Event type" />
               </SelectTrigger>
@@ -241,7 +241,7 @@ export default function AuditTrailScreen() {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <Select value={resultFilter} onValueChange={setResultFilter}>
+            <Select value={resultFilter} onValueChange={(v) => setResultFilter(v ?? "all")}>
               <SelectTrigger className="h-9 w-[140px] rounded-lg bg-card text-xs">
                 <SelectValue placeholder="Result" />
               </SelectTrigger>
@@ -253,7 +253,7 @@ export default function AuditTrailScreen() {
                 <SelectItem value="Critical">Critical</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={actorFilter} onValueChange={setActorFilter}>
+            <Select value={actorFilter} onValueChange={(v) => setActorFilter(v ?? "all")}>
               <SelectTrigger className="h-9 w-[150px] rounded-lg bg-card text-xs">
                 <SelectValue placeholder="Actor" />
               </SelectTrigger>

@@ -52,7 +52,7 @@ const REQUIRED: ProductField[] = [
   "price",
   "stock",
 ]
-const ALL_FIELDS: { value: ProductField label: string required: boolean }[] = [
+const ALL_FIELDS: { value: ProductField; label: string; required: boolean }[] = [
   { value: "product_name", label: "product name", required: true },
   { value: "sku", label: "SKU", required: true },
   { value: "category", label: "category", required: true },
@@ -70,8 +70,8 @@ const ALL_FIELDS: { value: ProductField label: string required: boolean }[] = [
   { value: "__ignore", label: "— ignore —", required: false },
 ]
 
-type ParsedRow = Record<string, string> & { __row: number }
-type Issue = { row: number message: string fix: string field: string }
+type ParsedRow = { [key: string]: string | number; __row: number }
+type Issue = { row: number; message: string; fix: string; field: string }
 
 function csvSplit(line: string): string[] {
   const out: string[] = []
@@ -92,7 +92,7 @@ function csvSplit(line: string): string[] {
   out.push(cur)
   return out.map((s) => s.trim().replace(/^"(.*)"$/, "$1"))
 }
-function parseCSV(text: string): { headers: string[] rows: ParsedRow[] } {
+function parseCSV(text: string): { headers: string[]; rows: ParsedRow[] } {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length)
   if (!lines.length) return { headers: [], rows: [] }
   const headers = csvSplit(lines[0]).map((h) => h.trim())
@@ -114,7 +114,7 @@ function validate(
   rows.forEach((r) => {
     const get = (f: ProductField) => {
       const col = Object.entries(mapping).find(([, v]) => v === f)?.[0]
-      return col ? (r[col] ?? "").trim() : ""
+      return col ? String(r[col] ?? "").trim() : ""
     }
     const row = r.__row
     for (const f of REQUIRED) {
@@ -390,12 +390,12 @@ function ImportWorkspace({
                   variant="outline"
                   size="sm"
                   className="h-7 rounded-full bg-card"
-                  asChild
-                >
-                  <a href={templateHref} download>
-                    <Download className="size-3.5" /> {templateLabel}
-                  </a>
-                </Button>
+                  render={
+                    <a href={templateHref} download>
+                      <Download className="size-3.5" /> {templateLabel}
+                    </a>
+                  }
+                />
               </div>
               <CardDescription className="text-xs">
                 Required: product name, SKU, category, price, stock
@@ -429,10 +429,10 @@ function ImportWorkspace({
                         <TableCell>
                           <Select
                             value={mapping[h] ?? "__ignore"}
-                            onValueChange={(v) =>
+                            onValueChange={(v: string | null) =>
                               setMapping((prev) => ({
                                 ...prev,
-                                [h]: v as ProductField,
+                                [h]: (v ?? "__ignore") as ProductField,
                               }))
                             }
                           >
@@ -745,16 +745,24 @@ export default function ProductImportScreen() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="h-9 rounded-lg bg-card" asChild>
-            <a href="/product-import-template.csv" download>
-              <Download className="size-4" /> CSV template
-            </a>
-          </Button>
-          <Button variant="outline" className="h-9 rounded-lg bg-card" asChild>
-            <a href="/product-import-template.xlsx" download>
-              <FileSpreadsheet className="size-4" /> Excel template
-            </a>
-          </Button>
+          <Button
+            variant="outline"
+            className="h-9 rounded-lg bg-card"
+            render={
+              <a href="/product-import-template.csv" download>
+                <Download className="size-4" /> CSV template
+              </a>
+            }
+          />
+          <Button
+            variant="outline"
+            className="h-9 rounded-lg bg-card"
+            render={
+              <a href="/product-import-template.xlsx" download>
+                <FileSpreadsheet className="size-4" /> Excel template
+              </a>
+            }
+          />
           <Button
             variant="outline"
             className="h-9 rounded-lg bg-card"
@@ -911,8 +919,8 @@ export default function ProductImportScreen() {
                     <Label className="text-xs">Category *</Label>
                     <Select
                       value={manual.category}
-                      onValueChange={(v) =>
-                        setManual({ ...manual, category: v })
+                      onValueChange={(v: string | null) =>
+                        setManual({ ...manual, category: v ?? "" })
                       }
                     >
                       <SelectTrigger className="h-9 text-sm">
@@ -942,8 +950,8 @@ export default function ProductImportScreen() {
                     <Label className="text-xs">Product type</Label>
                     <Select
                       value={manual.product_type}
-                      onValueChange={(v) =>
-                        setManual({ ...manual, product_type: v })
+                      onValueChange={(v: string | null) =>
+                        setManual({ ...manual, product_type: v ?? "" })
                       }
                     >
                       <SelectTrigger className="h-9 text-sm">
@@ -959,7 +967,7 @@ export default function ProductImportScreen() {
                     <Label className="text-xs">Status</Label>
                     <Select
                       value={manual.status}
-                      onValueChange={(v) => setManual({ ...manual, status: v })}
+                      onValueChange={(v: string | null) => setManual({ ...manual, status: v ?? "" })}
                     >
                       <SelectTrigger className="h-9 text-sm">
                         <SelectValue />
@@ -1005,7 +1013,7 @@ export default function ProductImportScreen() {
                     <Label className="text-xs">Tax</Label>
                     <Select
                       value={manual.tax}
-                      onValueChange={(v) => setManual({ ...manual, tax: v })}
+                      onValueChange={(v: string | null) => setManual({ ...manual, tax: v ?? "" })}
                     >
                       <SelectTrigger className="h-9 text-sm">
                         <SelectValue />

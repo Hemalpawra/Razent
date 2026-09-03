@@ -436,8 +436,8 @@ function AIDefaultsPage({ onBack }: { onBack: () => void }) {
                 <Label className="text-xs">Tone</Label>
                 <Select
                   value={local.tone}
-                  onValueChange={(v) =>
-                    setLocal({ ...local, tone: v as never })
+                  onValueChange={(v: string | null) =>
+                    setLocal({ ...local, tone: (v ?? "friendly") as never })
                   }
                 >
                   <SelectTrigger className="h-9 bg-card text-sm">
@@ -457,8 +457,8 @@ function AIDefaultsPage({ onBack }: { onBack: () => void }) {
                 <Label className="text-xs">Language</Label>
                 <Select
                   value={local.language}
-                  onValueChange={(v) =>
-                    setLocal({ ...local, language: v as never })
+                  onValueChange={(v: string | null) =>
+                    setLocal({ ...local, language: (v ?? "English") as never })
                   }
                 >
                   <SelectTrigger className="h-9 bg-card text-sm">
@@ -627,8 +627,8 @@ function BusinessRulesPage({ onBack }: { onBack: () => void }) {
               <Label className="text-xs">Currency</Label>
               <Select
                 value={local.currency}
-                onValueChange={(v) =>
-                  setLocal({ ...local, currency: v as never })
+                onValueChange={(v: string | null) =>
+                  setLocal({ ...local, currency: (v ?? "INR") as never })
                 }
               >
                 <SelectTrigger className="h-9 bg-card text-sm">
@@ -647,8 +647,8 @@ function BusinessRulesPage({ onBack }: { onBack: () => void }) {
               <Label className="text-xs">Tax Display</Label>
               <Select
                 value={local.taxDisplay}
-                onValueChange={(v) =>
-                  setLocal({ ...local, taxDisplay: v as never })
+                onValueChange={(v: string | null) =>
+                  setLocal({ ...local, taxDisplay: (v ?? "inclusive") as never })
                 }
               >
                 <SelectTrigger className="h-9 bg-card text-sm">
@@ -678,8 +678,8 @@ function BusinessRulesPage({ onBack }: { onBack: () => void }) {
               <Label className="text-xs">Order Numbering</Label>
               <Select
                 value={local.orderNumbering}
-                onValueChange={(v) =>
-                  setLocal({ ...local, orderNumbering: v as never })
+                onValueChange={(v: string | null) =>
+                  setLocal({ ...local, orderNumbering: (v ?? "RAZ-YYYY-####") as never })
                 }
               >
                 <SelectTrigger className="h-9 bg-card font-mono text-sm">
@@ -837,8 +837,8 @@ function DummyShippingPage({ onBack }: { onBack: () => void }) {
                   <Label className="text-xs">Default Delivery Time</Label>
                   <Select
                     value={local.defaultDeliveryTime}
-                    onValueChange={(v) =>
-                      setLocal({ ...local, defaultDeliveryTime: v })
+                    onValueChange={(v: string | null) =>
+                      setLocal({ ...local, defaultDeliveryTime: v ?? "" })
                     }
                   >
                     <SelectTrigger className="h-9 bg-card text-sm">

@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 
 import { Badge } from "@/components/ui/badge"
 
+import { Checkbox } from "@/components/ui/checkbox"
+
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 import {
@@ -100,7 +102,7 @@ import {
 
 type StoreView = "home" | "listing" | "detail" | "track-order" | "cart" | "checkout" | "payment-failed" | "payment-success"
 
-type CartItem = { id: string qty: number }
+type CartItem = { id: string; qty: number }
 
 type AIMsg = {
   role: "user" | "assistant"
@@ -108,7 +110,7 @@ type AIMsg = {
   products?: typeof mockProducts
 }
 
-const CATEGORY_DEFS: { name: string icon: typeof HomeIcon match: string[] }[] =
+const CATEGORY_DEFS: { name: string; icon: typeof HomeIcon; match: string[] }[] =
   [
     { name: "Electronics", icon: Smartphone, match: ["Home", "Security"] },
 
@@ -956,13 +958,8 @@ export default function StoreHome() {
                         open={mobileFiltersOpen}
                         onOpenChange={setMobileFiltersOpen}
                       >
-                        <SheetTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="lg:hidden"
-                          >
-                            <SlidersHorizontal className="size-4" /> Filters
+                        <SheetTrigger render={<Button variant="outline" size="sm" className="lg:hidden" />}>
+                          <SlidersHorizontal className="size-4" /> Filters
                             {brandFilters.length +
                               categoryFilters.length +
                               (priceMin ? 1 : 0) +
@@ -986,7 +983,6 @@ export default function StoreHome() {
                                   (fastDelivery ? 1 : 0)}
                               </Badge>
                             )}
-                          </Button>
                         </SheetTrigger>
                         <SheetContent
                           side="left"
@@ -1923,14 +1919,14 @@ function FilterSidebar(p: FilterProps) {
           <label className="flex cursor-pointer items-center gap-2 text-xs">
             <Checkbox
               checked={p.stockOnly}
-              onCheckedChange={(v) => p.setStockOnly(!!v)}
+              onCheckedChange={(v: boolean | "indeterminate") => p.setStockOnly(!!v)}
             />
             <span className="flex-1">In stock only</span>
           </label>
           <label className="flex cursor-pointer items-center gap-2 text-xs">
             <Checkbox
               checked={p.fastDelivery}
-              onCheckedChange={(v) => p.setFastDelivery(!!v)}
+              onCheckedChange={(v: boolean | "indeterminate") => p.setFastDelivery(!!v)}
             />
             <span className="flex-1">Fast delivery</span>
           </label>
@@ -1941,7 +1937,7 @@ function FilterSidebar(p: FilterProps) {
         <label className="flex cursor-pointer items-center gap-2 text-xs">
           <Checkbox
             checked={p.offerFilter}
-            onCheckedChange={(v) => p.setOfferFilter(!!v)}
+            onCheckedChange={(v: boolean | "indeterminate") => p.setOfferFilter(!!v)}
           />
           <span className="flex-1">Best deals & bundles</span>
         </label>
@@ -2201,7 +2197,7 @@ interface ProductDetailProps {
 
 // Generate deterministic product-specific data
 
-function generateSpecs(p: typeof mockProducts) {
+function generateSpecs(p: typeof mockProducts[number]) {
   const base = {
     "Home Security": [
       "Resolution",
@@ -2353,7 +2349,7 @@ function generateSpecs(p: typeof mockProducts) {
   return keys.map((k, i) => ({ key: k, value: vals[i % vals.length] }))
 }
 
-function productDescription(p: typeof mockProducts) {
+function productDescription(p: typeof mockProducts[number]) {
   const descs: Record<string, string> = {
     "Home Security":
       "Keep your home safe with intelligent monitoring. This smart camera combines AI-powered motion detection with crystal-clear video, so you never miss a moment — day or night.",
@@ -2386,7 +2382,7 @@ function productDescription(p: typeof mockProducts) {
   )
 }
 
-function productFeatures(p: typeof mockProducts) {
+function productFeatures(p: typeof mockProducts[number]) {
   const feats: Record<string, string[]> = {
     "Home Security": [
       "AI person/vehicle/package detection reduces false alerts",
@@ -2514,7 +2510,7 @@ function productFeatures(p: typeof mockProducts) {
   )
 }
 
-function productShipping(p: typeof mockProducts) {
+function productShipping(p: typeof mockProducts[number]) {
   return [
     {
       title: "Standard Delivery",
@@ -2552,8 +2548,8 @@ function productReturns() {
   ]
 }
 
-function productWarranty(p: typeof mockProducts) {
-  const base = {
+function productWarranty(p: typeof mockProducts[number]) {
+  const base: Record<string, string> = {
     "Home Security":
       "2-year manufacturer warranty + 1-year extended on registration",
 
@@ -2576,7 +2572,7 @@ function productWarranty(p: typeof mockProducts) {
   return base[p.category] || "1-year standard manufacturer warranty"
 }
 
-function productReviews(p: typeof mockProducts) {
+function productReviews(p: typeof mockProducts[number]) {
   const r = productRating(p)
 
   const count = Math.floor(p.id.length * 13) + 24
@@ -2626,7 +2622,7 @@ function productReviews(p: typeof mockProducts) {
   return { rating: r, count, reviews }
 }
 
-function relatedProducts(p: typeof mockProducts) {
+function relatedProducts(p: typeof mockProducts[number]) {
   // Same category, different products
 
   const sameCat = mockProducts

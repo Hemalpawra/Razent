@@ -231,7 +231,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
   // Top Performing Products — derive from mockOrders + mockProducts, top 5 by orders/revenue
 
   const productStats = (() => {
-    const map = new Map<string, { orders: number revenue: number }>()
+    const map = new Map<string, { orders: number; revenue: number }>()
 
     for (const o of mockOrders) {
       for (const item of o.items) {
@@ -837,7 +837,7 @@ function DonutCard({
 
   description: string
 
-  data: { name: string value: number fill: string }[]
+  data: { name: string; value: number; fill: string }[]
 
   centerValue: string
 
@@ -845,7 +845,7 @@ function DonutCard({
 
   valueFormatter?: (v: number) => string
 }) {
-  const config: Record<string, { label: string color: string }> = {}
+  const config: Record<string, { label: string; color: string }> = {}
 
   for (const d of data) config[d.name] = { label: d.name, color: d.fill }
 
@@ -949,27 +949,25 @@ function FunnelCard() {
 
             return (
               <Tooltip key={stage.label}>
-                <TooltipTrigger asChild>
-                  <div className="space-y-1 cursor-default">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-foreground">
-                        {stage.label}
+                <TooltipTrigger render={<div className="space-y-1 cursor-default" />}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-foreground">
+                      {stage.label}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {stage.count}
                       </span>
-                      <span className="flex items-center gap-2">
-                        <span className="font-semibold tabular-nums text-foreground">
-                          {stage.count}
-                        </span>
-                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-                          {conv.toFixed(1)}%
-                        </span>
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                        {conv.toFixed(1)}%
                       </span>
-                    </div>
-                    <div className="h-2 rounded-full bg-primary/20">
-                      <div
-                        className="h-2 rounded-full bg-primary transition-all"
-                        style={{ width: `${widthPct}%` }}
-                      />
-                    </div>
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-primary/20">
+                    <div
+                      className="h-2 rounded-full bg-primary transition-all"
+                      style={{ width: `${widthPct}%` }}
+                    />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="text-xs">

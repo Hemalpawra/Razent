@@ -124,7 +124,7 @@ function labelForStatus(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function getSource(order: Order): { label: string icon: typeof Bot } {
+function getSource(order: Order): { label: string; icon: typeof Bot } {
   if (order.via_ai && order.conversation_id)
     return { label: "AI Agent", icon: Bot }
 
@@ -436,14 +436,9 @@ export default function OrdersScreen() {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-10 w-10 px-3">
                   <Checkbox
-                    checked={
-                      allPagedSelected
-                        ? true
-                        : somePagedSelected
-                          ? "indeterminate"
-                          : false
-                    }
-                    onCheckedChange={(v) => toggleAll(v === true)}
+                    checked={allPagedSelected}
+                    indeterminate={!allPagedSelected && somePagedSelected}
+                    onCheckedChange={(checked) => toggleAll(checked === true)}
                     aria-label="Select all"
                   />
                 </TableHead>
@@ -666,7 +661,7 @@ export default function OrdersScreen() {
               <span className="hidden sm:inline">Rows per page</span>
               <Select
                 value={String(rowsPerPage)}
-                onValueChange={(v) => {
+                onValueChange={(v: string | null) => {
                   if (v) {
                     setRowsPerPage(Number(v))
 

@@ -8,7 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 
-const options: { value: ThemeMode label: string icon: typeof SunIcon }[] = [
+const options: { value: ThemeMode; label: string; icon: typeof SunIcon }[] = [
   { value: "light", label: "Light", icon: SunIcon },
   { value: "dark", label: "Dark", icon: MoonIcon },
   { value: "system", label: "System", icon: MonitorIcon },
