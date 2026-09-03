@@ -12,6 +12,7 @@ export type Conversation = {
   id: string
   customer_name: string
   type: ConversationType
+  agent_id?: string
   status: ConversationStatus
   last_message: string
   amount_paise?: number
