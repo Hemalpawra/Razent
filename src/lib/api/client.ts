@@ -141,7 +141,7 @@ function mapDbConversation(row: any): Conversation {
 
 function mapDbAuditSession(row: any): AuditSession {
   return {
-    session_id: row.external_id || String(row.id),
+    session_id: row.session_id || row.external_id || String(row.id),
     order_id: row.order_id ?? null,
     customer: row.customer ?? "",
     actor_label: row.actor_label ?? "System",
@@ -340,39 +340,74 @@ export async function getOrder(id: string): Promise<Order | null> {
 }
 
 export type TrackOrderArgs = {
-  orderId: string
-  mobile: string
-  email: string
+  orderId?: string
+  mobile?: string
+  email?: string
+  query?: string
 }
 
 /**
- * Public customer-side lookup. RLS allows anon reads of orders where
- * the customer provided the right identifiers.
+ * Public customer-side lookup. Accepts either a single search term (Order ID, phone, email, or name)
+ * or separate fields.
  */
-export async function trackOrder(args: TrackOrderArgs): Promise<Order | null> {
-  const { orderId, mobile, email } = args
-  // RLS already restricts to the row the customer knows about; we
-  // still apply the same identifier checks to be safe and to support
-  // pre-RLS or anon-key flows.
-  const { data, error } = await supabase
-    .from("orders")
-    .select("*")
-    .eq("external_id", orderId.trim())
-    .maybeSingle()
-  if (error) throw error
-  if (!data) return null
-  const last5 = (mobile || "").replace(/\D/g, "")
-  const cleanEmail = (email || "").trim().toLowerCase()
-  const phoneMatch =
-    last5.length >= 5 &&
-    String(data.shipping_address?.phone ?? "")
-      .replace(/\D/g, "")
-      .endsWith(last5)
-  const emailMatch =
-    cleanEmail.length > 0 &&
-    String(data.shipping_address?.email ?? "").toLowerCase() === cleanEmail
-  if (!phoneMatch && !emailMatch) return null
-  return mapDbOrder(data)
+export async function trackOrder(args: TrackOrderArgs | string): Promise<Order | null> {
+  const q = typeof args === "string" 
+    ? args.trim() 
+    : (args.query || args.orderId || args.mobile || args.email || "").trim()
+
+  if (!q) return null
+
+  try {
+    const digits = q.replace(/\D/g, "")
+    // 1. Try order ID match (starts with ORD- or exact external_id)
+    if (q.toUpperCase().startsWith("ORD-") || q.length >= 10) {
+      const { data: exactOrder } = await supabase
+        .from("orders")
+        .select("*")
+        .or(`external_id.eq.${q.toUpperCase()},external_id.ilike.%${q}%`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (exactOrder) return mapDbOrder(exactOrder)
+    }
+
+    // 2. Try email match
+    if (q.includes("@")) {
+      const { data: emailOrder } = await supabase
+        .from("orders")
+        .select("*")
+        .ilike("shipping_address->>email", `%${q.toLowerCase()}%`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (emailOrder) return mapDbOrder(emailOrder)
+    }
+
+    // 3. Try phone match
+    if (digits.length >= 4) {
+      const { data: phoneOrder } = await supabase
+        .from("orders")
+        .select("*")
+        .ilike("shipping_address->>phone", `%${digits}%`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (phoneOrder) return mapDbOrder(phoneOrder)
+    }
+
+    // 4. Try general search across external_id, name, email, phone
+    const { data: anyOrder } = await supabase
+      .from("orders")
+      .select("*")
+      .or(`external_id.ilike.%${q}%,shipping_address->>full_name.ilike.%${q}%,shipping_address->>email.ilike.%${q}%,shipping_address->>phone.ilike.%${q}%`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (anyOrder) return mapDbOrder(anyOrder)
+  } catch (err) {
+    console.warn("[trackOrder] search error:", err)
+  }
+  return null
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -469,6 +504,58 @@ export async function upsertConversation(
   } catch (err) {
     console.warn("[upsertConversation] fetch error:", err)
     return null
+  }
+}
+
+export async function updateConversationStatus(
+  id: string,
+  status: "active" | "closed" | "resolved" | "paid",
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("conversations")
+      .update({ status, updated_at: new Date().toISOString() })
+      .or(`external_id.eq.${id},id.eq.${id}`)
+    if (error) {
+      console.warn("[updateConversationStatus] error:", error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn("[updateConversationStatus] exception:", err)
+    return false
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Realtime Subscriptions
+// ─────────────────────────────────────────────────────────────────
+
+export function subscribeToOrders(callback: (payload: any) => void) {
+  const channel = supabase
+    .channel(`orders-live-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "orders" },
+      (payload) => callback(payload),
+    )
+    .subscribe()
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}
+
+export function subscribeToConversations(callback: (payload: any) => void) {
+  const channel = supabase
+    .channel(`convs-live-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "conversations" },
+      (payload) => callback(payload),
+    )
+    .subscribe()
+  return () => {
+    supabase.removeChannel(channel)
   }
 }
 
@@ -854,5 +941,22 @@ export async function createStorefrontOrder(order: Order): Promise<Order> {
     throw error
   }
   return mapDbOrder(data)
+}
+
+export function subscribeToProducts(onUpdate: () => void): () => void {
+  const channel = supabase
+    .channel(`public:products_live_${Date.now()}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "products" },
+      () => {
+        onUpdate()
+      },
+    )
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
 }
 

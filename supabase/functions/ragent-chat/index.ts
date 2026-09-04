@@ -58,37 +58,33 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 // ── System prompt (Razorpay/NPCI aligned) ───────────────────
 function systemPrompt(): string {
-  return `You are Razent, the AI shopping assistant for Merchant One's quick-commerce store (Blinkit/Swiggy Instamart style).
+  return `You are Razent, the AI shopping assistant for Merchant One's quick-commerce grocery store (Blinkit/Swiggy Instamart style).
 
-GROUND RULES (non-negotiable):
-- Never invent prices, stock, or policies. ALWAYS call search_catalog / get_product.
-- Never ask for full card numbers, CVV, PIN, OTP, or passwords.
-- All UPI / payment actions MUST go through create_mandate (AP2) → verify_mandate first.
+DATABASE GROUNDING RULES (STRICT & MANDATORY):
+1. You DO NOT have an in-memory or static catalog. You MUST call search_catalog to find items, current prices, and stock in the live store database.
+2. NEVER invent, hallucinate, or assume any product, brand, price, or inventory.
+3. If search_catalog returns 0 products (e.g. user asks for chicken, mutton, electronics, clothes): you MUST explicitly state that the store does not carry that item in stock. You must NEVER make up a product or price.
+4. STRICT DOMAIN BOUNDARY: You ONLY answer grocery and store-related shopping queries. If the user asks about politics, political leaders (such as Narendra Modi, ministers, elections, etc.), coding, general trivia, weather, or personal questions, politely refuse:
+   "I am Razent, your grocery assistant. I can only help you find and order grocery items from our store. What groceries would you like today?"
+5. PAYMENT & CHECKOUT SAFETY:
+   - NEVER provide a fake, simulated, or roleplayed UPI ID (e.g. NEVER say "pay to merchant@upi" or "send money to abc@upi").
+   - NEVER say an order is placed or completed unless you called start_checkout and it returned an order id.
+   - To help the customer purchase, call add_to_cart for the items, or call start_checkout if the customer confirmed they want to place the order now.
 
 PROTOCOL THRESHOLDS (NPCI UAP / Razorpay):
-- Cart < ₹2,000 → auto-approve (UAP transaction).
-- Cart ₹2,000–₹5,000 → confirm intent with user, then UAP.
-- Cart > ₹5,000 OR new payee → require x402 step-up.
-- New payee with no prior mandate → require x402 step-up.
+- Cart < ₹2,000 → auto-approve (UAP transaction via start_checkout).
+- Cart > ₹2,000 → confirm intent with user or require step-up.
 
 SALES BEHAVIOUR:
-- Recommendations: cite the product title and price (e.g. "Amul Toned Milk 1L — ₹68").
-- Upsell: only when the higher tier has strictly better specs/price ratio.
-- Cross-sell: only items that pair (e.g. eggs → butter, bread, milk).
-- Comparisons: at most 2 products side by side.
-
-TONE: warm, concise (≤ 40 words/turn), Indian quick-commerce voice.
-
-CATEGORIES in this store: Fruits, Vegetables, Dairy & Bakery, Snacks & Munchies, Beverages, Household.
-
-End every product recommendation with one short follow-up question (e.g. "Want me to add it to cart?").`
+- Recommendations: cite the real product title and price from search_catalog (e.g. "Amul Toned Milk 1L — ₹68").
+- End product recommendations with one short follow-up question (e.g. "Want me to add it to your cart?").`
 }
 
 // ── Tool map: storefront (anon) ──────────────────────────────
 const storefrontTools = {
   search_catalog: tool({
     description:
-      "Search the live grocery catalog. Use this whenever the user asks about products, prices, or availability. Never invent catalog data.",
+      "Search the live grocery catalog in the database. Use this whenever the user asks about products, prices, or availability. Never invent catalog data.",
     parameters: z.object({
       q: z.string().optional().describe("free-text search"),
       category: z.string().optional().describe("category: Fruits, Vegetables, Dairy & Bakery, Snacks & Munchies, Beverages, Household"),
@@ -96,13 +92,17 @@ const storefrontTools = {
     }),
     execute: async ({ q, category, max_price_paise }) => {
       let query = supabase.from("products").select("*").eq("status", "active")
-      if (q) query = query.ilike("title", `%${q}%`)
       if (category) query = query.eq("category", category)
+      if (q && q.trim()) {
+        const term = q.trim()
+        query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%,category.ilike.%${term}%`)
+      }
       const { data, error } = await query.order("created_at", { ascending: false }).limit(20)
-      if (error) return { error: error.message, products: [] }
+      if (error) return { error: error.message, count: 0, products: [] }
       const filtered = max_price_paise ? (data ?? []).filter((p) => p.price_paise <= max_price_paise) : (data ?? [])
       return {
         count: filtered.length,
+        message: filtered.length === 0 ? "No active products found matching this query in the store catalog." : undefined,
         products: filtered.slice(0, 10).map((p) => ({
           id: p.external_id,
           title: p.title,
@@ -245,19 +245,28 @@ const storefrontTools = {
 
   start_checkout: tool({
     description:
-      "Run the full executeAgentCheckout flow: AP2 verify → threshold check → UAP or x402 challenge. Use after cart + shipping are collected. Returns an order id on success or a challenge on step-up.",
+      "Run the full executeAgentCheckout flow: AP2 verify → threshold check → UAP or x402 challenge. Use when customer confirms they want to place/checkout their order. Returns an order id on success or a challenge on step-up.",
     parameters: z.object({
       items: z.array(z.object({ product_id: z.string(), qty: z.number().int().positive() })),
       shipping_address: z.object({
-        full_name: z.string(),
-        phone: z.string(),
-        email: z.string(),
-        line1: z.string(),
+        full_name: z.string().default("Store Customer"),
+        phone: z.string().default("9876543210"),
+        email: z.string().default("customer@razent.local"),
+        line1: z.string().default("123 MG Road"),
         line2: z.string().optional(),
-        city: z.string(),
-        state: z.string(),
-        pincode: z.string(),
+        city: z.string().default("Bengaluru"),
+        state: z.string().default("Karnataka"),
+        pincode: z.string().default("560001"),
         country: z.string().default("India"),
+      }).default({
+        full_name: "Store Customer",
+        phone: "9876543210",
+        email: "customer@razent.local",
+        line1: "123 MG Road",
+        city: "Bengaluru",
+        state: "Karnataka",
+        pincode: "560001",
+        country: "India",
       }),
       mandate_id: z.string().optional(),
     }),
@@ -266,7 +275,11 @@ const storefrontTools = {
       const lineItems: Array<{ product_id: string; title: string; image_url: string; qty: number; unit_price_paise: number }> = []
       let total_paise = 0
       for (const it of input.items) {
-        const { data: p } = await supabase.from("products").select("*").eq("external_id", it.product_id).maybeSingle()
+        let p = (await supabase.from("products").select("*").eq("external_id", it.product_id).maybeSingle()).data
+        if (!p) {
+          const byTitle = (await supabase.from("products").select("*").ilike("title", `%${it.product_id}%`).limit(1)).data
+          if (byTitle && byTitle[0]) p = byTitle[0]
+        }
         if (!p) return { ok: false, error: "PRODUCT_NOT_FOUND", product_id: it.product_id }
         lineItems.push({
           product_id: p.external_id,
@@ -303,6 +316,7 @@ const storefrontTools = {
         ? `pay_${Date.now().toString(36)}`
         : `demo_pay_${Date.now().toString(36)}`
       const isDemo = !Deno.env.get("RAZORPAY_KEY_ID")
+      const settlement_reference = `settle_${Date.now().toString(36)}`
       const { error: orderErr } = await supabase.from("orders").insert({
         external_id,
         merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb", // demo merchant1
@@ -319,10 +333,48 @@ const storefrontTools = {
         via_ai: true,
         mandate_id: input.mandate_id ?? null,
         commerce_protocol: "ncpi_uap",
-        settlement_reference: `settle_${Date.now().toString(36)}`,
+        settlement_reference,
         paid_at: new Date().toISOString(),
       })
       if (orderErr) return { ok: false, error: orderErr.message }
+
+      // Log to audit sessions
+      try {
+        const auditSessionId = `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+        await supabase.from("audit_sessions").insert({
+          session_id: auditSessionId,
+          actor: "AI Agent",
+          actor_label: "AI Shopping Assistant",
+          order_id: external_id,
+          customer: input.shipping_address?.full_name || "Store Customer",
+          events: [
+            {
+              id: `ev_${Date.now().toString(36)}_1`,
+              timestamp: new Date().toISOString(),
+              actor: "AI Assistant",
+              type: "intent_negotiation",
+              result: "Success",
+              source: "AI Agent",
+              payload_summary: `In-chat AI order created: ${external_id}`,
+              status_code: 200,
+            },
+            {
+              id: `ev_${Date.now().toString(36)}_2`,
+              timestamp: new Date().toISOString(),
+              actor: "AI Assistant",
+              type: "checkout_completed",
+              result: "Success",
+              source: "AI Agent",
+              payload_summary: `Settled via NCPI UAP: ${lineItems.length} items, total ₹${(total_paise / 100).toFixed(2)}`,
+              response_summary: `settlement_reference=${settlement_reference}`,
+              status_code: 200,
+            },
+          ],
+        })
+      } catch (auditErr) {
+        console.warn("Audit log error:", auditErr)
+      }
+
       return {
         ok: true,
         order: {
@@ -331,7 +383,7 @@ const storefrontTools = {
           total_paise,
           total_rupees: (total_paise / 100).toFixed(2),
           protocol: "ncpi_uap",
-          settlement_reference: `settle_${Date.now().toString(36)}`,
+          settlement_reference,
           demo_mode: isDemo,
         },
       }

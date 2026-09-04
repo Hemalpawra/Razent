@@ -46,8 +46,14 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { formatPrice } from "@/lib/types/product"
-import { listConversations, listOrders } from "@/lib/api/client"
-import type { Conversation, ConversationStatus } from "@/lib/types/conversation"
+import {
+  listConversations,
+  listOrders,
+  updateConversationStatus,
+  upsertConversation,
+  subscribeToConversations,
+} from "@/lib/api/client"
+import type { Conversation, ConversationStatus, ChatMessage } from "@/lib/types/conversation"
 import type { Order } from "@/lib/types/order"
 import { useState, useEffect } from "react"
 import ConversationDrawer from "@/components/merchant/AIAgent/ConversationDrawer"
@@ -134,6 +140,14 @@ export default function AIAgentScreen({
   useEffect(() => {
     listConversations().then(setConvData).catch(() => setConvData([]))
     listOrders().then(setOrders).catch(() => setOrders([]))
+
+    // Realtime live subscription to conversations
+    const unsubscribe = subscribeToConversations(() => {
+      listConversations().then(setConvData).catch(() => {})
+    })
+    return () => {
+      unsubscribe()
+    }
   }, [])
 
   const selected = selectedId
@@ -174,6 +188,43 @@ export default function AIAgentScreen({
   }
 
   const handleCloseSplit = () => setSplitOpen(false)
+
+  const handleStatusChange = async (newStatus: ConversationStatus) => {
+    if (!selected) return
+    await updateConversationStatus(selected.id, newStatus as any)
+    setConvData((prev) =>
+      prev.map((c) => (c.id === selected.id ? { ...c, status: newStatus } : c)),
+    )
+  }
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || !selected) return
+    const msgText = inputValue.trim()
+    setInputValue("")
+    const newMsg: ChatMessage = {
+      id: `m_${Date.now()}`,
+      role: "ai",
+      text: msgText,
+      at: new Date().toISOString(),
+    }
+    const updatedMsgs = [...(selected.messages || []), newMsg]
+    const updated: Conversation = {
+      ...selected,
+      last_message: msgText,
+      messages: updatedMsgs,
+    }
+    setConvData((prev) =>
+      prev.map((c) => (c.id === selected.id ? updated : c)),
+    )
+    await upsertConversation({
+      external_id: selected.id,
+      merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
+      customer_name: selected.customer_name,
+      last_message: msgText,
+      status: selected.status,
+      messages: updatedMsgs,
+    })
+  }
 
   if (loading) {
     return (
@@ -374,7 +425,7 @@ export default function AIAgentScreen({
 
           {/* Right — full-height AI workspace panel */}
           <Card className="flex flex-col overflow-hidden rounded-xl bg-card border shadow-sm xl:h-[calc(100vh-140px)] xl:sticky xl:top-3">
-            {/* Header — ChatGPT Assistant / Active / badge */}
+            {/* Header — Real Customer Info & Live Status */}
             <div className="shrink-0 border-b bg-card px-4 py-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
@@ -386,34 +437,46 @@ export default function AIAgentScreen({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-foreground truncate">
-                        ChatGPT Assistant
+                        {selected?.customer_name || "Customer Conversation"}
                       </span>
                       <Badge
-                        variant="success"
+                        variant={statusVariant[selected?.status ?? "active"]}
                         className="rounded-full px-2 py-0 text-[11px] shrink-0"
                       >
-                        Active
+                        {statusLabel[selected?.status ?? "active"]}
                       </Badge>
                     </div>
                     <div className="text-[11px] leading-4 text-muted-foreground truncate">
-                      {selected?.customer_name ?? "Ananya Rao"} ·{" "}
                       {selected ? sourceLabel(selected.type) : "AI Assistant"} ·{" "}
-                      {selected ? statusLabel[selected.status] : "Active"}
+                      Protocol: {selected?.protocol || "direct_web"}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Badge
-                    variant="secondary"
-                    className="rounded-full text-[11px] hidden sm:inline-flex"
-                  >
-                    AI Assistant
-                  </Badge>
+                  {selected?.status === "active" ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs rounded-full"
+                      onClick={() => handleStatusChange("completed")}
+                    >
+                      Mark Resolved
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs rounded-full"
+                      onClick={() => handleStatusChange("active")}
+                    >
+                      Reopen
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     onClick={handleCloseSplit}
-                    aria-label="Close assistant"
+                    aria-label="Close workspace"
                   >
                     <XIcon className="size-4" />
                   </Button>
@@ -424,174 +487,97 @@ export default function AIAgentScreen({
                   <Sparkles className="size-3" /> Live assistant workspace
                 </span>
                 <span className="opacity-40">·</span>
-                <span>Started 10:24 AM · May 27, 2025</span>
+                <span>
+                  Started{" "}
+                  {selected?.created_at
+                    ? new Date(selected.created_at).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : "Recently"}
+                </span>
               </div>
             </div>
 
-            {/* Message thread — scrollable */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-muted/20">
+            {/* Message thread — Live dynamic conversation */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-muted/20">
               <MessageGroup>
-                {/* Customer ask */}
-                <Message align="end">
-                  <MessageAvatar>
-                    <Avatar className="size-7">
-                      <AvatarFallback className="bg-muted text-foreground">
-                        <User className="size-3.5" />
-                      </AvatarFallback>
-                    </Avatar>
-                  </MessageAvatar>
-                  <MessageContent className="items-end">
-                    <Bubble variant="muted" align="end">
-                      <BubbleContent>
-                        Need fresh bananas and milk for quick breakfast delivery.
-                      </BubbleContent>
-                    </Bubble>
-                    <span className="text-[10px] text-muted-foreground">
-                      10:24 AM
-                    </span>
-                  </MessageContent>
-                </Message>
-
-                {/* AI reply */}
-                <Message align="start">
-                  <MessageAvatar>
-                    <Avatar className="size-7">
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        <Bot className="size-3.5" />
-                      </AvatarFallback>
-                    </Avatar>
-                  </MessageAvatar>
-                  <MessageContent className="items-start">
-                    <Bubble variant="tinted" align="start">
-                      <BubbleContent>
-                        Found fresh organic produce and dairy for 12-minute delivery:
-                      </BubbleContent>
-                    </Bubble>
-                    <span className="text-[10px] text-muted-foreground">
-                      10:25 AM
-                    </span>
-                  </MessageContent>
-                </Message>
-
-                {/* Product cards inside assistant message */}
-                <div className="grid gap-2 pl-10">
-                  {PRODUCTS.map((p) => (
-                    <Card
-                      key={p.id}
-                      className="rounded-xl bg-card p-2.5 shadow-sm"
-                    >
-                      <div className="flex gap-3">
-                        <img
-                          src={p.img}
-                          alt={p.name}
-                          className="size-12 rounded-lg object-cover ring-1 ring-border/40"
-                          loading="lazy"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium leading-4 text-foreground">
-                            {p.name}
-                          </div>
-                          <div className="text-[11px] leading-3 text-muted-foreground">
-                            {p.subtitle}
-                          </div>
-                          <div className="mt-1 flex items-center gap-2">
-                            <span className="text-sm font-semibold text-foreground">
-                              {formatPrice(p.price)}
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
-                              <Star className="size-3 fill-amber-500 text-amber-500" />
-                              {p.rating}
-                            </span>
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant={p.added ? "secondary" : "outline"}
-                          className="h-7 shrink-0 rounded-full text-xs"
+                {selected?.messages && selected.messages.length > 0 ? (
+                  selected.messages.map((m: any, idx: number) => {
+                    const isCustomer = m.role === "customer" || m.role === "user"
+                    return (
+                      <Message
+                        key={m.id || idx}
+                        align={isCustomer ? "end" : "start"}
+                      >
+                        <MessageAvatar>
+                          <Avatar className="size-7">
+                            <AvatarFallback
+                              className={
+                                isCustomer
+                                  ? "bg-muted text-foreground"
+                                  : "bg-primary text-primary-foreground"
+                              }
+                            >
+                              {isCustomer ? (
+                                <User className="size-3.5" />
+                              ) : (
+                                <Bot className="size-3.5" />
+                              )}
+                            </AvatarFallback>
+                          </Avatar>
+                        </MessageAvatar>
+                        <MessageContent
+                          className={isCustomer ? "items-end" : "items-start"}
                         >
-                          {p.added ? "Added" : "View"}
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-
-                {/* Customer picks */}
-                <Message align="end">
-                  <MessageAvatar>
-                    <Avatar className="size-7">
-                      <AvatarFallback className="bg-muted text-foreground">
-                        <User className="size-3.5" />
-                      </AvatarFallback>
-                    </Avatar>
-                  </MessageAvatar>
-                  <MessageContent className="items-end">
-                    <Bubble variant="muted" align="end">
-                      <BubbleContent>
-                        Add bananas and 1L milk to my basket.
-                      </BubbleContent>
-                    </Bubble>
-                    <span className="text-[10px] text-muted-foreground">
-                      10:27 AM
-                    </span>
-                  </MessageContent>
-                </Message>
-
-                <Message align="start">
-                  <MessageAvatar>
-                    <Avatar className="size-7">
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        <Bot className="size-3.5" />
-                      </AvatarFallback>
-                    </Avatar>
-                  </MessageAvatar>
-                  <MessageContent className="items-start">
-                    <Bubble variant="default" align="start">
-                      <BubbleContent>
-                        Added Fresh Robusta Bananas & Amul Taaza Milk (1L). Total: ₹104. 12-min delivery available. Shall I proceed to autonomous checkout?
-                      </BubbleContent>
-                    </Bubble>
-                    <span className="text-[10px] text-muted-foreground">
-                      10:28 AM
-                    </span>
-                  </MessageContent>
-                </Message>
+                          <Bubble
+                            variant={isCustomer ? "muted" : "default"}
+                            align={isCustomer ? "end" : "start"}
+                          >
+                            <BubbleContent className="text-sm whitespace-pre-wrap">
+                              {m.text}
+                            </BubbleContent>
+                          </Bubble>
+                          <span className="text-[10px] text-muted-foreground">
+                            {m.at
+                              ? new Date(m.at).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "Just now"}
+                          </span>
+                        </MessageContent>
+                      </Message>
+                    )
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+                    <Bot className="size-10 mb-2 opacity-40" />
+                    <p className="text-sm font-medium">No messages recorded</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Customer has connected to this session.
+                    </p>
+                  </div>
+                )}
               </MessageGroup>
-
-              <Separator className="my-2" />
-
-              {/* Quick reply chips */}
-              <div className="flex flex-wrap gap-2 pl-1">
-                {QUICK_CHIPS.map((chip) => (
-                  <Button
-                    key={chip}
-                    variant="outline"
-                    size="sm"
-                    className="h-7 rounded-full bg-card text-xs"
-                    onClick={() => setInputValue(chip)}
-                  >
-                    {chip}
-                  </Button>
-                ))}
-              </div>
             </div>
 
             {/* Input at bottom */}
             <div className="shrink-0 border-t bg-card px-3 py-3">
               <div className="flex items-center gap-2">
                 <Input
-                  placeholder="Type a message…"
+                  placeholder="Reply as Merchant Agent…"
                   className="h-9 flex-1 rounded-full bg-muted/40"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") setInputValue("")
+                    if (e.key === "Enter") handleSendMessage()
                   }}
                 />
                 <Button
                   size="icon"
                   className="size-9 shrink-0 rounded-full"
-                  onClick={() => setInputValue("")}
+                  onClick={handleSendMessage}
                   aria-label="Send"
                 >
                   <Send className="size-4" />
@@ -599,7 +585,7 @@ export default function AIAgentScreen({
               </div>
               <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
-                  <Bot className="size-3" /> AI drafting · press Enter to send
+                  <Bot className="size-3" /> Press Enter to send live reply to customer
                 </span>
                 <Button
                   variant="ghost"

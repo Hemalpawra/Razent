@@ -51,9 +51,12 @@ import {
   executeAgentCheckout,
   createStorefrontOrder,
   upsertConversation,
+  updateConversationStatus,
+  subscribeToProducts,
   logAuditEvent,
   listProducts,
 } from "@/lib/api/client"
+import { InvoiceModal, type InvoiceData } from "./InvoiceModal"
 import { orderStore } from "@/lib/storage/orderStore"
 
 import { mockProducts } from "@/lib/mock/products"
@@ -113,6 +116,7 @@ import {
   Cookie,
   Coffee,
   ShoppingBag,
+  Clock,
 } from "lucide-react"
 
 type StoreView = "home" | "listing" | "detail" | "track-order" | "cart" | "checkout" | "payment-failed" | "payment-success"
@@ -123,6 +127,12 @@ type AIMsg = {
   role: "user" | "assistant"
   text: string
   products?: Product[]
+  checkoutCard?: {
+    total_paise: number
+    itemsCount: number
+    orderId: string
+    status: string
+  }
 }
 
 const CATEGORY_DEFS: { name: string; icon: any; match: string[] }[] = [
@@ -238,6 +248,9 @@ export default function StoreHome() {
   const [trackPrefill, setTrackPrefill] = useState<{ orderId?: string; mobile?: string; email?: string } | null>(null)
 
   const [lastInvoiceNo, setLastInvoiceNo] = useState<string | null>(null)
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false)
+  const [invoiceModalData, setInvoiceModalData] = useState<InvoiceData | null>(null)
+  const [aiCheckingOut, setAiCheckingOut] = useState(false)
 
   const [lastOrderSnapshot, setLastOrderSnapshot] = useState<CartItem[] | null>(
     null,
@@ -254,8 +267,21 @@ export default function StoreHome() {
         }
       })
       .catch(() => {})
+
+    // Realtime subscription: if merchant adds/updates a 13th product, it reflects immediately
+    const unsub = subscribeToProducts(() => {
+      listProducts()
+        .then((data) => {
+          if (alive && data && data.length > 0) {
+            setProductsList(data)
+          }
+        })
+        .catch(() => {})
+    })
+
     return () => {
       alive = false
+      unsub()
     }
   }, [])
 
@@ -467,35 +493,168 @@ export default function StoreHome() {
   }
 
   function generateGroceryFallback(query: string, catalog: Product[]): AIMsg {
-    const q = query.toLowerCase()
-    let recs = catalog.filter((p) => {
+    const q = query.toLowerCase().trim()
+
+    // 1. Off-topic domain guard (politics, prime minister, narendra modi, weather, general trivia)
+    const OFF_TOPIC = /\b(narendra|modi|bjp|congress|politics|election|prime minister|president|weather|homework|write code|who is|capital of)\b/i
+    if (OFF_TOPIC.test(q)) {
+      return {
+        role: "assistant",
+        text: "I am Razent, your quick-commerce grocery shopping assistant. I can only help you find, compare, and order groceries from our store. What groceries would you like today?",
+        products: [],
+      }
+    }
+
+    // 2. Checkout / Payment intent
+    const CHECKOUT_INTENT = /\b(checkout|pay|buy|order now|place order|purchase)\b/i
+    if (CHECKOUT_INTENT.test(q)) {
+      return {
+        role: "assistant",
+        text: "Ready to order! You can review your items and complete your order instantly using our 1-click in-chat checkout below.",
+        products: [],
+      }
+    }
+
+    // 3. Search catalog dynamically against live products
+    const words = q.split(/\s+/).filter((w) => w.length > 2)
+    const recs = catalog.filter((p) => {
       const title = p.title.toLowerCase()
       const desc = p.description.toLowerCase()
       const cat = p.category.toLowerCase()
-      return (
-        title.includes(q) ||
-        desc.includes(q) ||
-        cat.includes(q) ||
-        (q.includes("banana") && title.includes("banana")) ||
-        (q.includes("apple") && title.includes("apple")) ||
-        (q.includes("milk") && title.includes("milk")) ||
-        (q.includes("egg") && title.includes("egg")) ||
-        (q.includes("tomato") && title.includes("tomato")) ||
-        (q.includes("onion") && title.includes("onion")) ||
-        (q.includes("bread") && (title.includes("bread") || cat.includes("bakery"))) ||
-        (q.includes("fruit") && cat.includes("fruit")) ||
-        (q.includes("veg") && cat.includes("veg")) ||
-        (q.includes("snack") && cat.includes("snack"))
-      )
-    })
-    if (recs.length === 0) recs = catalog.slice(0, 3)
-    else recs = recs.slice(0, 3)
+      if (title.includes(q) || desc.includes(q) || cat.includes(q)) return true
+      return words.some((w) => title.includes(w) || cat.includes(w))
+    }).slice(0, 3)
+
+    if (recs.length === 0) {
+      return {
+        role: "assistant",
+        text: `Sorry, we don't currently have "${query}" in stock. We stock fresh fruits, vegetables, dairy & bakery, snacks, beverages, and household essentials. Can I help you find something else?`,
+        products: [],
+      }
+    }
 
     return {
       role: "assistant",
-      text: `Here are ${recs.length} options matching "${query}". 10–15 min quick delivery available. Tap a card to add or view details.`,
+      text: `Found ${recs.length} matching item${recs.length > 1 ? "s" : ""} in our store. Delivered in 10–15 mins:`,
       products: recs,
     }
+  }
+
+  const handleChatCheckout = async () => {
+    if (cart.length === 0) return
+    setAiCheckingOut(true)
+    try {
+      const orderId = `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
+      const lineItems = cart.map((c) => {
+        const p = activeProducts.find((x) => x.id === c.id) || mockProducts.find((x) => x.id === c.id)
+        return {
+          product_id: c.id,
+          title: p?.title ?? c.id,
+          image_url: p?.image_url ?? "",
+          qty: c.qty,
+          unit_price_paise: p?.price_paise ?? 0,
+        }
+      })
+      const totalPaise = lineItems.reduce((acc, it) => acc + it.unit_price_paise * it.qty, 0)
+      const newOrder: any = {
+        id: orderId,
+        razorpay_order_id: `rzp_ai_${Date.now()}`,
+        razorpay_payment_id: `pay_uap_${Date.now().toString(36)}`,
+        status: "paid",
+        shipping_status: "pending",
+        currency: "INR",
+        total_paise: totalPaise,
+        shipping_paise: 0,
+        items: lineItems,
+        shipping_address: {
+          full_name: "Customer (via AI Assistant)",
+          phone: "9876543210",
+          email: "customer@razent.local",
+          line1: "123 MG Road",
+          city: "Bengaluru",
+          state: "Karnataka",
+          pincode: "560001",
+          country: "India",
+        },
+        via_ai: true,
+        commerce_protocol: "ncpi_uap",
+        created_at: new Date().toISOString(),
+        paid_at: new Date().toISOString(),
+      }
+      const created = await createStorefrontOrder(newOrder)
+      setLastOrderId(created.id)
+      setLastPaymentId(created.razorpay_payment_id || `pay_uap_${Date.now()}`)
+      setLastOrderSnapshot([...cart])
+      setCart([])
+      const aiSuccessMsg: AIMsg = {
+        role: "assistant",
+        text: `🎉 Order placed successfully! Order ID: #${created.id}. Total paid: ₹${(totalPaise / 100).toFixed(2)} via NCPI UAP Auto-Approve. Delivery partner arriving in 10–15 mins!`,
+        checkoutCard: {
+          total_paise: totalPaise,
+          itemsCount: lineItems.length,
+          orderId: created.id,
+          status: "paid",
+        },
+      }
+      setAiMsgs((prev) => [...prev, aiSuccessMsg])
+      upsertConversation({
+        external_id: convExternalId,
+        customer_name: "Storefront Customer",
+        last_message: aiSuccessMsg.text,
+        status: "active",
+        messages: [...aiMsgs, aiSuccessMsg].map((m, idx) => ({
+          id: `m_${idx + 1}`,
+          role: m.role === "user" ? "customer" : "ai",
+          text: m.text,
+          at: new Date().toISOString(),
+        })),
+      }).catch(() => {})
+    } catch (err) {
+      console.error("Chat checkout failed:", err)
+    } finally {
+      setAiCheckingOut(false)
+    }
+  }
+
+  const handleOpenInvoiceModal = (customOrder?: any) => {
+    const rawItems = (customOrder?.items || lastOrderSnapshot || cart || []).map((it: any) => {
+      const p = activeProducts.find((x) => x.id === it.id || x.id === it.product_id) || mockProducts.find((x) => x.id === it.id)
+      return {
+        title: it.title || p?.title || "Grocery item",
+        qty: it.qty || 1,
+        unitPricePaise: it.unit_price_paise || p?.price_paise || 5000,
+      }
+    })
+    const subtotal = rawItems.reduce((acc: number, it: any) => acc + it.unitPricePaise * it.qty, 0)
+    const delivery = subtotal > 149900 || subtotal === 0 ? 0 : 4900
+    const tax = Math.round((subtotal + delivery) * 0.18)
+    const total = subtotal + delivery + tax
+
+    setInvoiceModalData({
+      orderId: customOrder?.orderId || customOrder?.id || lastOrderId || "ORD-2026-DEMO",
+      invoiceNo: customOrder?.invoiceNumber || lastInvoiceNo || `INV-${(customOrder?.orderId || lastOrderId || "202603").slice(-6)}`,
+      date: customOrder?.invoiceDate || new Date().toLocaleString("en-IN"),
+      customerName: customOrder?.customerName || "Ananya Rao",
+      phone: customOrder?.phone || "+91 98765 43210",
+      email: customOrder?.email || "ananya.rao@example.com",
+      address: "123 MG Road, Indiranagar, Bengaluru, Karnataka — 560038",
+      items: rawItems.length > 0 ? rawItems : [{ title: "Daily Groceries Basket", qty: 1, unitPricePaise: 25000 }],
+      subtotalPaise: subtotal > 0 ? subtotal : 25000,
+      deliveryPaise: delivery,
+      taxPaise: tax > 0 ? tax : 4500,
+      totalPaise: total > 0 ? total : 29500,
+      paymentMethod: customOrder?.paymentMethod || "UPI (Agentic NCPI UAP)",
+      paymentId: customOrder?.paymentId || lastPaymentId || `pay_${Date.now().toString(36)}`,
+      status: "PAID",
+    })
+    setInvoiceModalOpen(true)
+  }
+
+  const handleDownloadInvoice = (customOrder?: any) => {
+    handleOpenInvoiceModal(customOrder)
+    setTimeout(() => {
+      window.print()
+    }, 400)
   }
 
   async function handleAskAI(prompt?: string) {
@@ -1518,6 +1677,8 @@ export default function StoreHome() {
               onClose={() => setView("home")}
               onOpenAI={() => setAiOpen(true)}
               initialValues={trackPrefill}
+              onViewInvoice={(ord) => handleOpenInvoiceModal(ord)}
+              onDownloadInvoice={(ord) => handleDownloadInvoice(ord)}
             />
           )}
 
@@ -1538,23 +1699,22 @@ export default function StoreHome() {
             <CheckoutView
               cart={cart}
               cartTotal={cartTotal}
-              products={productsList}
+              products={activeProducts}
               conversationId={convExternalId}
-              onClose={() => setView("cart")}
+              onClose={() => setView("home")}
               onBackToCart={() => setView("cart")}
-              onPaymentSuccess={(orderId, paymentId, invoiceNo) => {
-                setLastOrderId(orderId)
-                setFailedOrderId("")
-                setLastPaymentId(paymentId)
-                setLastInvoiceNo(invoiceNo)
+              onOpenProduct={openProduct}
+              onPaymentSuccess={(pid, inv) => {
+                setLastPaymentId(pid)
+                setLastInvoiceNo(inv)
                 setLastOrderSnapshot([...cart])
+                setCart([])
                 setView("payment-success")
               }}
-              onPaymentFailed={(orderId) => {
+              onPaymentFailed={(oid) => {
+                setFailedOrderId(oid)
                 setView("payment-failed")
-                setFailedOrderId(orderId)
               }}
-              onOpenProduct={openProduct}
             />
           )}
 
@@ -1595,8 +1755,8 @@ export default function StoreHome() {
                 })
                 setView("track-order")
               }}
-              onViewInvoice={() => setView("track-order")}
-              onDownloadInvoice={() => {}}
+              onViewInvoice={() => handleOpenInvoiceModal()}
+              onDownloadInvoice={() => handleDownloadInvoice()}
               onContinueShopping={() => {
                 setCart([])
                 setView("listing")
@@ -1692,13 +1852,30 @@ export default function StoreHome() {
                   </div>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setAiOpen(false)}
-              >
-                <X className="size-4" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setAiOpen(false)
+                    updateConversationStatus(convExternalId, "resolved").catch(() => {})
+                  }}
+                >
+                  End Chat
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => {
+                    setAiOpen(false)
+                    updateConversationStatus(convExternalId, "resolved").catch(() => {})
+                  }}
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
             </div>
 
             <div className="flex-1 space-y-4 overflow-auto p-4">
@@ -1739,7 +1916,7 @@ export default function StoreHome() {
                     </MessageContent>
                   </Message>
 
-                  {m.products && (
+                  {m.products && m.products.length > 0 && (
                     <div className="mt-3 grid gap-2">
                       {m.products.map((p) => (
                         <Card key={p.id} className="overflow-hidden">
@@ -1760,13 +1937,23 @@ export default function StoreHome() {
                                 <span className="text-sm font-semibold">
                                   {formatPrice(p.price_paise)}
                                 </span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openProduct(p.id)}
-                                >
-                                  View
-                                </Button>
+                                <div className="flex gap-1.5">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-xs"
+                                    onClick={() => openProduct(p.id)}
+                                  >
+                                    View
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    onClick={() => addToCart(p.id)}
+                                  >
+                                    Add
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           </CardContent>
@@ -1788,6 +1975,56 @@ export default function StoreHome() {
                         </Button>
                       </div>
                     </div>
+                  )}
+
+                  {m.checkoutCard && (
+                    <Card className="mt-3 overflow-hidden border-emerald-500/30 bg-emerald-500/5">
+                      <CardContent className="p-3.5 space-y-2.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                            Order Placed via Agentic UAP
+                          </span>
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                            Auto-Settled
+                          </Badge>
+                        </div>
+                        <div className="rounded-md bg-background/80 p-2.5 space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Order ID:</span>
+                            <span className="font-mono font-medium">{m.checkoutCard.orderId}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total Paid:</span>
+                            <span className="font-bold text-foreground">{formatPrice(m.checkoutCard.total_paise)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Delivery:</span>
+                            <span className="text-emerald-600 font-medium">10–15 mins</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            className="flex-1 h-8 text-xs"
+                            onClick={() => {
+                              setTrackPrefill({ orderId: m.checkoutCard!.orderId })
+                              setView("track-order")
+                              setAiOpen(false)
+                            }}
+                          >
+                            Track Order
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 h-8 text-xs"
+                            onClick={() => handleOpenInvoiceModal({ orderId: m.checkoutCard!.orderId })}
+                          >
+                            View Invoice
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
               ))}
@@ -1818,6 +2055,28 @@ export default function StoreHome() {
                 </div>
               )}
             </div>
+
+            {/* Quick in-chat checkout action bar when items are in cart */}
+            {cart.length > 0 && (
+              <div className="mx-3 mb-2 flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="size-4 text-emerald-600" />
+                  <div>
+                    <span className="font-semibold">{cart.reduce((s, c) => s + c.qty, 0)} items in cart</span>
+                    <p className="text-[11px] text-muted-foreground">{formatPrice(cartTotal)} total</p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs"
+                  disabled={aiCheckingOut}
+                  onClick={handleChatCheckout}
+                >
+                  {aiCheckingOut ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                  ⚡ 1-Click Order (UAP)
+                </Button>
+              </div>
+            )}
 
             <div className="border-t p-3">
               <div className="flex gap-2">
@@ -1951,6 +2210,12 @@ export default function StoreHome() {
           )}
         </SheetContent>
       </Sheet>
+
+      <InvoiceModal
+        isOpen={invoiceModalOpen}
+        onClose={() => setInvoiceModalOpen(false)}
+        data={invoiceModalData}
+      />
     </div>
   )
 }
@@ -3482,6 +3747,8 @@ interface TrackOrderProps {
   onClose: () => void
   onOpenAI: () => void
   initialValues?: { orderId?: string; mobile?: string; email?: string } | null
+  onViewInvoice?: (data: OrderData) => void
+  onDownloadInvoice?: (data: OrderData) => void
 }
 
 const TRACKING_STAGES = [
@@ -3610,7 +3877,7 @@ function TrackOrderEmpty({ onRetry }: { onRetry: () => void }) {
       <h3 className="mt-3 font-semibold">No order found</h3>
       <p className="mt-1 max-w-md mx-auto text-sm text-muted-foreground">
         We couldn't find an order matching those details. Please check your
-        Order ID, mobile number, and email address.
+        Order ID, mobile number, or email address.
       </p>
       <Button className="mt-4" onClick={onRetry}>
         <RefreshCw className="size-4 mr-2" /> Try again
@@ -3709,12 +3976,16 @@ function OrderTimeline({ currentStage }: { currentStage: TrackStageKey }) {
   )
 }
 
-function TrackOrder({ onClose, onOpenAI, initialValues }: TrackOrderProps) {
+function TrackOrder({ onClose, onOpenAI, initialValues, onViewInvoice, onDownloadInvoice }: TrackOrderProps) {
   const { storeProfile } = useSettings()
 
+  const [query, setQuery] = useState(
+    initialValues?.orderId || initialValues?.mobile || initialValues?.email || "",
+  )
   const [orderId, setOrderId] = useState(initialValues?.orderId ?? "")
   const [mobile, setMobile] = useState(initialValues?.mobile ?? "")
   const [email, setEmail] = useState(initialValues?.email ?? "")
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const [submitted, setSubmitted] = useState(false)
 
@@ -3731,17 +4002,19 @@ function TrackOrder({ onClose, onOpenAI, initialValues }: TrackOrderProps) {
     setLoading(true)
 
     try {
-      // Section 4: Real order lookup through the API seam instead of synthetic generation.
-      const result = await trackOrder({
-        orderId: orderId.trim(),
-        mobile: mobile.trim(),
-        email: email.trim(),
-      })
+      // Section 4: Real order lookup through the API seam with single-field or multi-field query.
+      const result = showAdvanced
+        ? await trackOrder({
+            orderId: orderId.trim(),
+            mobile: mobile.trim(),
+            email: email.trim(),
+          })
+        : await trackOrder(query.trim())
       if (result) {
         const primaryItem = result.items?.[0]
         const data: OrderData = {
           orderId: result.id,
-          customerName: result.shipping_address?.full_name ?? email.trim().split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          customerName: result.shipping_address?.full_name ?? (result.shipping_address?.email || "Customer").split("@")[0],
           productName: primaryItem?.title ?? "Unknown product",
           amount: result.total_paise,
           paymentMethod: result.via_ai ? "UPI" : (primaryItem ? "Card" : "UPI"),
@@ -3818,42 +4091,73 @@ function TrackOrder({ onClose, onOpenAI, initialValues }: TrackOrderProps) {
           <Card>
             <CardContent className="p-6 space-y-4">
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="orderId">Order ID</Label>
-                  <Input
-                    id="orderId"
-                    value={orderId}
-                    onChange={(e) => setOrderId(e.target.value)}
-                    placeholder="ORD-123456"
-                    required
-                    className="h-10"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="mobile">Mobile Number</Label>
-                  <Input
-                    id="mobile"
-                    type="tel"
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value)}
-                    placeholder="+91 98765 43210"
-                    required
-                    className="h-10"
-                    inputMode="tel"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    required
-                    className="h-10"
-                  />
-                </div>
+                {!showAdvanced ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="searchQuery">Order ID, Phone Number, or Email</Label>
+                    <Input
+                      id="searchQuery"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="e.g. ORD-2026-123456, 9876543210, or customer@example.com"
+                      required
+                      className="h-10"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvanced(true)}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Use multi-field search
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="orderId">Order ID (Optional)</Label>
+                      <Input
+                        id="orderId"
+                        value={orderId}
+                        onChange={(e) => setOrderId(e.target.value)}
+                        placeholder="ORD-123456"
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="mobile">Mobile Number (Optional)</Label>
+                      <Input
+                        id="mobile"
+                        type="tel"
+                        value={mobile}
+                        onChange={(e) => setMobile(e.target.value)}
+                        placeholder="+91 98765 43210"
+                        className="h-10"
+                        inputMode="tel"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="email">Email Address (Optional)</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvanced(false)}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Back to single-field search
+                      </button>
+                    </div>
+                  </>
+                )}
                 <Button
                   type="submit"
                   className="w-full"
@@ -3949,53 +4253,76 @@ function TrackOrder({ onClose, onOpenAI, initialValues }: TrackOrderProps) {
         <div className="grid gap-6 md:grid-cols-2">
           {/* Result card */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                Order Details
-                <Badge variant="outline" className="text-xs capitalize">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base">Order Details</CardTitle>
+              <PaymentStatusBadge status={paymentStatus} />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Order ID:</span>
+                  <div className="font-mono font-medium">{oid}</div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Customer:</span>
+                  <div className="font-medium">{customerName}</div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Item:</span>
+                  <div className="font-medium">{productName}</div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Amount:</span>
+                  <div className="font-semibold">{formatPrice(amount)}</div>
+                </div>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Payment method:</span>
+                <span className="font-medium">{paymentMethod}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Delivery status:</span>
+                <Badge variant="outline" className="capitalize">
                   {orderStatus}
                 </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid gap-2 sm:grid-cols-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Order ID:</span>{" "}
-                  <span className="ml-2 font-mono">{oid}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Customer:</span>{" "}
-                  <span className="ml-2">{customerName}</span>
-                </div>
-                <div className="sm:col-span-2">
-                  <span className="text-muted-foreground">Product:</span>{" "}
-                  <span className="ml-2">{productName}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Amount:</span>{" "}
-                  <span className="ml-2 font-semibold">
-                    {formatPrice(amount)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Payment method:</span>{" "}
-                  <span className="ml-2">{paymentMethod}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Order status:</span>{" "}
-                  <span className="ml-2 capitalize">{orderStatus}</span>
-                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Payment status card */}
+          {/* Payment attempt card */}
           <Card>
             <CardHeader>
-              <CardTitle>Payment Status</CardTitle>
+              <CardTitle className="text-base">Payment Status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <PaymentStatusBadge status={paymentStatus} />
+              <div className="flex items-center gap-3">
+                {paymentStatus === "paid" && (
+                  <div className="size-8 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center">
+                    <Check className="size-4 text-emerald-600" />
+                  </div>
+                )}
+                {paymentStatus === "pending" && (
+                  <div className="size-8 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center">
+                    <Clock className="size-4 text-amber-600" />
+                  </div>
+                )}
+                {paymentStatus === "failed" && (
+                  <div className="size-8 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <AlertCircle className="size-4 text-destructive" />
+                  </div>
+                )}
+                <div>
+                  <div className="font-medium text-sm">
+                    {paymentStatus === "paid" && "Payment Successful"}
+                    {paymentStatus === "pending" && "Payment Pending"}
+                    {paymentStatus === "failed" && "Payment Failed"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {paymentMethod}
+                  </div>
+                </div>
+              </div>
               {paymentStatus === "paid" && (
                 <div className="text-sm text-emerald-600">
                   Payment confirmed on {attemptTime}
@@ -4044,10 +4371,18 @@ function TrackOrder({ onClose, onOpenAI, initialValues }: TrackOrderProps) {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDownloadInvoice?.(orderData!)}
+              >
                 <Download className="size-3.5 mr-1.5" /> Download Invoice
               </Button>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onViewInvoice?.(orderData!)}
+              >
                 <Eye className="size-3.5 mr-1.5" /> View Invoice
               </Button>
             </div>
@@ -4560,6 +4895,7 @@ function CheckoutView({
   onPaymentSuccess,
   onPaymentFailed,
 }: CheckoutViewProps) {
+  const [addresses, setAddresses] = useState<Address[]>(SAVED_ADDRESSES)
   const [selectedAddr, setSelectedAddr] = useState<string>(
     SAVED_ADDRESSES[0].id,
   )
@@ -4591,10 +4927,8 @@ function CheckoutView({
     setAddrError(null)
     setPaying(true)
 
-    // Build a real Order shape from cart + selected/new address + shipping.
-    const address = showNewAddr
-      ? (newAddr as { full_name?: string; phone?: string; line1?: string; city?: string; state?: string; pincode?: string; email?: string })
-      : SAVED_ADDRESSES.find((a) => a.id === selectedAddr)
+    // Build a real Order shape from cart + selected address + shipping.
+    const address = addresses.find((a) => a.id === selectedAddr) || addresses[0]
     const items = cart.map((c) => {
       const p = (products || []).find((x) => x.id === c.id) || mockProducts.find((x) => x.id === c.id)
       return {
@@ -4804,7 +5138,7 @@ function CheckoutView({
                 )}
                 {!showNewAddr ? (
                   <div className="grid gap-3">
-                    {SAVED_ADDRESSES.map((a) => (
+                    {addresses.map((a) => (
                       <label
                         key={a.id}
                         className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${
@@ -4840,14 +5174,16 @@ function CheckoutView({
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 px-2 text-xs"
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
                               className="h-7 px-2 text-xs text-destructive"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                if (addresses.length > 1) {
+                                  setAddresses((prev) => prev.filter((x) => x.id !== a.id))
+                                  if (selectedAddr === a.id) {
+                                    setSelectedAddr(addresses.find((x) => x.id !== a.id)!.id)
+                                  }
+                                }
+                              }}
                             >
                               Remove
                             </Button>
@@ -4932,8 +5268,27 @@ function CheckoutView({
                       <Button
                         size="sm"
                         onClick={() => {
-                          setSelectedAddr("new")
+                          if (!newAddr.name?.trim() || !newAddr.phone?.trim() || !newAddr.line1?.trim() || !newAddr.pincode?.trim()) {
+                            setAddrError("Please enter full name, mobile, address line, and pincode")
+                            return
+                          }
+                          const newId = `addr_${Date.now()}`
+                          const createdAddr: Address = {
+                            id: newId,
+                            label: newAddr.label || "Other",
+                            name: newAddr.name.trim(),
+                            phone: newAddr.phone.trim(),
+                            email: newAddr.email?.trim() || "customer@razent.local",
+                            line1: newAddr.line1.trim(),
+                            city: newAddr.city?.trim() || "Bengaluru",
+                            state: newAddr.state?.trim() || "Karnataka",
+                            pincode: newAddr.pincode.trim(),
+                          }
+                          setAddresses((prev) => [createdAddr, ...prev])
+                          setSelectedAddr(newId)
                           setShowNewAddr(false)
+                          setNewAddr({})
+                          setAddrError(null)
                         }}
                       >
                         Save address
@@ -4941,7 +5296,10 @@ function CheckoutView({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setShowNewAddr(false)}
+                        onClick={() => {
+                          setShowNewAddr(false)
+                          setAddrError(null)
+                        }}
                       >
                         Cancel
                       </Button>

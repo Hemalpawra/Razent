@@ -157,6 +157,15 @@ export default function OrdersScreen() {
 
   useEffect(() => {
     fetchOrders()
+    let unsub: (() => void) | undefined
+    import("@/lib/api/client").then(({ subscribeToOrders }) => {
+      unsub = subscribeToOrders(() => {
+        fetchOrders()
+      })
+    })
+    return () => {
+      if (unsub) unsub()
+    }
   }, [])
 
   const selectedOrder = drawerId
