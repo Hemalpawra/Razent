@@ -4,18 +4,10 @@ import {
   IndianRupee,
   MessageCircle,
   TrendingUp,
-  Package,
-  Lightbulb,
   AlertTriangle,
   Eye,
-  ChevronDown,
   Download,
-  Bot,
-  User,
-  Star,
-  Send,
-  XIcon,
-  Sparkles,
+  RotateCw,
 } from "lucide-react"
 import {
   Card,
@@ -27,6 +19,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRangePicker"
+import { cn } from "@/lib/utils"
 import {
   Table,
   TableBody,
@@ -35,28 +29,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import {
-  Message,
-  MessageAvatar,
-  MessageContent,
-  MessageGroup,
-} from "@/components/ui/message"
-import { Bubble, BubbleContent } from "@/components/ui/bubble"
-import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
 import { formatPrice } from "@/lib/types/product"
 import {
   listConversations,
   listOrders,
   updateConversationStatus,
-  upsertConversation,
   subscribeToConversations,
 } from "@/lib/api/client"
-import type { Conversation, ConversationStatus, ChatMessage } from "@/lib/types/conversation"
+import type { Conversation, ConversationStatus } from "@/lib/types/conversation"
 import type { Order } from "@/lib/types/order"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import ConversationDrawer from "@/components/merchant/AIAgent/ConversationDrawer"
+import { toast } from "sonner"
 
 const statusVariant: Record<ConversationStatus, "success" | "secondary" | "warning" | "destructive" | "default"> =
   {
@@ -85,61 +69,44 @@ function sourceLabel(type: string) {
   return type === "agent_to_agent" ? "AI Agent" : "AI Assistant"
 }
 
-const PRODUCTS = [
-  {
-    id: "p1",
-    name: "Fresh Robusta Bananas (1 kg)",
-    subtitle: "Farm fresh · 1 kg bunch · Grade A",
-    price: 4800,
-    rating: 4.9,
-    img: "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=240&q=70&auto=format&fit=crop",
-    added: true,
-  },
-  {
-    id: "p2",
-    name: "Amul Taaza Toned Milk (1L)",
-    subtitle: "Pasteurised toned milk · 1 Litre pouch",
-    price: 5600,
-    rating: 4.8,
-    img: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=240&q=70&auto=format&fit=crop",
-    added: true,
-  },
-  {
-    id: "p3",
-    name: "Farm Fresh Brown Eggs (6 pcs)",
-    subtitle: "High protein · Farm fresh brown eggs",
-    price: 5200,
-    rating: 4.7,
-    img: "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=240&q=70&auto=format&fit=crop",
-    added: false,
-  },
-]
-
-const QUICK_CHIPS = [
-  "Yes, proceed",
-  "Show cheaper options",
-  "Compare all 3",
-  "Add to cart",
-]
-
 export default function AIAgentScreen({
-  loading,
+  loading: externalLoading,
   error,
 }: {
   loading?: boolean
   error?: string | null
 }) {
-  const [splitOpen, setSplitOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [inputValue, setInputValue] = useState("")
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isLoading, setIsLoading] = useState(!externalLoading)
 
   const [convData, setConvData] = useState<Conversation[]>([])
   const [orders, setOrders] = useState<Order[]>([])
+  const [dateFilter, setDateFilter] = useState<DateRangeValue>({
+    preset: "all",
+    label: "All Time",
+    startDate: null,
+    endDate: null,
+  })
+
+  const loadData = async () => {
+    setIsRefreshing(true)
+    try {
+      const [c, o] = await Promise.all([listConversations(), listOrders()])
+      setConvData(c || [])
+      setOrders(o || [])
+    } catch {
+      setConvData([])
+      setOrders([])
+    } finally {
+      setIsLoading(false)
+      setTimeout(() => setIsRefreshing(false), 400)
+    }
+  }
 
   useEffect(() => {
-    listConversations().then(setConvData).catch(() => setConvData([]))
-    listOrders().then(setOrders).catch(() => setOrders([]))
+    loadData()
 
     // Realtime live subscription to conversations
     const unsubscribe = subscribeToConversations(() => {
@@ -153,6 +120,31 @@ export default function AIAgentScreen({
   const selected = selectedId
     ? (convData.find((c) => c.id === selectedId) ?? null)
     : null
+
+  const filteredConversations = useMemo(() => {
+    return convData.filter((c) => {
+      if (dateFilter.preset === "today") {
+        const today = new Date().toISOString().slice(0, 10)
+        return c.created_at.startsWith(today)
+      } else if (dateFilter.preset === "yesterday") {
+        const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+        return c.created_at.startsWith(y)
+      } else if (dateFilter.preset === "7d") {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+        return c.created_at >= sevenDaysAgo
+      } else if (dateFilter.preset === "30d") {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
+        return c.created_at >= thirtyDaysAgo
+      } else if (dateFilter.preset === "custom") {
+        const d = c.created_at.slice(0, 10)
+        if (dateFilter.startDate && d < dateFilter.startDate) return false
+        if (dateFilter.endDate && d > dateFilter.endDate) return false
+        return true
+      }
+      return true
+    })
+  }, [convData, dateFilter])
+
   const activeCount = convData.filter(
     (c) =>
       c.status === "active" ||
@@ -170,24 +162,10 @@ export default function AIAgentScreen({
     ? `${((orders.filter((o) => o.via_ai).length / convData.length) * 100).toFixed(1)}%`
     : "0%"
 
-  const [dateRange, setDateRange] = useState("Last 7 Days")
-  const cycleDateRange = () => {
-    const list = ["Today", "Last 7 Days", "Last 30 Days", "All Time"]
-    const next = list[(list.indexOf(dateRange) + 1) % list.length]
-    setDateRange(next)
-  }
-
   const handleOpen = (id: string) => {
     setSelectedId(id)
-    // desktop -> split, mobile -> drawer fallback
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setDrawerOpen(true)
-    } else {
-      setSplitOpen(true)
-    }
+    setDrawerOpen(true)
   }
-
-  const handleCloseSplit = () => setSplitOpen(false)
 
   const handleStatusChange = async (newStatus: ConversationStatus) => {
     if (!selected) return
@@ -195,50 +173,70 @@ export default function AIAgentScreen({
     setConvData((prev) =>
       prev.map((c) => (c.id === selected.id ? { ...c, status: newStatus } : c)),
     )
+    toast.success(`Conversation status updated to ${newStatus}`)
   }
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || !selected) return
-    const msgText = inputValue.trim()
-    setInputValue("")
-    const newMsg: ChatMessage = {
-      id: `m_${Date.now()}`,
-      role: "ai",
-      text: msgText,
-      at: new Date().toISOString(),
+  const handleExportConversations = () => {
+    if (filteredConversations.length === 0) {
+      toast.error("No conversations to export")
+      return
     }
-    const updatedMsgs = [...(selected.messages || []), newMsg]
-    const updated: Conversation = {
-      ...selected,
-      last_message: msgText,
-      messages: updatedMsgs,
-    }
-    setConvData((prev) =>
-      prev.map((c) => (c.id === selected.id ? updated : c)),
+    const headers = [
+      "ID",
+      "Customer",
+      "Type",
+      "Status",
+      "Last Message",
+      "Amount Paise",
+      "Created At",
+      "Updated At",
+    ]
+    const rows = filteredConversations.map((c) => [
+      c.id,
+      `"${(c.customer_name || "").replace(/"/g, '""')}"`,
+      c.type,
+      c.status,
+      `"${(c.last_message || "").replace(/"/g, '""')}"`,
+      c.amount_paise || 0,
+      c.created_at,
+      c.updated_at,
+    ])
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute(
+      "download",
+      `ai_conversations_${new Date().toISOString().slice(0, 10)}.csv`,
     )
-    await upsertConversation({
-      external_id: selected.id,
-      merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
-      customer_name: selected.customer_name,
-      last_message: msgText,
-      status: selected.status,
-      messages: updatedMsgs,
-    })
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    toast.success(`Exported ${filteredConversations.length} conversations`)
   }
 
-  if (loading) {
+  if (externalLoading || isLoading) {
     return (
       <div className="space-y-3 bg-muted/30 -m-6 p-6">
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center">
           <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-9 w-32" />
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-24" />
+            <Skeleton className="h-9 w-9" />
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-72 rounded-xl" />
+        <div className="grid gap-3 lg:grid-cols-[70%_30%]">
+          <Skeleton className="h-80 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
+        </div>
       </div>
     )
   }
@@ -251,7 +249,7 @@ export default function AIAgentScreen({
             Failed to load AI Agent
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{error}</p>
-          <Button className="mt-4" onClick={() => location.reload()}>
+          <Button className="mt-4" onClick={loadData}>
             Retry
           </Button>
         </Card>
@@ -260,35 +258,6 @@ export default function AIAgentScreen({
   }
 
   const empty = convData.length === 0
-
-  if (empty) {
-    return (
-      <div className="bg-muted/30 -m-6 p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
-              AI Agent
-            </h1>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Monitor how your AI helps customers and drives more sales.
-            </p>
-          </div>
-        </div>
-        <Card className="mt-6 rounded-xl bg-card p-10 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <MessageCircle className="size-6" />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-foreground">
-            No conversations yet
-          </h3>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            Your AI will appear here once products are imported and customers
-            start chatting.
-          </p>
-        </Card>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-3 bg-muted/30 -m-6 p-6">
@@ -303,17 +272,28 @@ export default function AIAgentScreen({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" className="h-9 rounded-lg bg-card" onClick={cycleDateRange}>
-            {dateRange}
-            <ChevronDown className="size-4 opacity-60" />
-          </Button>
-          <Button variant="outline" className="h-9 rounded-lg bg-card">
-            <Download className="size-4" />
+          <DateRangePicker value={dateFilter} onChange={setDateFilter} />
+          <Button
+            variant="outline"
+            className="h-9 rounded-lg bg-card"
+            onClick={handleExportConversations}
+          >
+            <Download className="size-4 mr-1.5" />
             Export
           </Button>
           <Button
+            variant="outline"
+            size="icon"
+            className="size-9 rounded-lg bg-card"
+            onClick={loadData}
+            disabled={isRefreshing}
+            title="Refresh conversations"
+          >
+            <RotateCw className={cn("size-4", isRefreshing && "animate-spin")} />
+          </Button>
+          <Button
             className="h-9 rounded-lg"
-            onClick={() => handleOpen((convData[0]?.id ?? "demo"))}
+            onClick={() => handleOpen(filteredConversations[0]?.id ?? convData[0]?.id ?? "demo")}
           >
             Test AI
           </Button>
@@ -369,11 +349,25 @@ export default function AIAgentScreen({
         />
       </div>
 
-      {/* Conditional layout: normal 70/30 when closed, split [1fr_380px] full-height when open */}
-      {!splitOpen ? (
+      {empty ? (
+        <Card className="mt-4 rounded-xl bg-card p-10 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <MessageCircle className="size-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-foreground">
+            No conversations yet
+          </h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            Your AI will appear here once products are imported and customers
+            start chatting.
+          </p>
+        </Card>
+      ) : (
+        /* 70/30 Grid Layout with clean Slide-Over Drawer */
         <div className="grid gap-3 lg:grid-cols-[70%_30%]">
           {/* Left — Live Conversations */}
-          <LiveConversationsCard onOpen={handleOpen} convData={convData} />
+          <LiveConversationsCard onOpen={handleOpen} convData={filteredConversations} />
+
           {/* Right — needs attention */}
           <div className="space-y-3">
             <Card className="rounded-xl bg-card">
@@ -411,201 +405,14 @@ export default function AIAgentScreen({
             </Card>
           </div>
         </div>
-      ) : (
-        <div className="grid gap-3 lg:grid-cols-[1fr_380px]">
-          {/* Left — store visible, scrollable full-height */}
-          <div className="min-w-0 xl:h-[calc(100vh-140px)] xl:overflow-auto xl:pr-1">
-            <LiveConversationsCard
-              onOpen={handleOpen}
-              selectedId={selectedId}
-              splitMode
-              convData={convData}
-            />
-          </div>
-
-          {/* Right — full-height AI workspace panel */}
-          <Card className="flex flex-col overflow-hidden rounded-xl bg-card border shadow-sm xl:h-[calc(100vh-140px)] xl:sticky xl:top-3">
-            {/* Header — Real Customer Info & Live Status */}
-            <div className="shrink-0 border-b bg-card px-4 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Avatar className="size-9">
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      <Bot className="size-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground truncate">
-                        {selected?.customer_name || "Customer Conversation"}
-                      </span>
-                      <Badge
-                        variant={statusVariant[selected?.status ?? "active"]}
-                        className="rounded-full px-2 py-0 text-[11px] shrink-0"
-                      >
-                        {statusLabel[selected?.status ?? "active"]}
-                      </Badge>
-                    </div>
-                    <div className="text-[11px] leading-4 text-muted-foreground truncate">
-                      {selected ? sourceLabel(selected.type) : "AI Assistant"} ·{" "}
-                      Protocol: {selected?.protocol || "direct_web"}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {selected?.status === "active" ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs rounded-full"
-                      onClick={() => handleStatusChange("completed")}
-                    >
-                      Mark Resolved
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs rounded-full"
-                      onClick={() => handleStatusChange("active")}
-                    >
-                      Reopen
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={handleCloseSplit}
-                    aria-label="Close workspace"
-                  >
-                    <XIcon className="size-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Sparkles className="size-3" /> Live assistant workspace
-                </span>
-                <span className="opacity-40">·</span>
-                <span>
-                  Started{" "}
-                  {selected?.created_at
-                    ? new Date(selected.created_at).toLocaleString("en-IN", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })
-                    : "Recently"}
-                </span>
-              </div>
-            </div>
-
-            {/* Message thread — Live dynamic conversation */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-muted/20">
-              <MessageGroup>
-                {selected?.messages && selected.messages.length > 0 ? (
-                  selected.messages.map((m: any, idx: number) => {
-                    const isCustomer = m.role === "customer" || m.role === "user"
-                    return (
-                      <Message
-                        key={m.id || idx}
-                        align={isCustomer ? "end" : "start"}
-                      >
-                        <MessageAvatar>
-                          <Avatar className="size-7">
-                            <AvatarFallback
-                              className={
-                                isCustomer
-                                  ? "bg-muted text-foreground"
-                                  : "bg-primary text-primary-foreground"
-                              }
-                            >
-                              {isCustomer ? (
-                                <User className="size-3.5" />
-                              ) : (
-                                <Bot className="size-3.5" />
-                              )}
-                            </AvatarFallback>
-                          </Avatar>
-                        </MessageAvatar>
-                        <MessageContent
-                          className={isCustomer ? "items-end" : "items-start"}
-                        >
-                          <Bubble
-                            variant={isCustomer ? "muted" : "default"}
-                            align={isCustomer ? "end" : "start"}
-                          >
-                            <BubbleContent className="text-sm whitespace-pre-wrap">
-                              {m.text}
-                            </BubbleContent>
-                          </Bubble>
-                          <span className="text-[10px] text-muted-foreground">
-                            {m.at
-                              ? new Date(m.at).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "Just now"}
-                          </span>
-                        </MessageContent>
-                      </Message>
-                    )
-                  })
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-                    <Bot className="size-10 mb-2 opacity-40" />
-                    <p className="text-sm font-medium">No messages recorded</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Customer has connected to this session.
-                    </p>
-                  </div>
-                )}
-              </MessageGroup>
-            </div>
-
-            {/* Input at bottom */}
-            <div className="shrink-0 border-t bg-card px-3 py-3">
-              <div className="flex items-center gap-2">
-                <Input
-                  placeholder="Reply as Merchant Agent…"
-                  className="h-9 flex-1 rounded-full bg-muted/40"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSendMessage()
-                  }}
-                />
-                <Button
-                  size="icon"
-                  className="size-9 shrink-0 rounded-full"
-                  onClick={handleSendMessage}
-                  aria-label="Send"
-                >
-                  <Send className="size-4" />
-                </Button>
-              </div>
-              <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Bot className="size-3" /> Press Enter to send live reply to customer
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 rounded-full text-[11px]"
-                  onClick={handleCloseSplit}
-                >
-                  Close workspace
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
       )}
 
-      {/* Mobile fallback drawer — hidden on md via SheetContent md:hidden, keep for small screens */}
+      {/* Slide-over Right Drawer for Conversation Details */}
       <ConversationDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         conversation={selected}
+        onStatusChange={handleStatusChange}
       />
     </div>
   )
@@ -613,13 +420,9 @@ export default function AIAgentScreen({
 
 function LiveConversationsCard({
   onOpen,
-  selectedId,
-  splitMode,
   convData = [],
 }: {
   onOpen: (id: string) => void
-  selectedId?: string | null
-  splitMode?: boolean
   convData?: Conversation[]
 }) {
   return (
@@ -628,11 +431,11 @@ function LiveConversationsCard({
         <div>
           <CardTitle className="text-base">Live Conversations</CardTitle>
           <CardDescription className="text-xs">
-            Latest 5 · AI Assistant + AI Agent
+            Latest {Math.min(10, convData.length)} · AI Assistant + AI Agent
           </CardDescription>
         </div>
         <Badge variant="secondary" className="rounded-full text-[11px]">
-          {Math.min(5, convData.length)} of {convData.length}
+          {Math.min(10, convData.length)} of {convData.length}
         </Badge>
       </CardHeader>
       <div className="overflow-x-auto">
@@ -660,81 +463,90 @@ function LiveConversationsCard({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {convData.slice(0, 5).map((c) => (
-              <TableRow
-                key={c.id}
-                className={
-                  "hover:bg-muted/20 " +
-                  (selectedId === c.id && splitMode ? "bg-primary/[0.04]" : "")
-                }
-              >
-                <TableCell className="px-4 py-3">
-                  <div className="text-sm font-medium text-foreground">
-                    {c.customer_name}
-                  </div>
-                  <div className="max-w-[18rem] truncate text-xs text-muted-foreground">
-                    {c.last_message}
-                  </div>
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <Badge
-                    variant={
-                      c.type === "agent_to_agent" ? "default" : "secondary"
-                    }
-                    className="rounded-full text-[11px]"
-                  >
-                    {sourceLabel(c.type)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <Badge
-                    variant={statusVariant[c.status]}
-                    className="rounded-full px-2.5 py-0 text-[11px]"
-                  >
-                    {statusLabel[c.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="px-3 py-3 text-right text-sm font-medium tabular-nums text-foreground">
-                  {c.amount_paise ? formatPrice(c.amount_paise) : "—"}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell px-3 py-3 text-xs text-muted-foreground">
-                  {new Date(c.updated_at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}{" "}
-                  ·{" "}
-                  {new Date(c.updated_at).toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                  })}
-                </TableCell>
-                <TableCell className="px-4 py-3 text-right">
-                  <Button
-                    variant={
-                      selectedId === c.id && splitMode ? "default" : "outline"
-                    }
-                    size="sm"
-                    className="h-7 rounded-md"
-                    onClick={() => onOpen(c.id)}
-                  >
-                    <Eye className="size-3.5" /> Open
-                  </Button>
+            {convData.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground text-sm">
+                  No conversations match the current date filter.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              convData.slice(0, 10).map((c) => (
+                <TableRow
+                  key={c.id}
+                  className="hover:bg-muted/20 cursor-pointer"
+                  onClick={() => onOpen(c.id)}
+                >
+                  <TableCell className="px-4 py-3">
+                    <div className="text-sm font-medium text-foreground">
+                      {c.customer_name}
+                    </div>
+                    <div className="max-w-[18rem] truncate text-xs text-muted-foreground">
+                      {c.last_message}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <Badge
+                      variant={
+                        c.type === "agent_to_agent" ? "default" : "secondary"
+                      }
+                      className="rounded-full text-[11px]"
+                    >
+                      {sourceLabel(c.type)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <Badge
+                      variant={statusVariant[c.status]}
+                      className="rounded-full px-2.5 py-0 text-[11px]"
+                    >
+                      {statusLabel[c.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-3 py-3 text-right text-sm font-medium tabular-nums text-foreground">
+                    {c.amount_paise ? formatPrice(c.amount_paise) : "—"}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell px-3 py-3 text-xs text-muted-foreground">
+                    {new Date(c.updated_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}{" "}
+                    ·{" "}
+                    {new Date(c.updated_at).toLocaleDateString("en-GB", {
+                      day: "2-digit",
+                      month: "short",
+                    })}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-md"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onOpen(c.id)
+                      }}
+                    >
+                      <Eye className="size-3.5 mr-1" /> View Details
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
       <div className="flex items-center justify-between border-t bg-card px-4 py-3 text-xs text-muted-foreground">
-        <span>Showing {Math.min(5, convData.length)} of {convData.length} conversations</span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 rounded-full bg-card"
-          onClick={() => onOpen((convData[0]?.id ?? "demo"))}
-        >
-          Open latest
-        </Button>
+        <span>Showing {Math.min(10, convData.length)} of {convData.length} conversations</span>
+        {convData.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 rounded-full bg-card"
+            onClick={() => onOpen(convData[0]?.id ?? "demo")}
+          >
+            View Latest
+          </Button>
+        )}
       </div>
     </Card>
   )

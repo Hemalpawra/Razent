@@ -26,6 +26,7 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
+  DrawerBody,
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -35,7 +36,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
-import { Input } from "@/components/ui/input"
 import { formatPrice } from "@/lib/types/product"
 import type { Conversation } from "@/lib/types/conversation"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -159,10 +159,12 @@ export default function ConversationDrawer({
   open,
   onClose,
   conversation,
+  onStatusChange,
 }: {
   open: boolean
   onClose: () => void
   conversation: Conversation | null
+  onStatusChange?: (status: "active" | "completed") => void
 }) {
   const isMobile = useIsMobile()
 
@@ -176,12 +178,30 @@ export default function ConversationDrawer({
 
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
-      <DrawerContent className="p-6">
-        <DrawerHeader>
-          <DrawerTitle className="text-lg font-heading font-medium tracking-tight">
-            Agent Conversation
-          </DrawerTitle>
-          <DrawerDescription>Chat with {displayType}</DrawerDescription>
+      <DrawerContent className="p-0">
+        <DrawerHeader className="p-4 border-b">
+          <div className="flex items-center justify-between pr-8">
+            <div>
+              <DrawerTitle className="text-lg font-heading font-medium tracking-tight">
+                Conversation Details
+              </DrawerTitle>
+              <DrawerDescription>Session #{conversation?.id}</DrawerDescription>
+            </div>
+            {conversation && onStatusChange && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs rounded-full"
+                onClick={() =>
+                  onStatusChange(
+                    conversation.status === "active" ? "completed" : "active",
+                  )
+                }
+              >
+                {conversation.status === "active" ? "Mark Resolved" : "Reopen"}
+              </Button>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -193,7 +213,7 @@ export default function ConversationDrawer({
           </Button>
         </DrawerHeader>
 
-        <div className="mt-6 space-y-4">
+        <DrawerBody className="p-4 space-y-4">
           <div className="border-b bg-card px-4 py-4">
             <div className="flex items-center justify-between">
               <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
@@ -305,18 +325,6 @@ export default function ConversationDrawer({
                       )
                     })
                   )}
-                </div>
-
-                <Separator />
-
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="Type a message…"
-                    className="h-9 flex-1 rounded-full bg-card"
-                  />
-                  <Button size="icon" className="size-9 rounded-full">
-                    <Send className="size-4" />
-                  </Button>
                 </div>
               </TabsContent>
 
@@ -559,7 +567,7 @@ export default function ConversationDrawer({
               Take Over
             </Button>
           </div>
-        </div>
+        </DrawerBody>
       </DrawerContent>
     </Drawer>
   )

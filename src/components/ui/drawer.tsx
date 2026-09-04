@@ -25,10 +25,11 @@ function DrawerContent({
 }) {
   return (
     <DrawerPrimitive.Portal>
+      <DrawerPrimitive.Backdrop className="fixed inset-0 bg-black/40 z-40 transition-opacity duration-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0" />
       <DrawerPrimitive.Popup
         data-slot="drawer-content"
         className={cn(
-          "fixed right-0 top-0 h-full w-[25vw] min-w-[380px] max-w-[420px] z-40 flex flex-col bg-popover text-popover-foreground border-l border-border overflow-hidden",
+          "fixed right-0 top-0 h-full w-[92vw] sm:w-[440px] max-w-[480px] z-50 flex flex-col bg-popover text-popover-foreground border-l border-border shadow-2xl overflow-hidden",
           "transition-transform duration-200 ease-in-out",
           "data-[state=open]:translate-x-0 data-[state=closed]:translate-x-full",
           className,

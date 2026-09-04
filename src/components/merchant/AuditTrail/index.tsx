@@ -5,18 +5,19 @@ import {
   ChevronDownIcon,
   DownloadIcon,
   RotateCcwIcon,
+  RotateCw,
   ChevronRightIcon,
   ChevronDownIcon as ChevronDownSmallIcon,
   EyeIcon,
 } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
-
 import { Button } from "@/components/ui/button"
-
 import { Badge } from "@/components/ui/badge"
-
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
+import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRangePicker"
+import { cn } from "@/lib/utils"
 
 import {
   Select,
@@ -59,21 +60,21 @@ function variant(
 
 export default function AuditTrailScreen() {
   const [q, setQ] = useState("")
-
   const [eventFilter, setEventFilter] = useState<string>("all")
-
   const [resultFilter, setResultFilter] = useState<string>("all")
-
   const [actorFilter, setActorFilter] = useState<string>("all")
+  const [dateFilter, setDateFilter] = useState<DateRangeValue>({
+    preset: "all",
+    label: "All Time",
+    startDate: null,
+    endDate: null,
+  })
+  const [loading, setLoading] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-
-  const [selectedSession, setSelectedSession] = useState<AuditSession | null>(
-    null,
-  )
-
+  const [selectedSession, setSelectedSession] = useState<AuditSession | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null)
-
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const isMobile = useIsMobile()
@@ -84,29 +85,38 @@ export default function AuditTrailScreen() {
 
   const [auditData, setAuditData] = useState<AuditSession[]>([])
 
+  const loadAuditData = async (isManual = false) => {
+    if (isManual) setIsRefreshing(true)
+    try {
+      const data = await listAuditSessions()
+      setAuditData(data)
+    } finally {
+      if (isManual) setTimeout(() => setIsRefreshing(false), 500)
+    }
+  }
+
   useEffect(() => {
-    listAuditSessions().then(setAuditData).catch(() => setAuditData([]))
+    setLoading(true)
+    listAuditSessions()
+      .then((data) => {
+        setAuditData(data)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [])
 
   const totalSessions = auditData.length
-
   const totalEvents = auditData.reduce((a, s) => a + s.event_count, 0)
-
   const success = auditData
     .filter((s) => s.status === "Success")
     .reduce((a, s) => a + s.event_count, 0)
-
   const failed = auditData.filter((s) => s.status === "Failed").length
-
-  const critical = auditData.filter(
-    (s) => s.status === "Critical",
-  ).length
+  const critical = auditData.filter((s) => s.status === "Critical").length
 
   const filtered = useMemo(() => {
     return auditData.filter((s) => {
       if (q.trim()) {
         const n = q.toLowerCase()
-
         if (
           !s.session_id.toLowerCase().includes(n) &&
           !(s.order_id ?? "").toLowerCase().includes(n) &&
@@ -131,21 +141,94 @@ export default function AuditTrailScreen() {
       )
         return false
 
+      // Date range filtering
+      const sessionDate = s.created_at || ""
+      if (dateFilter.preset === "today") {
+        const today = new Date().toISOString().slice(0, 10)
+        if (!sessionDate.startsWith(today)) return false
+      } else if (dateFilter.preset === "yesterday") {
+        const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+        if (!sessionDate.startsWith(y)) return false
+      } else if (dateFilter.preset === "7d") {
+        const cutoff = new Date(Date.now() - 7 * 86400000).toISOString()
+        if (sessionDate < cutoff) return false
+      } else if (dateFilter.preset === "30d") {
+        const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
+        if (sessionDate < cutoff) return false
+      } else if (dateFilter.preset === "custom") {
+        const d = sessionDate.slice(0, 10)
+        if (dateFilter.startDate && d < dateFilter.startDate) return false
+        if (dateFilter.endDate && d > dateFilter.endDate) return false
+      }
+
       return true
     })
-  }, [auditData, q, eventFilter, resultFilter, actorFilter])
+  }, [auditData, q, eventFilter, resultFilter, actorFilter, dateFilter])
+
+  const handleExportLogs = () => {
+    if (!auditData || auditData.length === 0) return
+    const headers = ["Session ID", "Order ID", "Customer", "Started At", "Status", "Events Count", "Last Event"]
+    const rows = filtered.map((s) => [
+      s.session_id,
+      s.order_id || "—",
+      `"${(s.customer || "Customer").replace(/"/g, '""')}"`,
+      s.created_at ? new Date(s.created_at).toLocaleString("en-IN") : "—",
+      s.status,
+      s.event_count,
+      `"${(s.last_event || "").replace(/"/g, '""')}"`,
+    ])
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `audit-trail-export-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
 
   const openDrawer = (s: AuditSession, e: AuditEvent | null = null) => {
     setSelectedSession(s)
-
     setSelectedEvent(e)
+    setDrawerOpen(true)
+  }
 
-    if (isMobile) {
-      openAuditDrawer(s.session_id)
-      setActiveScreen("audit_detail")
-    } else {
-      setDrawerOpen(true)
-    }
+  if (loading && auditData.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <Skeleton className="h-9 w-48 rounded-lg" />
+            <Skeleton className="h-4 w-72 mt-2 rounded" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32 rounded-lg" />
+            <Skeleton className="h-9 w-24 rounded-lg" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <Card className="rounded-xl bg-card p-4 space-y-4">
+          <div className="flex justify-between">
+            <Skeleton className="h-9 w-64 rounded-lg" />
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-28 rounded-lg" />
+              <Skeleton className="h-9 w-28 rounded-lg" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-md" />
+            ))}
+          </div>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -161,11 +244,12 @@ export default function AuditTrailScreen() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="h-9 rounded-lg bg-card">
-            All Time
-            <ChevronDownIcon className="size-4 opacity-60" />
-          </Button>
-          <Button variant="outline" className="h-9 rounded-lg bg-card">
+          <DateRangePicker value={dateFilter} onChange={setDateFilter} />
+          <Button
+            variant="outline"
+            className="h-9 rounded-lg bg-card gap-1.5"
+            onClick={handleExportLogs}
+          >
             <DownloadIcon className="size-4" />
             Export
           </Button>
@@ -270,15 +354,19 @@ export default function AuditTrailScreen() {
                 <SelectItem value="system">System</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 rounded-lg bg-card"
-            >
-              All Time
-            </Button>
+            <DateRangePicker value={dateFilter} onChange={setDateFilter} />
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 bg-card shrink-0"
+              aria-label="Refresh"
+              disabled={isRefreshing}
+              onClick={() => loadAuditData(true)}
+            >
+              <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -288,14 +376,16 @@ export default function AuditTrailScreen() {
                 setEventFilter("all")
                 setResultFilter("all")
                 setActorFilter("all")
+                setDateFilter({ preset: "all", label: "All Time", startDate: null, endDate: null })
               }}
             >
-              <RotateCcwIcon className="size-3.5" /> Reset
+              <RotateCcwIcon className="size-3.5 mr-1" /> Reset
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="h-9 rounded-lg border-primary text-primary hover:bg-primary/5"
+              className="h-9 rounded-lg border-primary text-primary hover:bg-primary/5 gap-1.5"
+              onClick={handleExportLogs}
             >
               <DownloadIcon className="size-3.5" /> Export logs
             </Button>

@@ -23,6 +23,8 @@ import {
 import { Separator } from "@/components/ui/separator"
 
 import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/utils"
+import { ThemeToggle } from "@/components/shared/ThemeToggle"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
@@ -260,6 +262,7 @@ export default function StoreHome() {
 
   useEffect(() => {
     let alive = true
+    setLoading(true)
     listProducts()
       .then((data) => {
         if (alive && data && data.length > 0) {
@@ -267,6 +270,9 @@ export default function StoreHome() {
         }
       })
       .catch(() => {})
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
 
     // Realtime subscription: if merchant adds/updates a 13th product, it reflects immediately
     const unsub = subscribeToProducts(() => {
@@ -944,7 +950,7 @@ export default function StoreHome() {
               onClick={() => setAiOpen((v) => !v)}
               className="hidden sm:inline-flex"
             >
-              <Sparkles className="size-4" /> Ask AI
+              <Sparkles className="size-4 mr-1.5" /> AI Assistant
             </Button>
             <Button
               variant="ghost"
@@ -959,6 +965,7 @@ export default function StoreHome() {
                 </span>
               )}
             </Button>
+            <ThemeToggle />
             <Button variant="ghost" size="icon">
               <User className="size-5" />
             </Button>
@@ -979,22 +986,9 @@ export default function StoreHome() {
         </div>
       </header>
 
-      {/* Split layout when AI open — workspace mode: no footer, full-height 2-column */}
-      <div
-        className={
-          aiOpen
-            ? "mx-auto grid max-w-6xl grid-cols-1 gap-0 xl:grid-cols-[1fr_380px]"
-            : "mx-auto max-w-6xl"
-        }
-      >
-        {/* LEFT: store — stays visible and usable */}
-        <div
-          className={
-            aiOpen
-              ? "min-w-0 xl:h-[calc(100vh-56px)] xl:overflow-auto"
-              : "min-w-0"
-          }
-        >
+      {/* Store Container */}
+      <div className="mx-auto max-w-6xl">
+        <div className="min-w-0">
           {/* Breadcrumb when listing/detail */}
           {(view === "listing" || view === "detail") && (
             <div className="flex items-center gap-1.5 px-4 py-3 text-xs text-muted-foreground">
@@ -1153,7 +1147,22 @@ export default function StoreHome() {
                   </div>
                 </div>
                 <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {featured.map((p) => (
+                  {loading ? (
+                    Array.from({ length: 4 }).map((_, i) => (
+                      <Card key={i} className="flex flex-col overflow-hidden">
+                        <Skeleton className="aspect-[4/3] w-full" />
+                        <div className="p-3 space-y-2">
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-3 w-1/2" />
+                          <div className="flex justify-between items-center pt-2">
+                            <Skeleton className="h-5 w-16" />
+                            <Skeleton className="h-8 w-20" />
+                          </div>
+                        </div>
+                      </Card>
+                    ))
+                  ) : (
+                    featured.map((p) => (
                     <Card
                       key={p.id}
                       className="group flex flex-col overflow-hidden"
@@ -1217,7 +1226,8 @@ export default function StoreHome() {
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                  ))
+                )}
                 </div>
               </section>
 
@@ -1832,31 +1842,54 @@ export default function StoreHome() {
               </footer>
             )}
         </div>
+      </div>
 
-        {/* RIGHT: AI Assistant — full-height panel, not a drawer/overlay */}
-        {aiOpen && (
-          <div className="flex min-h-[520px] flex-col border bg-card xl:sticky xl:top-0 xl:h-[calc(100vh-56px)] xl:border-l xl:border-t-0">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Avatar className="size-8">
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    <Sparkles className="size-4" />
-                  </AvatarFallback>
-                </Avatar>
+      {/* AI Assistant - Desktop Slide-over Drawer & Mobile/Tablet Dedicated Screen */}
+      {aiOpen && (
+        <>
+          {/* Backdrop for Desktop Drawer */}
+          <div
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs transition-opacity hidden lg:block"
+            onClick={() => setAiOpen(false)}
+          />
+
+          {/* Drawer container: right slide-over drawer on lg/desktop, full-screen on mobile/tablet */}
+          <aside
+            className={cn(
+              "fixed z-50 flex flex-col bg-card shadow-2xl border-border",
+              // Mobile & Tablet: full screen dedicated view
+              "inset-0 lg:inset-auto lg:right-0 lg:top-0 lg:h-full lg:w-[440px] lg:max-w-[95vw] lg:border-l lg:animate-in lg:slide-in-from-right lg:duration-200"
+            )}
+            role="dialog"
+            aria-modal="true"
+            aria-label="AI Shopping Assistant"
+          >
+            {/* Header */}
+            <div className="flex shrink-0 items-center justify-between border-b bg-card px-4 py-3 sm:py-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="relative">
+                  <Avatar className="size-9 ring-1 ring-primary/20">
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      <Sparkles className="size-4" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card" />
+                </div>
                 <div>
-                  <div className="text-sm font-semibold leading-none">
-                    AI Assistant
+                  <div className="text-sm font-semibold leading-tight text-foreground flex items-center gap-1.5">
+                    <span>AI Assistant</span>
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal">Instant</Badge>
                   </div>
-                  <div className="text-[11px] text-emerald-600">
-                    ● Online · {storeProfile.storeName}
+                  <div className="text-[11px] text-muted-foreground">
+                    Online · {storeProfile.storeName}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-1">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground rounded-full"
                   onClick={() => {
                     setAiOpen(false)
                     updateConversationStatus(convExternalId, "resolved").catch(() => {})
@@ -1867,18 +1900,17 @@ export default function StoreHome() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-7"
-                  onClick={() => {
-                    setAiOpen(false)
-                    updateConversationStatus(convExternalId, "resolved").catch(() => {})
-                  }}
+                  className="size-8 rounded-full hover:bg-muted"
+                  onClick={() => setAiOpen(false)}
+                  aria-label="Close Assistant"
                 >
                   <X className="size-4" />
                 </Button>
               </div>
             </div>
 
-            <div className="flex-1 space-y-4 overflow-auto p-4">
+            {/* Chat Body - Scrollable */}
+            <div className="flex-1 space-y-4 overflow-y-auto p-4 overscroll-contain">
               {aiMsgs.map((m, i) => (
                 <div key={i}>
                   <Message align={m.role === "user" ? "end" : "start"}>
@@ -1919,36 +1951,41 @@ export default function StoreHome() {
                   {m.products && m.products.length > 0 && (
                     <div className="mt-3 grid gap-2">
                       {m.products.map((p) => (
-                        <Card key={p.id} className="overflow-hidden">
+                        <Card key={p.id} className="overflow-hidden border bg-card/80">
                           <CardContent className="flex gap-3 p-3">
                             <img
                               src={p.image_url}
                               alt={p.title}
-                              className="size-14 rounded-md object-cover"
+                              className="size-14 rounded-md object-cover shrink-0"
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium leading-tight">
+                              <div className="truncate text-sm font-medium leading-tight text-foreground">
                                 {p.title}
                               </div>
                               <div className="text-xs text-muted-foreground line-clamp-1">
                                 {p.description}
                               </div>
-                              <div className="mt-1 flex items-center justify-between">
-                                <span className="text-sm font-semibold">
+                              <div className="mt-1.5 flex items-center justify-between">
+                                <span className="text-sm font-semibold text-foreground">
                                   {formatPrice(p.price_paise)}
                                 </span>
                                 <div className="flex gap-1.5">
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-7 px-2 text-xs"
-                                    onClick={() => openProduct(p.id)}
+                                    className="h-7 px-2.5 text-xs rounded-full"
+                                    onClick={() => {
+                                      openProduct(p.id)
+                                      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                                        setAiOpen(false)
+                                      }
+                                    }}
                                   >
                                     View
                                   </Button>
                                   <Button
                                     size="sm"
-                                    className="h-7 px-2 text-xs"
+                                    className="h-7 px-2.5 text-xs rounded-full"
                                     onClick={() => addToCart(p.id)}
                                   >
                                     Add
@@ -1959,9 +1996,11 @@ export default function StoreHome() {
                           </CardContent>
                         </Card>
                       ))}
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-1.5 pt-1">
                         <Button
                           size="sm"
+                          variant="secondary"
+                          className="h-7 text-xs rounded-full"
                           onClick={() => handleAskAI("Compare these")}
                         >
                           Compare
@@ -1969,6 +2008,7 @@ export default function StoreHome() {
                         <Button
                           size="sm"
                           variant="outline"
+                          className="h-7 text-xs rounded-full"
                           onClick={() => handleAskAI("Cheaper alternative")}
                         >
                           Cheaper option
@@ -1984,7 +2024,7 @@ export default function StoreHome() {
                           <span className="font-semibold text-emerald-700 dark:text-emerald-400">
                             Order Placed via Agentic UAP
                           </span>
-                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px]">
                             Auto-Settled
                           </Badge>
                         </div>
@@ -2005,7 +2045,7 @@ export default function StoreHome() {
                         <div className="flex gap-2 pt-1">
                           <Button
                             size="sm"
-                            className="flex-1 h-8 text-xs"
+                            className="flex-1 h-8 text-xs rounded-full"
                             onClick={() => {
                               setTrackPrefill({ orderId: m.checkoutCard!.orderId })
                               setView("track-order")
@@ -2017,7 +2057,7 @@ export default function StoreHome() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 h-8 text-xs"
+                            className="flex-1 h-8 text-xs rounded-full"
                             onClick={() => handleOpenInvoiceModal({ orderId: m.checkoutCard!.orderId })}
                           >
                             View Invoice
@@ -2028,47 +2068,21 @@ export default function StoreHome() {
                   )}
                 </div>
               ))}
-
-              {aiMsgs.length === 1 && (
-                <div className="space-y-2">
-                  <div className="text-xs font-medium text-muted-foreground">
-                    Try asking:
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SAMPLE_PROMPTS.map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => handleAskAI(s)}
-                        className="rounded-full border bg-muted px-3 py-1.5 text-xs hover:bg-accent"
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                  <Card className="bg-muted/50">
-                    <CardContent className="p-3 text-xs leading-5 text-muted-foreground">
-                      I can compare products, suggest a cheaper or better
-                      option, and narrow by budget or use-case — then add to
-                      cart for you.
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
             </div>
 
             {/* Quick in-chat checkout action bar when items are in cart */}
             {cart.length > 0 && (
-              <div className="mx-3 mb-2 flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs">
+              <div className="mx-3 mb-2 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs">
                 <div className="flex items-center gap-2">
                   <ShoppingCart className="size-4 text-emerald-600" />
                   <div>
-                    <span className="font-semibold">{cart.reduce((s, c) => s + c.qty, 0)} items in cart</span>
+                    <span className="font-semibold text-foreground">{cart.reduce((s, c) => s + c.qty, 0)} items in cart</span>
                     <p className="text-[11px] text-muted-foreground">{formatPrice(cartTotal)} total</p>
                   </div>
                 </div>
                 <Button
                   size="sm"
-                  className="h-8 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs"
+                  className="h-8 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-full"
                   disabled={aiCheckingOut}
                   onClick={handleChatCheckout}
                 >
@@ -2078,39 +2092,43 @@ export default function StoreHome() {
               </div>
             )}
 
-            <div className="border-t p-3">
+            {/* Bottom Input Area */}
+            <div className="shrink-0 border-t bg-card p-3 pb-safe">
               <div className="flex gap-2">
                 <Input
                   value={aiInput}
                   onChange={(e) => setAiInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAskAI()}
-                  placeholder="Ask for products, compare, or set a budget…"
-                  className="h-9"
+                  placeholder="Ask for groceries, compare, set budget…"
+                  className="h-10 rounded-full bg-muted/40 px-4 text-sm"
                 />
                 <Button
                   size="icon"
+                  className="size-10 shrink-0 rounded-full"
                   onClick={() => handleAskAI()}
                   disabled={!aiInput.trim()}
+                  aria-label="Send message"
                 >
                   <Send className="size-4" />
                 </Button>
               </div>
               <div className="mt-2 text-center text-[11px] text-muted-foreground">
-                AI can help choose — checkout is still your tap.
+                AI recommends groceries — order is placed with your consent.
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          </aside>
+        </>
+      )}
 
-      {/* Floating AI button when closed */}
+      {/* Floating AI Assistant Button when closed */}
       {!aiOpen && (
         <button
           onClick={() => setAiOpen(true)}
-          className="fixed bottom-5 right-5 z-40 grid size-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg ring-1 ring-primary/20 hover:bg-primary/90"
-          aria-label="Ask AI Assistant"
+          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-xl ring-1 ring-primary/20 hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
+          aria-label="AI Assistant"
         >
-          <Sparkles className="size-5" />
+          <Sparkles className="size-4 animate-pulse" />
+          <span>AI Assistant</span>
         </button>
       )}
 

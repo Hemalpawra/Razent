@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Razent AI shopping assistant — Edge Function.
  *

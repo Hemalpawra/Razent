@@ -105,10 +105,6 @@ export default function OrderDrawer({
       ]
     : []
 
-  if (isMobile) {
-    return null
-  }
-
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
       <DrawerContent>

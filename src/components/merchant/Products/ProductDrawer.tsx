@@ -33,6 +33,7 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
+  DrawerBody,
   DrawerFooter,
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
@@ -251,8 +252,8 @@ export default function ProductDrawer({
 
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
-      <DrawerContent className="p-6">
-        <DrawerHeader>
+      <DrawerContent className="p-0">
+        <DrawerHeader className="p-4 border-b">
           <DrawerTitle className="text-lg font-heading font-medium tracking-tight">
             Product Details
           </DrawerTitle>
@@ -268,7 +269,7 @@ export default function ProductDrawer({
           </Button>
         </DrawerHeader>
 
-        <div className="mt-6">
+        <DrawerBody className="p-4 space-y-4">
           {}
           <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-4">
             <div className="flex gap-3 min-w-0">
@@ -887,7 +888,7 @@ export default function ProductDrawer({
               <ArchiveIcon className="size-4" /> Archive
             </Button>
           </div>
-        </div>
+        </DrawerBody>
       </DrawerContent>
     </Drawer>
   )

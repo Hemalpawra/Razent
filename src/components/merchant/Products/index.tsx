@@ -3,6 +3,7 @@ import {
   Search,
   SlidersHorizontal,
   Download,
+  Upload,
   Plus,
   Eye,
   Trash2,
@@ -20,6 +21,9 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ImportModal } from "@/components/merchant/shared/ImportModal"
+import { cn } from "@/lib/utils"
 import {
   Table,
   TableHeader,
@@ -69,23 +73,91 @@ export default function ProductsScreen() {
   const [statusFilter, setStatusFilter] = useState<ProductStatus | "all">("all")
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
+  const loadProducts = async (isManual = false) => {
+    if (isManual) setIsRefreshing(true)
+    try {
+      const data = await listProducts()
+      setProducts(data)
+    } finally {
+      if (isManual) setTimeout(() => setIsRefreshing(false), 500)
+    }
+  }
+
   useEffect(() => {
     let alive = true
-    ;(async () => {
-      setLoading(true)
-      const data = await listProducts()
-      if (alive) {
-        setProducts(data)
-        setLoading(false)
-      }
-    })()
+    setLoading(true)
+    listProducts()
+      .then((data) => {
+        if (alive) {
+          setProducts(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (alive) setLoading(false)
+      })
     return () => {
       alive = false
     }
   }, [])
+
+  const handleExport = () => {
+    if (!products || products.length === 0) return
+    const headers = ["ID", "Title", "SKU", "Category", "Price (INR)", "Stock", "Status"]
+    const rows = filtered.map((p) => [
+      p.id,
+      `"${p.title.replace(/"/g, '""')}"`,
+      getSku(p),
+      p.category,
+      (p.price_paise / 100).toFixed(2),
+      p.stock,
+      p.status,
+    ])
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `products-export-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportProducts = async (rows: Record<string, string>[]) => {
+    let success = 0
+    let errors = 0
+    const { upsertProduct } = await import("@/lib/api/client")
+    for (const r of rows) {
+      try {
+        const title = r.title || r.Title || r.product_name || "Imported Product"
+        const price = Math.round(parseFloat(r.price || r.Price || "100") * 100)
+        const id = r.id || `prod_${Date.now()}_${Math.floor(Math.random() * 1000)}`
+        await upsertProduct({
+          id,
+          title,
+          description: r.description || `${title} from catalog`,
+          price_paise: price,
+          category: r.category || "Grocery",
+          stock: parseInt(r.stock || "50", 10),
+          status: (r.status || "active") as any,
+          tags: ["imported", r.category || "grocery"].filter(Boolean),
+          image_url: r.image_url || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=240&q=70&auto=format&fit=crop",
+        })
+        success++
+      } catch {
+        errors++
+      }
+    }
+    await loadProducts()
+    return { success, errors }
+  }
 
   const filtered = useMemo(
     () =>
@@ -132,6 +204,33 @@ export default function ProductsScreen() {
     } else {
       openProductDrawer(p.id)
     }
+  }
+
+  if (loading && products.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-col gap-1">
+          <Skeleton className="h-9 w-48 rounded-lg" />
+          <Skeleton className="h-4 w-72 mt-1 rounded" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <Card className="rounded-xl bg-card p-4 space-y-4">
+          <div className="flex justify-between">
+            <Skeleton className="h-9 w-64 rounded-lg" />
+            <Skeleton className="h-9 w-48 rounded-lg" />
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-md" />
+            ))}
+          </div>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -206,9 +305,10 @@ export default function ProductsScreen() {
               size="icon"
               className="size-9 rounded-md shrink-0"
               aria-label="Refresh"
-              onClick={() => window.location.reload()}
+              disabled={isRefreshing}
+              onClick={() => loadProducts(true)}
             >
-              <RotateCw className="size-4" />
+              <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
             </Button>
             <Button
               variant="outline"
@@ -222,12 +322,21 @@ export default function ProductsScreen() {
           <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="outline"
-              className="h-9 rounded-md border-primary text-primary hover:bg-primary/5 hover:text-primary"
+              className="h-9 rounded-md gap-1.5"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="size-4" />
+              Import
+            </Button>
+            <Button
+              variant="outline"
+              className="h-9 rounded-md border-primary text-primary hover:bg-primary/5 hover:text-primary gap-1.5"
+              onClick={handleExport}
             >
               <Download className="size-4" />
               Export
             </Button>
-            <Button className="h-9 rounded-md">
+            <Button className="h-9 rounded-md" onClick={() => openProductDrawer(null)}>
               <Plus className="size-4" />
               Add Product
             </Button>
@@ -521,9 +630,18 @@ export default function ProductsScreen() {
       </Card>
 
       <ProductDrawer
-        open={!isMobile && drawerProductId !== null}
+        open={drawerProductId !== null}
         onClose={closeProductDrawer}
         product={products.find((p) => p.id === drawerProductId) ?? null}
+      />
+
+      <ImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import Products"
+        description="Upload a CSV with product catalog items (columns: title, category, price, stock, sku)."
+        sampleCsv={`title,category,price,stock,sku\nOrganic Brown Eggs (6pcs),Dairy & Bakery,65,40,SKU-EGG6\nFresh Blueberries (125g),Fruits,180,25,SKU-BERRY\nTata Tea Gold (500g),Beverages,280,60,SKU-TEA500`}
+        onImport={handleImportProducts}
       />
     </div>
   )

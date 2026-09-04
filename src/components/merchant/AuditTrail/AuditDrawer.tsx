@@ -15,6 +15,7 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
+  DrawerBody,
   DrawerFooter,
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
@@ -87,8 +88,8 @@ export default function AuditDrawer({
 
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
-      <DrawerContent className="p-6">
-        <DrawerHeader>
+      <DrawerContent className="p-0">
+        <DrawerHeader className="p-4 border-b">
           <DrawerTitle className="text-lg font-heading font-medium tracking-tight">
             Audit Details
           </DrawerTitle>
@@ -104,7 +105,7 @@ export default function AuditDrawer({
           </Button>
         </DrawerHeader>
 
-        <div className="mt-6">
+        <DrawerBody className="p-4 space-y-4">
           <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-4">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -423,7 +424,7 @@ export default function AuditDrawer({
               </div>
             </>
           )}
-        </div>
+        </DrawerBody>
       </DrawerContent>
     </Drawer>
   )

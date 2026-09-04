@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Upload,
   IndianRupee,
   ShoppingCart,
   Clock3,
@@ -19,12 +20,13 @@ import {
 } from "lucide-react"
 
 import { Card } from "@/components/ui/card"
-
 import { Button } from "@/components/ui/button"
-
 import { Input } from "@/components/ui/input"
-
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRangePicker"
+import { ImportModal } from "@/components/merchant/shared/ImportModal"
+import { cn } from "@/lib/utils"
 
 import {
   Table,
@@ -147,12 +149,26 @@ export default function OrdersScreen() {
   const isMobile = useIsMobile()
 
   const [orders, setOrders] = useState<Order[] | null>(null)
-  const [dateRange, setDateRange] = useState<"all" | "today" | "7d" | "30d">("all")
+  const [dateFilter, setDateFilter] = useState<DateRangeValue>({
+    preset: "all",
+    label: "All Time",
+    startDate: null,
+    endDate: null,
+  })
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
-  const fetchOrders = () => {
-    import("@/lib/api/client").then(({ listOrders }) =>
-      listOrders().then((o: Order[]) => setOrders(o)).catch(() => setOrders([] as Order[]))
-    )
+  const fetchOrders = async () => {
+    setIsRefreshing(true)
+    try {
+      const { listOrders } = await import("@/lib/api/client")
+      const o = await listOrders()
+      setOrders(o)
+    } catch {
+      setOrders([] as Order[])
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500)
+    }
   }
 
   useEffect(() => {
@@ -173,28 +189,10 @@ export default function OrdersScreen() {
     : null
 
   const [q, setQ] = useState("")
-
   const [filterStatus, setFilterStatus] = useState<OrderStatus | "all">("all")
-
   const [page, setPage] = useState(1)
-
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE_DEFAULT)
-
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-
-  const cycleDateRange = () => {
-    const ranges: ("all" | "today" | "7d" | "30d")[] = ["all", "today", "7d", "30d"]
-    const nextIdx = (ranges.indexOf(dateRange) + 1) % ranges.length
-    setDateRange(ranges[nextIdx])
-    setPage(1)
-  }
-
-  const dateRangeLabel = {
-    all: "All Time",
-    today: "Today",
-    "7d": "Last 7 Days",
-    "30d": "Last 30 Days",
-  }[dateRange]
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -203,36 +201,47 @@ export default function OrdersScreen() {
       .filter((o: Order) => {
         if (filterStatus !== "all" && o.status !== filterStatus) return false
 
-        if (dateRange === "today") {
+        // Date range filtering
+        if (dateFilter.preset === "today") {
           const today = new Date().toISOString().slice(0, 10)
           if (!o.created_at.startsWith(today)) return false
-        } else if (dateRange === "7d") {
+        } else if (dateFilter.preset === "yesterday") {
+          const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+          if (!o.created_at.startsWith(y)) return false
+        } else if (dateFilter.preset === "7d") {
           const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
           if (o.created_at < sevenDaysAgo) return false
-        } else if (dateRange === "30d") {
+        } else if (dateFilter.preset === "30d") {
           const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
           if (o.created_at < thirtyDaysAgo) return false
+        } else if (dateFilter.preset === "custom") {
+          const d = o.created_at.slice(0, 10)
+          if (dateFilter.startDate && d < dateFilter.startDate) return false
+          if (dateFilter.endDate && d > dateFilter.endDate) return false
         }
 
         if (!term) return true
 
         return (
           o.id.toLowerCase().includes(term) ||
-          o.shipping_address.full_name.toLowerCase().includes(term) ||
-          o.shipping_address.email.toLowerCase().includes(term) ||
+          (o.shipping_address?.full_name || "").toLowerCase().includes(term) ||
+          (o.shipping_address?.email || "").toLowerCase().includes(term) ||
+          (o.shipping_address?.phone || "").toLowerCase().includes(term) ||
           o.items.some((it) => it.title.toLowerCase().includes(term))
         )
       })
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [orders, q, filterStatus, dateRange])
+  }, [orders, q, filterStatus, dateFilter])
 
   const handleExport = () => {
     if (!orders || orders.length === 0) return
-    const headers = ["Order ID", "Date", "Customer", "Status", "Shipping Status", "Items Count", "Total (INR)"]
+    const headers = ["Order ID", "Date", "Customer", "Email", "Phone", "Status", "Shipping Status", "Items Count", "Total (INR)"]
     const rows = filtered.map((o) => [
       o.id,
       new Date(o.created_at).toLocaleString("en-IN"),
       `"${(o.shipping_address?.full_name || "Customer").replace(/"/g, '""')}"`,
+      `"${(o.shipping_address?.email || "").replace(/"/g, '""')}"`,
+      `"${(o.shipping_address?.phone || "").replace(/"/g, '""')}"`,
       o.status,
       o.shipping_status || "pending",
       o.items.length,
@@ -248,6 +257,45 @@ export default function OrdersScreen() {
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
+  }
+
+  const handleImportOrders = async (rows: Record<string, string>[]) => {
+    let success = 0
+    let errors = 0
+    const { createStorefrontOrder } = await import("@/lib/api/client")
+    for (const r of rows) {
+      try {
+        const orderId = r.id || r["Order ID"] || `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`
+        const total = Math.round(parseFloat(r.total || r["Total (INR)"] || "99") * 100)
+        await createStorefrontOrder({
+          id: orderId,
+          razorpay_order_id: `order_imp_${Date.now()}`,
+          status: (r.status || "paid") as any,
+          shipping_status: (r.shipping_status || "pending") as any,
+          currency: "INR",
+          total_paise: total,
+          shipping_paise: 0,
+          items: [{ product_id: "prod_import", title: r.item || "Imported Item", image_url: r.image_url || "", qty: 1, unit_price_paise: total }],
+          shipping_address: {
+            full_name: r.customer || r.Customer || "Imported Customer",
+            phone: r.phone || "9876543210",
+            email: r.email || "customer@example.com",
+            line1: "123 Market St",
+            city: "Bengaluru",
+            state: "Karnataka",
+            pincode: "560001",
+            country: "India",
+          },
+          via_ai: false,
+          created_at: new Date().toISOString(),
+        })
+        success++
+      } catch {
+        errors++
+      }
+    }
+    fetchOrders()
+    return { success, errors }
   }
 
   // reset page when filters change
@@ -317,6 +365,42 @@ export default function OrdersScreen() {
     return { total, paid, pending, shipped, revenuePaise }
   }, [orders])
 
+  if (orders === null) {
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <Skeleton className="h-9 w-48 rounded-lg" />
+            <Skeleton className="h-4 w-72 mt-2 rounded" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32 rounded-lg" />
+            <Skeleton className="h-9 w-24 rounded-lg" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <Card className="rounded-xl bg-card p-4 space-y-4">
+          <div className="flex justify-between">
+            <Skeleton className="h-9 w-64 rounded-lg" />
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-20 rounded-lg" />
+              <Skeleton className="h-9 w-24 rounded-lg" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-md" />
+            ))}
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       {/* Header */}
@@ -330,11 +414,20 @@ export default function OrdersScreen() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" className="h-9 rounded-lg bg-card" onClick={cycleDateRange}>
-            {dateRangeLabel}
-            <ChevronDown className="size-4 opacity-60" />
+          <DateRangePicker value={dateFilter} onChange={setDateFilter} />
+          <Button
+            variant="outline"
+            className="h-9 rounded-lg bg-card gap-1.5"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="size-4" />
+            Import
           </Button>
-          <Button variant="outline" className="h-9 rounded-lg bg-card" onClick={handleExport}>
+          <Button
+            variant="outline"
+            className="h-9 rounded-lg bg-card gap-1.5"
+            onClick={handleExport}
+          >
             <Download className="size-4" />
             Export
           </Button>
@@ -458,38 +551,25 @@ export default function OrdersScreen() {
             <Button
               variant="outline"
               size="icon"
-              className="hidden h-9 w-9 bg-card sm:inline-flex"
+              className="h-9 w-9 bg-card"
               aria-label="Refresh"
-              onClick={() => {
-                setQ("")
-                setFilterStatus("all")
-                setDateRange("all")
-                setPage(1)
-                fetchOrders()
-              }}
+              disabled={isRefreshing}
+              onClick={() => fetchOrders()}
             >
-              <RotateCw className="size-4" />
+              <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
+            </Button>
+            <DateRangePicker value={dateFilter} onChange={setDateFilter} />
+            <Button
+              variant="outline"
+              className="hidden h-9 rounded-lg bg-card sm:inline-flex gap-1.5"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="size-4" />
+              Import
             </Button>
             <Button
               variant="outline"
-              size="icon"
-              className="hidden h-9 w-9 bg-card sm:inline-flex"
-              aria-label="More"
-              onClick={cycleDateRange}
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              className="hidden h-9 rounded-lg bg-card sm:inline-flex"
-              onClick={cycleDateRange}
-            >
-              {dateRangeLabel}
-              <ChevronDown className="size-4 opacity-60" />
-            </Button>
-            <Button
-              variant="outline"
-              className="hidden h-9 rounded-lg bg-card sm:inline-flex"
+              className="hidden h-9 rounded-lg bg-card sm:inline-flex gap-1.5"
               onClick={handleExport}
             >
               <Download className="size-4" />
@@ -498,7 +578,7 @@ export default function OrdersScreen() {
             {/* On mobile keep compact Export */}
             <Button
               variant="outline"
-              className="h-9 rounded-lg bg-card sm:hidden"
+              className="h-9 rounded-lg bg-card sm:hidden gap-1.5"
               onClick={handleExport}
             >
               <Download className="size-4" />
@@ -806,9 +886,18 @@ export default function OrdersScreen() {
       </Card>
 
       <OrderDrawer
-        open={!isMobile && drawerId !== null}
+        open={drawerId !== null}
         onClose={closeDrawer}
         order={selectedOrder}
+      />
+
+      <ImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import Orders"
+        description="Upload a CSV with order records (columns: id, customer, phone, email, status, total)."
+        sampleCsv={`id,customer,phone,email,status,total\nORD-2026-901,Rahul Verma,9876543210,rahul@example.com,paid,450\nORD-2026-902,Neha Patel,9811223344,neha@example.com,paid,299`}
+        onImport={handleImportOrders}
       />
     </div>
   )
