@@ -482,6 +482,16 @@ export async function getDashboard(): Promise<DashboardData> {
           pending_orders: data.pending_orders ?? 0,
           recent_orders: data.recent_orders ?? [],
           needs_attention: data.needs_attention ?? [],
+          // Optional delta fields - not in view yet
+          revenue_vs_prev_pct: undefined,
+          orders_vs_prev_pct: undefined,
+          conversion_vs_prev_pct: undefined,
+          upsell_vs_prev_pct: undefined,
+          aov_vs_prev_pct: undefined,
+          conversion_rate_pct: undefined,
+          upsell_revenue_paise: undefined,
+          aov_paise: undefined,
+          revenue_daily_paise: undefined,
         }
       }
     }
@@ -497,6 +507,15 @@ export async function getDashboard(): Promise<DashboardData> {
     pending_orders: 2,
     recent_orders: ["ORD-2026-904101", "ORD-2026-904102", "ORD-2026-904104"],
     needs_attention: [],
+    revenue_vs_prev_pct: undefined,
+    orders_vs_prev_pct: undefined,
+    conversion_vs_prev_pct: undefined,
+    upsell_vs_prev_pct: undefined,
+    aov_vs_prev_pct: undefined,
+    conversion_rate_pct: undefined,
+    upsell_revenue_paise: undefined,
+    aov_paise: undefined,
+    revenue_daily_paise: undefined,
   }
 }
 
@@ -566,6 +585,7 @@ export type ExecuteAgentCheckoutInput = {
   }
   approvalThresholdRupees: number
   protocol?: "ncpi_uap" | "acp" | "x402" | "direct_web"
+  merchantId?: string // Optional: for customer checkout, use the seeded merchant
 }
 
 export type ExecuteAgentCheckoutResult = {
@@ -579,7 +599,7 @@ export type ExecuteAgentCheckoutResult = {
 export async function executeAgentCheckout(
   input: ExecuteAgentCheckoutInput,
 ): Promise<ExecuteAgentCheckoutResult> {
-  const { order, mandate, approvalThresholdRupees, protocol = "ncpi_uap" } = input
+  const { order, mandate, approvalThresholdRupees, protocol = "ncpi_uap", merchantId } = input
 
   // 1. AP2 mandate verification
   if (mandate) {
@@ -642,12 +662,13 @@ export async function executeAgentCheckout(
   }
 
   // 3. Auto-approve: persist the order (guest checkout → customer_id NULL)
-  const merchantId = await requireMerchantId()
+  // Use provided merchantId or fall back to seeded merchant (merchant1@razent.local)
+  const targetMerchantId = merchantId || "b57fec42-c785-466e-b225-3f7a27edcccb"
   const { data: dbOrder, error: orderErr } = await supabase
     .from("orders")
     .insert({
       external_id: order.id,
-      merchant_id: merchantId,
+      merchant_id: targetMerchantId,
       customer_id: null, // Q13-a: pure guest
       razorpay_order_id: order.razorpay_order_id,
       razorpay_payment_id: order.razorpay_payment_id ?? null,

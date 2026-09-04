@@ -4460,13 +4460,14 @@ function CheckoutView({
     }
 
     try {
-      const settings = useSettings.getState()
-      const result = await executeAgentCheckout({
-        order,
-        mandate: undefined,
-        approvalThresholdRupees: settings.aiDefaults?.approvalThreshold ?? 15000,
-        protocol: "ncpi_uap",
-      })
+          const settings = useSettings.getState()
+          const result = await executeAgentCheckout({
+            order,
+            mandate: undefined,
+            approvalThresholdRupees: settings.aiDefaults?.approvalThreshold ?? 15000,
+            protocol: "ncpi_uap",
+            merchantId: "b57fec42-c785-466e-b225-3f7a27edcccb", // Seeded merchant
+          })
       if (result.settlement === "auto") {
         onPaymentSuccess(
           result.order.id,

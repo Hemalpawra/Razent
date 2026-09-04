@@ -62,20 +62,37 @@ export default function DashboardScreen() {
   const [rangeIdx, setRangeIdx] = useState(0)
 
   const [dashData, setDashData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getDashboard().then((d) => setDashData(d)).catch(() => setDashData(null))
+    let alive = true
+    getDashboard()
+      .then((d) => {
+        if (alive) {
+          setDashData(d)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setDashData(null)
+          setLoading(false)
+        }
+      })
+    return () => { alive = false }
   }, [])
 
-  const revenueData = useMemo(() => [
-    { date: "21 May", revenue: 40000 },
-    { date: "22 May", revenue: 75000 },
-    { date: "23 May", revenue: 62000 },
-    { date: "24 May", revenue: 88000 },
-    { date: "25 May", revenue: 52000 },
-    { date: "26 May", revenue: 110000 },
-    { date: "27 May", revenue: dashData?.revenue_month_paise ? dashData.revenue_month_paise / 100 : 124560 },
-  ], [dashData])
+  const revenueData = useMemo(() => {
+    if (!dashData) return []
+    // Use real daily revenue from dashboard data if available, fallback to empty
+    // The API returns monthly totals, we'll use the available data
+    return dashData.revenue_daily_paise
+      ? dashData.revenue_daily_paise.map((r: any) => ({
+          date: r.date,
+          revenue: r.revenue_paise / 100,
+        }))
+      : []
+  }, [dashData])
 
   const handleExport = () => {
     const csv = ["Revenue,Orders", "124560,18", "110000,15", "88000,12"].join(
@@ -135,38 +152,38 @@ export default function DashboardScreen() {
       </div>
 
       {/* KPI strip — 5 cards — tighter gap + padding */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard
-          icon={<IndianRupee className="size-4" />}
-          label="Revenue Generated"
-          value="₹1,000.00"
-          delta="↑ 18.6% vs May 13 - May 19"
-        />
-        <KpiCard
-          icon={<ShoppingCart className="size-4" />}
-          label="Orders Created"
-          value="256"
-          delta="↑ 16.2% vs May 13 - May 19"
-        />
-        <KpiCard
-          icon={<Bot className="size-4" />}
-          label="AI Conversion Rate"
-          value="24.5%"
-          delta="↑ 5.3% vs May 13 - May 19"
-        />
-        <KpiCard
-          icon={<TrendingUp className="size-4" />}
-          label="Upsell Revenue"
-          value="₹1,24,560"
-          delta="↑ 22.8% vs May 13 - May 19"
-        />
-        <KpiCard
-          icon={<Wallet className="size-4" />}
-          label="Avg. Order Value"
-          value="₹3,419"
-          delta="↑ 2.7% vs May 13 - May 19"
-        />
-      </div>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+              <KpiCard
+                icon={<IndianRupee className="size-4" />}
+                label="Revenue Generated"
+                value={dashData ? `₹${(dashData.revenue_month_paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "₹0.00"}
+                delta={dashData ? (dashData.revenue_vs_prev_pct >= 0 ? `↑ ${dashData.revenue_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.revenue_vs_prev_pct).toFixed(1)}%`) : "—"}
+              />
+              <KpiCard
+                icon={<ShoppingCart className="size-4" />}
+                label="Orders Created"
+                value={dashData ? String(dashData.orders_month) : "0"}
+                delta={dashData ? (dashData.orders_vs_prev_pct >= 0 ? `↑ ${dashData.orders_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.orders_vs_prev_pct).toFixed(1)}%`) : "—"}
+              />
+              <KpiCard
+                icon={<Bot className="size-4" />}
+                label="AI Conversion Rate"
+                value={dashData ? `${dashData.conversion_rate_pct}%` : "0%"}
+                delta={dashData ? (dashData.conversion_vs_prev_pct >= 0 ? `↑ ${dashData.conversion_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.conversion_vs_prev_pct).toFixed(1)}%`) : "—"}
+              />
+              <KpiCard
+                icon={<TrendingUp className="size-4" />}
+                label="Upsell Revenue"
+                value={dashData ? `₹${(dashData.upsell_revenue_paise / 100).toLocaleString("en-IN")}` : "₹0"}
+                delta={dashData ? (dashData.upsell_vs_prev_pct >= 0 ? `↑ ${dashData.upsell_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.upsell_vs_prev_pct).toFixed(1)}%`) : "—"}
+              />
+              <KpiCard
+                icon={<Wallet className="size-4" />}
+                label="Avg. Order Value"
+                value={dashData ? `₹${(dashData.aov_paise / 100).toLocaleString("en-IN")}` : "₹0"}
+                delta={dashData ? (dashData.aov_vs_prev_pct >= 0 ? `↑ ${dashData.aov_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.aov_vs_prev_pct).toFixed(1)}%`) : "—"}
+              />
+            </div>
 
       {/* Main grid: left (Overview + AI Performance), right (Needs Attention + Recent Activity) — tighter + closer side cards */}
       <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">

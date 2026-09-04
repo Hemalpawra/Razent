@@ -71,8 +71,6 @@ export default function ProductsScreen() {
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [selected, setSelected] = useState<Product | null>(null)
-  const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -132,8 +130,7 @@ export default function ProductsScreen() {
       setActiveScreen("product_detail")
       openProductDrawer(p.id)
     } else {
-      setSelected(p)
-      setDrawerOpen(true)
+      openProductDrawer(p.id)
     }
   }
 
@@ -526,7 +523,7 @@ export default function ProductsScreen() {
       <ProductDrawer
         open={!isMobile && drawerProductId !== null}
         onClose={closeProductDrawer}
-        product={selected}
+        product={products.find((p) => p.id === drawerProductId) ?? null}
       />
     </div>
   )

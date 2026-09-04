@@ -24,4 +24,14 @@ export type DashboardData = {
     severity: "info" | "warning" | "critical"
     href?: string
   }[]
+  // Optional delta fields for KPI comparison
+  revenue_vs_prev_pct?: number
+  orders_vs_prev_pct?: number
+  conversion_vs_prev_pct?: number
+  upsell_vs_prev_pct?: number
+  aov_vs_prev_pct?: number
+  conversion_rate_pct?: number
+  upsell_revenue_paise?: number
+  aov_paise?: number
+  revenue_daily_paise?: { date: string; revenue_paise: number }[]
 }
