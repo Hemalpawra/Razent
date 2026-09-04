@@ -59,19 +59,19 @@ enable_signup = false
 enable_confirmations = false
 
 # Edge Functions configuration
-[functions]
+[edge_functions]
 enabled = true
 
-[functions.execute-agent-checkout]
+[edge_functions.execute-agent-checkout]
 verify_jwt = true
 
-[functions.uap-verifier]
+[edge_functions.uap-verifier]
 verify_jwt = false
 
-[functions.x402-challenge]
+[edge_functions.x402-challenge]
 verify_jwt = false
 
-[functions.razorpay-webhook]
+[edge_functions.razorpay-webhook]
 verify_jwt = false
 
 [analytics]
