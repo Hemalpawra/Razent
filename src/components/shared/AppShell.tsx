@@ -58,7 +58,7 @@ const navGroups: {
   },
 ]
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, readOnly }: { children: ReactNode; readOnly?: boolean }) {
   const activeScreen = useUI((s) => s.activeScreen)
   const setScreen = useUI((s) => s.setActiveScreen)
   const role = useUI((s) => s.role)
@@ -203,9 +203,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="min-w-0 flex-1 leading-none">
               <div className="truncate text-xs font-semibold text-sidebar-foreground">
                 Merchant Store
+                {readOnly && (
+                  <span className="ml-1.5 inline-flex rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                    VIEW ONLY
+                  </span>
+                )}
               </div>
               <div className="truncate text-[11px] text-muted-foreground">
-                Super Admin
+                {readOnly ? "Public — read-only mode" : "Super Admin"}
               </div>
             </div>
           </div>
