@@ -14,8 +14,8 @@
  * surface } and reads the stream.
  */
 import { streamText, tool } from "npm:ai@^7.0.91"
-import { createOpenAICompatible } from "npm:@ai-sdk/openai-compatible@^0.4.0"
-import { z } from "npm:zod@^3.23.8"
+import { createOpenAICompatible } from "npm:@ai-sdk/openai-compatible@^3.0.43"
+import { z } from "npm:zod@^4.5.4"
 import { createClient } from "jsr:@supabase/supabase-js@2"
 
 // ── Config ────────────────────────────────────────────────────
