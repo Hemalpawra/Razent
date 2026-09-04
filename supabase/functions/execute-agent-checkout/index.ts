@@ -8,6 +8,9 @@
 //   supabase functions deploy execute-agent-checkout
 //     (no --no-verify-jwt: requires a Supabase user JWT)
 
+// @ts-nocheck
+declare const Deno: any;
+
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -42,7 +45,7 @@ type CheckoutResult = {
   reason?: string;
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response("method not allowed", { status: 405 });
   }

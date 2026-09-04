@@ -1,11 +1,11 @@
 import { Component, type ReactNode } from "react"
 import { AlertTriangle, RefreshCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useError } from "@/state/useError"
 
 /**
  * Top-level error boundary. Catches errors thrown during render or in
- * initial module imports (like supabase.ts throwing when VITE_SUPABASE_URL
- * is missing). Shows a single, dismissable error card so the user knows
+ * initial component mounting. Shows a single, dismissable error card so the user knows
  * exactly what's wrong instead of seeing a blank screen.
  */
 type Props = {
@@ -25,16 +25,14 @@ export class EnvErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error) {
     // Surface to the global error store as well, so sonner Toaster can
     // also show a toast if mounted inside the boundary.
-    // We use require here to avoid a circular import at module init.
     try {
-      const { useError } = require("@/state/useError") as typeof import("@/state/useError")
       useError.getState().push({
         title: "App failed to start",
         description: error.message,
         severity: "error",
       })
     } catch {
-      /* useError module not available yet — fall back to inline display */
+      /* useError store not available yet — fall back to inline display */
     }
   }
 

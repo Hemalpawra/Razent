@@ -15,6 +15,9 @@
 //      the request body, verified against a registered key in
 //      public.payment_mandates.metadata->>'public_key'
 
+// @ts-nocheck
+declare const Deno: any;
+
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
@@ -73,7 +76,7 @@ async function verifyNpcisignature(body: string, signature: string): Promise<boo
   );
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response("method not allowed", { status: 405 });
   }

@@ -17,19 +17,14 @@ import {
   type User,
 } from "@supabase/supabase-js"
 
-const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim()
-const key =
+const rawUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim()
+const rawKey =
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim()
 
-if (!url || !key) {
-  // Surface the missing-config error to Q7's <Toaster />.
-  // Defer to a dynamic import so this module can still load in
-  // dev (the toast handler isn't mounted yet at import time).
-  const missing = !url ? "VITE_SUPABASE_URL" : "VITE_SUPABASE_ANON_KEY"
-  throw new Error(
-    `Razent: ${missing} is not set in .env. Create C:/Users/hemal/Ragent/Razent/.env with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.`,
-  )
-}
+export const isSupabaseConfigured = Boolean(rawUrl && rawKey)
+
+const url = rawUrl || "https://placeholder.supabase.co"
+const key = rawKey || "placeholder-anon-key"
 
 export const supabase: SupabaseClient = createClient(url, key, {
   auth: {

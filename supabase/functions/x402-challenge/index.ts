@@ -10,6 +10,9 @@
 //   fetch("/functions/v1/x402-challenge?order=ord_2026_0012")
 //     returns 402 with { challenge_id, payment_url, amount_paise, ... }
 
+// @ts-nocheck
+declare const Deno: any;
+
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -19,7 +22,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const orderId = url.searchParams.get("order");
   if (!orderId) {

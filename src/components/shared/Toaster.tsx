@@ -20,6 +20,8 @@ export function Toaster() {
 
   // Drain the store into sonner toasts whenever it changes.
   useEffect(() => {
+    if (errors.length === 0) return
+
     errors.forEach((e) => {
       const opts = {
         id: e.id,
@@ -36,8 +38,8 @@ export function Toaster() {
       else if (e.severity === "warning") toast.warning(e.title, opts)
       else toast.info(e.title, opts)
     })
-    // If all are dismissed, clear the store too.
-    if (errors.length === 0) clear()
+
+    clear()
   }, [errors, dismiss, clear])
 
   return (

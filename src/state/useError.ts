@@ -38,7 +38,8 @@ export const useError = create<ErrorStore>((set) => ({
   },
   dismiss: (id) =>
     set((s) => ({ errors: s.errors.filter((e) => e.id !== id) })),
-  clear: () => set({ errors: [] }),
+  clear: () =>
+    set((s) => (s.errors.length === 0 ? s : { errors: [] })),
 }))
 
 /**

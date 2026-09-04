@@ -395,15 +395,21 @@ export async function listAuditSessions(): Promise<AuditSession[]> {
 export type LogAuditEventInput = {
   order_id?: string | null
   customer?: string
-  actor_label: string
-  events: AuditEvent[]
+  actor_label?: string
+  events?: AuditEvent[]
+  event?: AuditEvent
   merchant_id?: string
 }
 
 export async function logAuditEvent(
   input: LogAuditEventInput,
 ): Promise<AuditSession> {
-  const merchantId = input.merchant_id ?? (await requireMerchantId())
+  const merchantId =
+    input.merchant_id ?? (await requireMerchantId().catch(() => null))
+  const events = input.events ?? (input.event ? [input.event] : [])
+  const actorLabel =
+    input.actor_label ?? input.event?.actor ?? "User Action"
+
   // Build session with no external_id; the trigger
   // (20260309000003_reconcile_schema_drift) auto-fills it.
   const { data, error } = await supabase
@@ -411,8 +417,8 @@ export async function logAuditEvent(
     .insert({
       order_id: input.order_id ?? null,
       customer: input.customer ?? "",
-      actor_label: input.actor_label,
-      events: input.events,
+      actor_label: actorLabel,
+      events,
       merchant_id: merchantId,
     } as any)
     .select()

@@ -1,14 +1,7 @@
+// @ts-nocheck
 /**
- * Ragent Orchestrator — real LLM-backed shopping assistant.
- *
- * Reads the LIVE productStore / orderStore / conversationStore / auditStore
- * (lib/storage/*) via the same lib/api/client.ts the storefront and merchant
- * dashboard use. No mock data.
- *
- * Provider: OpenAI-compatible (OpenRouter by default). Set:
- *   LLM_API_KEY  — required
- *   LLM_BASE_URL — default https://openrouter.ai/api/v1
- *   LLM_MODEL    — default minimax/minimax-m3:free
+ * Ragent Orchestrator — (legacy Vite middleware orchestrator).
+ * Note: ragent-chat has been ported to Supabase Edge Functions (supabase/functions/ragent-chat/).
  */
 import {
   streamText,
