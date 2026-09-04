@@ -11,6 +11,7 @@ import {
   Store,
   Shield,
 } from "lucide-react"
+import { Outlet } from "react-router-dom"
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
 import StoreHome from "@/components/customer/StoreHome"
 import { useUI, type Screen } from "@/state/useUI"
@@ -231,7 +232,9 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
         </header>
 
         <div className="flex flex-1 flex-col p-3 md:p-4">
-          <div className="mx-auto w-full max-w-[1360px]">{children}</div>
+          <div className="mx-auto w-full max-w-[1360px]">
+            {children || <Outlet />}
+          </div>
         </div>
 
         <footer className="border-t bg-background/40 py-3 text-center text-xs text-muted-foreground">
