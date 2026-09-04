@@ -543,9 +543,15 @@ export async function getAnalytics(): Promise<AnalyticsData> {
         .eq("merchant_id", merchantId)
         .maybeSingle()
       if (!error && data) {
+        // Fix: DB returns orders_by_status as an object; convert to array
+        const statusObj = data.orders_by_status ?? {}
+        const statusArray = Object.entries(statusObj).map(([status, count]) => ({
+          status: status as "paid" | "created" | "failed" | "refunded",
+          count: Number(count),
+        }))
         return {
           revenue_series: data.daily_revenue ?? data.revenue_series ?? [],
-          orders_by_status: data.orders_by_status ?? [],
+          orders_by_status: statusArray,
           top_categories: data.top_categories ?? [],
           aov_paise: Number(data.aov_paise ?? 0),
           conversion_rate_pct: Number(data.conversion_rate_pct ?? 0),
