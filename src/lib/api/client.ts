@@ -417,6 +417,61 @@ export async function getConversation(
   return null
 }
 
+export type UpsertConversationInput = {
+  id?: string
+  external_id?: string
+  merchant_id?: string
+  customer_name?: string
+  customer_email?: string
+  customer_phone?: string
+  type?: "human_customer" | "agent_to_agent"
+  protocol?: "ncpi_uap" | "acp" | "x402" | "direct_web"
+  status?: string
+  last_message?: string
+  amount_paise?: number
+  order_id?: string
+  messages?: any[]
+}
+
+export async function upsertConversation(
+  input: UpsertConversationInput,
+): Promise<Conversation | null> {
+  try {
+    const merchantId = input.merchant_id || SEEDED_MERCHANT_ID
+    const extId = input.external_id || `conv_${Date.now()}`
+    const payload: any = {
+      external_id: extId,
+      merchant_id: merchantId,
+      customer_name: input.customer_name || "Storefront Customer",
+      type: input.type || "human_customer",
+      protocol: input.protocol || "direct_web",
+      status: input.status || "active",
+      last_message: input.last_message || "",
+      messages: input.messages || [],
+      updated_at: new Date().toISOString(),
+    }
+    if (input.customer_email) payload.customer_email = input.customer_email
+    if (input.customer_phone) payload.customer_phone = input.customer_phone
+    if (input.amount_paise !== undefined) payload.amount_paise = input.amount_paise
+    if (input.order_id !== undefined) payload.order_id = input.order_id
+
+    const { data, error } = await supabase
+      .from("conversations")
+      .upsert(payload, { onConflict: "external_id" })
+      .select()
+      .maybeSingle()
+
+    if (error) {
+      console.warn("[upsertConversation] error:", error.message)
+      return null
+    }
+    return data ? mapDbConversation(data) : null
+  } catch (err) {
+    console.warn("[upsertConversation] fetch error:", err)
+    return null
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Audit
 // ─────────────────────────────────────────────────────────────────

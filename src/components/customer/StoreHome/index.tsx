@@ -50,6 +50,7 @@ import {
   trackOrder,
   executeAgentCheckout,
   createStorefrontOrder,
+  upsertConversation,
   logAuditEvent,
   listProducts,
 } from "@/lib/api/client"
@@ -233,6 +234,7 @@ export default function StoreHome() {
 
   const [lastPaymentId, setLastPaymentId] = useState<string | null>(null)
   const [lastOrderId, setLastOrderId] = useState<string | null>(null)
+  const [convExternalId] = useState<string>(() => `conv_${Date.now()}`)
   const [trackPrefill, setTrackPrefill] = useState<{ orderId?: string; mobile?: string; email?: string } | null>(null)
 
   const [lastInvoiceNo, setLastInvoiceNo] = useState<string | null>(null)
@@ -509,9 +511,23 @@ export default function StoreHome() {
     const assistantIndex = currentMsgs.length
     setAiMsgs((m) => [...m, { role: "assistant", text: "" }])
 
+    // Parallel sync: save conversation initiate/message to Supabase
+    upsertConversation({
+      external_id: convExternalId,
+      customer_name: "Storefront Customer",
+      last_message: text,
+      status: "active",
+      messages: currentMsgs.map((m, idx) => ({
+        id: `m_${idx + 1}`,
+        role: m.role === "user" ? "customer" : "ai",
+        text: m.text,
+        at: new Date().toISOString(),
+      })),
+    }).catch(() => {})
+
     const anonKey =
       (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsc2poc25mdXJ4a3phd2RpbXlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwMTcwNzMsImV4cCI6MjA4ODU5MzA3M30.4O28gqG1Jv15mP4X9f-t4KzD2oK089q7bS-V5eHkI1M"
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsc2poc25mdXJ4a3phd2RpbXlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NzU4NDEsImV4cCI6MjEwMzI1MTg0MX0.0WWRzsUkp-KF_9e2Oq4gcLjToxwzQE3ht05yxrBRx_g"
     const chatUrl =
       "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/ragent-chat?surface=store"
 
@@ -618,6 +634,31 @@ export default function StoreHome() {
           next[assistantIndex] = fallback
           return next
         })
+        upsertConversation({
+          external_id: convExternalId,
+          customer_name: "Storefront Customer",
+          last_message: fallback.text,
+          status: "active",
+          messages: [...currentMsgs, { role: "assistant", text: fallback.text }].map((m, idx) => ({
+            id: `m_${idx + 1}`,
+            role: m.role === "user" ? "customer" : "ai",
+            text: m.text,
+            at: new Date().toISOString(),
+          })),
+        }).catch(() => {})
+      } else {
+        upsertConversation({
+          external_id: convExternalId,
+          customer_name: "Storefront Customer",
+          last_message: accumulated,
+          status: "active",
+          messages: [...currentMsgs, { role: "assistant", text: accumulated }].map((m, idx) => ({
+            id: `m_${idx + 1}`,
+            role: m.role === "user" ? "customer" : "ai",
+            text: m.text,
+            at: new Date().toISOString(),
+          })),
+        }).catch(() => {})
       }
     } catch (err) {
       console.warn("[handleAskAI] stream failed, using grocery fallback:", err)
@@ -627,6 +668,18 @@ export default function StoreHome() {
         next[assistantIndex] = fallback
         return next
       })
+      upsertConversation({
+        external_id: convExternalId,
+        customer_name: "Storefront Customer",
+        last_message: fallback.text,
+        status: "active",
+        messages: [...currentMsgs, { role: "assistant", text: fallback.text }].map((m, idx) => ({
+          id: `m_${idx + 1}`,
+          role: m.role === "user" ? "customer" : "ai",
+          text: m.text,
+          at: new Date().toISOString(),
+        })),
+      }).catch(() => {})
     }
   }
 
@@ -1486,6 +1539,7 @@ export default function StoreHome() {
               cart={cart}
               cartTotal={cartTotal}
               products={productsList}
+              conversationId={convExternalId}
               onClose={() => setView("cart")}
               onBackToCart={() => setView("cart")}
               onPaymentSuccess={(orderId, paymentId, invoiceNo) => {
@@ -4387,6 +4441,8 @@ interface CheckoutViewProps {
 
   products?: Product[]
 
+  conversationId?: string
+
   onClose: () => void
 
   onBackToCart: () => void
@@ -4498,6 +4554,7 @@ function CheckoutView({
   cart,
   cartTotal,
   products = [],
+  conversationId,
   onClose: _onClose,
   onBackToCart,
   onPaymentSuccess,
@@ -4614,8 +4671,17 @@ function CheckoutView({
           status: "paid",
           paid_at: new Date().toISOString(),
           razorpay_payment_id: `pay_${Date.now()}`,
+          conversation_id: conversationId,
         }
         await createStorefrontOrder(paidOrder)
+        if (conversationId) {
+          upsertConversation({
+            external_id: conversationId,
+            status: "paid",
+            order_id: paidOrder.id,
+            amount_paise: paidOrder.total_paise,
+          }).catch(() => {})
+        }
         onPaymentSuccess(
           order.id,
           paidOrder.razorpay_payment_id!,
@@ -4652,8 +4718,17 @@ function CheckoutView({
               paid_at: new Date().toISOString(),
               razorpay_payment_id: response.razorpay_payment_id || `pay_${Date.now()}`,
               razorpay_signature: response.razorpay_signature,
+              conversation_id: conversationId,
             }
             await createStorefrontOrder(paidOrder)
+            if (conversationId) {
+              upsertConversation({
+                external_id: conversationId,
+                status: "paid",
+                order_id: paidOrder.id,
+                amount_paise: paidOrder.total_paise,
+              }).catch(() => {})
+            }
             onPaymentSuccess(
               order.id,
               response.razorpay_payment_id || `pay_${Date.now()}`,
