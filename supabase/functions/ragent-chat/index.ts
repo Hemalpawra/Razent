@@ -13,7 +13,7 @@
  * Frontend (src/components/customer/StoreHome) POSTs { messages, session_id,
  * surface } and reads the stream.
  */
-import { streamText, tool } from "npm:ai@^3.4.0"
+import { streamText, tool } from "npm:ai@^7.0.91"
 import { createOpenAICompatible } from "npm:@ai-sdk/openai-compatible@^0.4.0"
 import { z } from "npm:zod@^3.23.8"
 import { createClient } from "jsr:@supabase/supabase-js@2"
