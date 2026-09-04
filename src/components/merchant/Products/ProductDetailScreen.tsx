@@ -1,12 +1,15 @@
 "use client" /* Header */ /* Product Header */ /* Pricing */ /* Stock */ /* Actions */
 
+import { useEffect, useState } from "react"
 import { ArrowLeft } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useUI } from "@/state/useUI"
-import { mockProducts } from "@/lib/mock/products"
+import { getProduct } from "@/lib/api/client"
 import { formatPrice } from "@/lib/types/product"
+import type { Product } from "@/lib/types/product"
 
 function getSku(p: { id: string }): string {
   const raw = p.id
@@ -21,9 +24,17 @@ export default function ProductDetailScreen() {
   const setActiveScreen = useUI((s) => s.setActiveScreen)
   const drawerProductId = useUI((s) => s.drawerProductId)
   const closeProductDrawer = useUI((s) => s.closeProductDrawer)
-  const product = drawerProductId
-    ? (mockProducts.find((p) => p.id === drawerProductId) ?? null)
-    : null
+
+  const [product, setProduct] = useState<Product | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!drawerProductId) { setLoading(false); return }
+    getProduct(drawerProductId)
+      .then((p) => setProduct(p ?? null))
+      .catch(() => setProduct(null))
+      .finally(() => setLoading(false))
+  }, [drawerProductId])
 
   const sku = product ? getSku(product) : ""
   const updated = product
@@ -59,7 +70,13 @@ export default function ProductDetailScreen() {
       </header>
 
       <div className="p-4 space-y-4">
-        {!product ? (
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+          </div>
+        ) : !product ? (
           <Card className="flex flex-col items-center justify-center p-8 text-center">
             <p className="text-sm text-muted-foreground">
               No product selected. Please go back and select a product.

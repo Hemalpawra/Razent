@@ -147,10 +147,16 @@ export default function OrdersScreen() {
   const isMobile = useIsMobile()
 
   const [orders, setOrders] = useState<Order[] | null>(null)
-  useEffect(() => {
+  const [dateRange, setDateRange] = useState<"all" | "today" | "7d" | "30d">("all")
+
+  const fetchOrders = () => {
     import("@/lib/api/client").then(({ listOrders }) =>
       listOrders().then((o: Order[]) => setOrders(o)).catch(() => setOrders([] as Order[]))
     )
+  }
+
+  useEffect(() => {
+    fetchOrders()
   }, [])
 
   const selectedOrder = drawerId
@@ -167,13 +173,37 @@ export default function OrdersScreen() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  const cycleDateRange = () => {
+    const ranges: ("all" | "today" | "7d" | "30d")[] = ["all", "today", "7d", "30d"]
+    const nextIdx = (ranges.indexOf(dateRange) + 1) % ranges.length
+    setDateRange(ranges[nextIdx])
+    setPage(1)
+  }
+
+  const dateRangeLabel = {
+    all: "All Time",
+    today: "Today",
+    "7d": "Last 7 Days",
+    "30d": "Last 30 Days",
+  }[dateRange]
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
 
     return (orders || [])
-
       .filter((o: Order) => {
         if (filterStatus !== "all" && o.status !== filterStatus) return false
+
+        if (dateRange === "today") {
+          const today = new Date().toISOString().slice(0, 10)
+          if (!o.created_at.startsWith(today)) return false
+        } else if (dateRange === "7d") {
+          const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+          if (o.created_at < sevenDaysAgo) return false
+        } else if (dateRange === "30d") {
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
+          if (o.created_at < thirtyDaysAgo) return false
+        }
 
         if (!term) return true
 
@@ -184,9 +214,32 @@ export default function OrdersScreen() {
           o.items.some((it) => it.title.toLowerCase().includes(term))
         )
       })
-
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [orders, q, filterStatus])
+  }, [orders, q, filterStatus, dateRange])
+
+  const handleExport = () => {
+    if (!orders || orders.length === 0) return
+    const headers = ["Order ID", "Date", "Customer", "Status", "Shipping Status", "Items Count", "Total (INR)"]
+    const rows = filtered.map((o) => [
+      o.id,
+      new Date(o.created_at).toLocaleString("en-IN"),
+      `"${(o.shipping_address?.full_name || "Customer").replace(/"/g, '""')}"`,
+      o.status,
+      o.shipping_status || "pending",
+      o.items.length,
+      (o.total_paise / 100).toFixed(2),
+    ])
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `orders-export-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
 
   // reset page when filters change
 
@@ -268,11 +321,11 @@ export default function OrdersScreen() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" className="h-9 rounded-lg bg-card">
-            All Time
+          <Button variant="outline" className="h-9 rounded-lg bg-card" onClick={cycleDateRange}>
+            {dateRangeLabel}
             <ChevronDown className="size-4 opacity-60" />
           </Button>
-          <Button variant="outline" className="h-9 rounded-lg bg-card">
+          <Button variant="outline" className="h-9 rounded-lg bg-card" onClick={handleExport}>
             <Download className="size-4" />
             Export
           </Button>
@@ -355,9 +408,20 @@ export default function OrdersScreen() {
             <Button
               variant="outline"
               className="hidden h-9 shrink-0 rounded-lg bg-card sm:inline-flex"
+              onClick={() => {
+                const nextStatus: Record<string, OrderStatus | "all"> = {
+                  all: "paid",
+                  paid: "created",
+                  created: "failed",
+                  failed: "refunded",
+                  refunded: "all",
+                }
+                setFilterStatus(nextStatus[filterStatus] ?? "all")
+                setPage(1)
+              }}
             >
               <SlidersHorizontal className="size-3.5" />
-              More Filters
+              Status: {filterStatus === "all" ? "All" : filterStatus}
             </Button>
             {/* mobile More Filters icon */}
             <Button
@@ -365,6 +429,17 @@ export default function OrdersScreen() {
               size="icon"
               className="h-9 bg-card sm:hidden"
               aria-label="More Filters"
+              onClick={() => {
+                const nextStatus: Record<string, OrderStatus | "all"> = {
+                  all: "paid",
+                  paid: "created",
+                  created: "failed",
+                  failed: "refunded",
+                  refunded: "all",
+                }
+                setFilterStatus(nextStatus[filterStatus] ?? "all")
+                setPage(1)
+              }}
             >
               <SlidersHorizontal className="size-4" />
             </Button>
@@ -378,10 +453,10 @@ export default function OrdersScreen() {
               aria-label="Refresh"
               onClick={() => {
                 setQ("")
-
                 setFilterStatus("all")
-
+                setDateRange("all")
                 setPage(1)
+                fetchOrders()
               }}
             >
               <RotateCw className="size-4" />
@@ -391,19 +466,22 @@ export default function OrdersScreen() {
               size="icon"
               className="hidden h-9 w-9 bg-card sm:inline-flex"
               aria-label="More"
+              onClick={cycleDateRange}
             >
               <MoreHorizontal className="size-4" />
             </Button>
             <Button
               variant="outline"
               className="hidden h-9 rounded-lg bg-card sm:inline-flex"
+              onClick={cycleDateRange}
             >
-              All Time
+              {dateRangeLabel}
               <ChevronDown className="size-4 opacity-60" />
             </Button>
             <Button
               variant="outline"
               className="hidden h-9 rounded-lg bg-card sm:inline-flex"
+              onClick={handleExport}
             >
               <Download className="size-4" />
               Export
@@ -412,6 +490,7 @@ export default function OrdersScreen() {
             <Button
               variant="outline"
               className="h-9 rounded-lg bg-card sm:hidden"
+              onClick={handleExport}
             >
               <Download className="size-4" />
               Export

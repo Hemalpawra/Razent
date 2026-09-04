@@ -185,9 +185,20 @@ function assertOk<T>(
 export const SEEDED_MERCHANT_ID = "b57fec42-c785-466e-b225-3f7a27edcccb"
 
 /** Returns the current merchant id (auth.users.id), or the seeded demo merchant if not signed in. */
+/** Returns the current merchant id (auth.users.id), or the seeded demo merchant if not signed in. */
 async function requireMerchantId(): Promise<string> {
   const user = await getUser().catch(() => null)
-  if (user) return user.id
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle()
+    if (profile?.role === "super_admin") {
+      return SEEDED_MERCHANT_ID
+    }
+    return user.id
+  }
   return SEEDED_MERCHANT_ID
 }
 
@@ -212,16 +223,14 @@ export async function listProducts(
     if (args.category && args.category !== "All") q = q.eq("category", args.category)
     if (args.status) q = q.eq("status", args.status)
     const { data, error } = await q
-    if (!error && data && data.length > 0) {
-      return data.map(mapDbProduct)
-    }
     if (error) {
       console.warn("[listProducts] Supabase returned error:", error.message)
+      return []
     }
-    return filterMockProducts(mockProducts, args)
+    return (data || []).map(mapDbProduct)
   } catch (err: any) {
-    console.warn("[listProducts] fetch error, using catalog fallback:", err?.message)
-    return filterMockProducts(mockProducts, args)
+    console.warn("[listProducts] fetch error:", err?.message)
+    return []
   }
 }
 
@@ -234,9 +243,9 @@ export async function getProduct(id: string): Promise<Product | null> {
       .maybeSingle()
     if (!error && data) return mapDbProduct(data)
   } catch (err: any) {
-    console.warn("[getProduct] fetch error, using catalog fallback:", err?.message)
+    console.warn("[getProduct] fetch error:", err?.message)
   }
-  return mockProducts.find((p) => p.id === id) ?? null
+  return null
 }
 
 export type UpsertProductInput = Omit<
@@ -295,22 +304,24 @@ export async function deleteProduct(
 // ─────────────────────────────────────────────────────────────────
 
 export async function listOrders(): Promise<Order[]> {
-  // Q8: scope to current merchant via RLS — the .eq() makes it explicit
-  // and gives faster query plans on the merchant_id index.
   try {
     const merchantId = await requireMerchantId()
-    const { data, error } = await supabase
+    let q = supabase
       .from("orders")
       .select("*")
-      .eq("merchant_id", merchantId)
       .order("created_at", { ascending: false })
-    if (!error && data && data.length > 0) {
-      return data.map(mapDbOrder)
+    if (merchantId) {
+      q = q.or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
     }
-    return mockOrders
+    const { data, error } = await q
+    if (error) {
+      console.warn("[listOrders] fetch error:", error.message)
+      return []
+    }
+    return (data || []).map(mapDbOrder)
   } catch (err) {
-    console.warn("[listOrders] fetch error, using mock orders:", err)
-    return mockOrders
+    console.warn("[listOrders] fetch error:", err)
+    return []
   }
 }
 
@@ -323,9 +334,9 @@ export async function getOrder(id: string): Promise<Order | null> {
       .maybeSingle()
     if (!error && data) return mapDbOrder(data)
   } catch (err) {
-    console.warn("[getOrder] fetch error, using mock fallback:", err)
+    console.warn("[getOrder] fetch error:", err)
   }
-  return mockOrders.find((o) => o.id === id) ?? null
+  return null
 }
 
 export type TrackOrderArgs = {
@@ -371,18 +382,22 @@ export async function trackOrder(args: TrackOrderArgs): Promise<Order | null> {
 export async function listConversations(): Promise<Conversation[]> {
   try {
     const merchantId = await requireMerchantId()
-    const { data, error } = await supabase
+    let q = supabase
       .from("conversations")
       .select("*")
-      .eq("merchant_id", merchantId)
       .order("updated_at", { ascending: false })
-    if (!error && data && data.length > 0) {
-      return data.map(mapDbConversation)
+    if (merchantId) {
+      q = q.or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
     }
-    return mockConversations
+    const { data, error } = await q
+    if (error) {
+      console.warn("[listConversations] error:", error.message)
+      return []
+    }
+    return (data || []).map(mapDbConversation)
   } catch (err) {
-    console.warn("[listConversations] fetch error, using mock conversations:", err)
-    return mockConversations
+    console.warn("[listConversations] fetch error:", err)
+    return []
   }
 }
 
@@ -397,9 +412,9 @@ export async function getConversation(
       .maybeSingle()
     if (!error && data) return mapDbConversation(data)
   } catch (err) {
-    console.warn("[getConversation] fetch error, using mock fallback:", err)
+    console.warn("[getConversation] fetch error:", err)
   }
-  return mockConversations.find((c) => c.id === id) ?? null
+  return null
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -409,20 +424,22 @@ export async function getConversation(
 export async function listAuditSessions(): Promise<AuditSession[]> {
   try {
     const merchantId = await requireMerchantId()
-    // Q4-B: read from the rollup view (event_count, last_event, status,
-    // severity computed in SQL).
-    const { data, error } = await supabase
+    let q = supabase
       .from("audit_sessions_view")
       .select("*")
-      .eq("merchant_id", merchantId)
       .order("created_at", { ascending: false })
-    if (!error && data && data.length > 0) {
-      return data.map(mapDbAuditSession)
+    if (merchantId) {
+      q = q.or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
     }
-    return mockAuditSessions
+    const { data, error } = await q
+    if (error) {
+      console.warn("[listAuditSessions] error:", error.message)
+      return []
+    }
+    return (data || []).map(mapDbAuditSession)
   } catch (err) {
-    console.warn("[listAuditSessions] fetch error, using mock audit sessions:", err)
-    return mockAuditSessions
+    console.warn("[listAuditSessions] fetch error:", err)
+    return []
   }
 }
 
@@ -475,8 +492,40 @@ export async function getDashboard(): Promise<DashboardData> {
     const { data, error } = await supabase
       .from("dashboard_view")
       .select("*")
-      .eq("merchant_id", merchantId)
+      .or(`merchant_id.eq.${merchantId}`)
       .maybeSingle()
+
+    // Fetch real last 7 days daily revenue for sales chart
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+    const { data: recentOrders } = await supabase
+      .from("orders")
+      .select("created_at, total_paise, status")
+      .gte("created_at", sevenDaysAgo)
+      .order("created_at", { ascending: true })
+
+    const dailyRevMap = new Map<string, number>()
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000)
+      const key = d.toLocaleDateString("en-IN", { month: "short", day: "numeric" })
+      dailyRevMap.set(key, 0)
+    }
+
+    if (recentOrders) {
+      recentOrders.forEach((o) => {
+        if (o.status === "paid") {
+          const key = new Date(o.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })
+          if (dailyRevMap.has(key)) {
+            dailyRevMap.set(key, (dailyRevMap.get(key) || 0) + Number(o.total_paise))
+          }
+        }
+      })
+    }
+
+    const revenueDaily = Array.from(dailyRevMap.entries()).map(([date, revenue_paise]) => ({
+      date,
+      revenue_paise,
+    }))
+
     if (!error && data) {
       return {
         active_conversations: Number(data.active_conversations ?? 0),
@@ -495,7 +544,7 @@ export async function getDashboard(): Promise<DashboardData> {
         conversion_rate_pct: undefined,
         upsell_revenue_paise: undefined,
         aov_paise: undefined,
-        revenue_daily_paise: undefined,
+        revenue_daily_paise: revenueDaily,
       }
     }
   } catch (err: any) {
@@ -518,89 +567,59 @@ export async function getDashboard(): Promise<DashboardData> {
     conversion_rate_pct: undefined,
     upsell_revenue_paise: undefined,
     aov_paise: undefined,
-    revenue_daily_paise: undefined,
+    revenue_daily_paise: [],
   }
 }
 
 export async function getAnalytics(): Promise<AnalyticsData> {
   try {
     const merchantId = await requireMerchantId().catch(() => null)
-    if (merchantId) {
-      const { data, error } = await supabase
-        .from("analytics_view")
-        .select("*")
-        .eq("merchant_id", merchantId)
-        .maybeSingle()
-      if (!error && data) {
-        // Fix: DB returns orders_by_status as an object; convert to array
-        const statusObj = data.orders_by_status ?? {}
-        const statusArray = Object.entries(statusObj).map(([status, count]) => ({
-          status: status as "paid" | "created" | "failed" | "refunded",
-          count: Number(count),
-        }))
-        const rawSeries = data.daily_revenue ?? data.revenue_series ?? []
-        const revenueSeries = Array.isArray(rawSeries)
-          ? rawSeries.map((r: any) => ({
-              date: r.date,
-              revenue_paise: Number(r.revenue_paise ?? r.revenue ?? 0),
-              orders: Number(r.orders ?? 0),
-            }))
-          : []
-        const rawCategories = data.top_categories ?? []
-        const topCategories = Array.isArray(rawCategories)
-          ? rawCategories.map((c: any) => ({
-              category: c.category,
-              revenue_paise: Number(c.revenue_paise ?? c.revenue ?? 0),
-            }))
-          : []
-        return {
-          revenue_series: revenueSeries,
-          orders_by_status: statusArray,
-          top_categories: topCategories,
-          aov_paise: Number(data.aov_paise ?? 0),
-          conversion_rate_pct: Number(data.conversion_rate_pct ?? 0),
-          insights: Array.isArray(data.insights) ? data.insights : [],
-        }
+    const { data, error } = await supabase
+      .from("analytics_view")
+      .select("*")
+      .or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
+      .maybeSingle()
+    if (!error && data) {
+      // Fix: DB returns orders_by_status as an object; convert to array
+      const statusObj = data.orders_by_status ?? {}
+      const statusArray = Object.entries(statusObj).map(([status, count]) => ({
+        status: status as "paid" | "created" | "failed" | "refunded",
+        count: Number(count),
+      }))
+      const rawSeries = data.daily_revenue ?? data.revenue_series ?? []
+      const revenueSeries = Array.isArray(rawSeries)
+        ? rawSeries.map((r: any) => ({
+            date: r.date,
+            revenue_paise: Number(r.revenue_paise ?? r.revenue ?? 0),
+            orders: Number(r.orders ?? 0),
+          }))
+        : []
+      const rawCategories = data.top_categories ?? []
+      const topCategories = Array.isArray(rawCategories)
+        ? rawCategories.map((c: any) => ({
+            category: c.category,
+            revenue_paise: Number(c.revenue_paise ?? c.revenue ?? 0),
+          }))
+        : []
+      return {
+        revenue_series: revenueSeries,
+        orders_by_status: statusArray,
+        top_categories: topCategories,
+        aov_paise: Number(data.aov_paise ?? 0),
+        conversion_rate_pct: Number(data.conversion_rate_pct ?? 0),
+        insights: Array.isArray(data.insights) ? data.insights : [],
       }
     }
   } catch (err: any) {
-    console.warn("[getAnalytics] fetch error, using fallback analytics:", err?.message)
+    console.warn("[getAnalytics] fetch error:", err?.message)
   }
   return {
-    revenue_series: [
-      { date: "2026-08-28", revenue_paise: 2450000, orders: 15 },
-      { date: "2026-08-29", revenue_paise: 3100000, orders: 18 },
-      { date: "2026-08-30", revenue_paise: 2890000, orders: 16 },
-      { date: "2026-08-31", revenue_paise: 3950000, orders: 22 },
-      { date: "2026-09-01", revenue_paise: 4200000, orders: 25 },
-      { date: "2026-09-02", revenue_paise: 3800000, orders: 21 },
-      { date: "2026-09-03", revenue_paise: 4850000, orders: 28 },
-    ],
-    orders_by_status: [
-      { status: "paid", count: 85 },
-      { status: "created", count: 8 },
-      { status: "failed", count: 4 },
-      { status: "refunded", count: 2 },
-    ],
-    top_categories: [
-      { category: "Fruits & Veggies", revenue_paise: 2400000 },
-      { category: "Dairy & Breakfast", revenue_paise: 1950000 },
-      { category: "Snacks & Munchies", revenue_paise: 1400000 },
-    ],
-    aov_paise: 49500,
-    conversion_rate_pct: 18.5,
-    insights: [
-      {
-        id: "ins_1",
-        title: "High AI Checkout Conversion",
-        detail: "Autonomous AI checkout conversion is 24% higher than standard web cart.",
-      },
-      {
-        id: "ins_2",
-        title: "High Repeat Rate on Staples",
-        detail: "Fresh Robusta Bananas and Amul Taaza Milk have 88% repeat re-order rate.",
-      },
-    ],
+    revenue_series: [],
+    orders_by_status: [],
+    top_categories: [],
+    aov_paise: 0,
+    conversion_rate_pct: 0,
+    insights: [],
   }
 }
 
@@ -749,3 +768,36 @@ export async function executeAgentCheckout(
     protocol,
   }
 }
+
+export async function createStorefrontOrder(order: Order): Promise<Order> {
+  const targetMerchantId = (order as any).merchant_id || SEEDED_MERCHANT_ID
+  const { data, error } = await supabase
+    .from("orders")
+    .insert({
+      external_id: order.id,
+      merchant_id: targetMerchantId,
+      customer_id: null,
+      razorpay_order_id: order.razorpay_order_id,
+      razorpay_payment_id: order.razorpay_payment_id ?? null,
+      status: order.status,
+      shipping_status: order.shipping_status ?? "pending",
+      currency: order.currency || "INR",
+      total_paise: order.total_paise,
+      shipping_paise: order.shipping_paise ?? 0,
+      items: order.items,
+      shipping_address: order.shipping_address,
+      billing_address: order.billing_address ?? null,
+      via_ai: !!order.via_ai,
+      commerce_protocol: order.commerce_protocol || "direct_web",
+      notes: order.notes ?? null,
+      paid_at: order.status === "paid" ? new Date().toISOString() : null,
+    } as any)
+    .select()
+    .maybeSingle()
+  if (error) {
+    console.error("[createStorefrontOrder] insert error:", error)
+    throw error
+  }
+  return mapDbOrder(data)
+}
+

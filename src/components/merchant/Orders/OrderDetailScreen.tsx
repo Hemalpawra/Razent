@@ -1,6 +1,6 @@
 "use client" /* Header */ /* Amount Paid */ /* Order Items */ /* Actions */ /* Customer Details */ /* Payment Details */ /* Order Timeline */ /* Bottom Actions */
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import {
   ArrowLeft,
   FileTextIcon,
@@ -14,9 +14,11 @@ import {
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useUI } from "@/state/useUI"
-import { mockOrders } from "@/lib/mock/orders"
+import { getOrder } from "@/lib/api/client"
 import { formatPrice } from "@/lib/types/order"
+import type { Order } from "@/lib/types/order"
 
 function formatPaid(paise: number) {
   const rupees = paise / 100
@@ -32,9 +34,17 @@ export default function OrderDetailScreen() {
   const setActiveScreen = useUI((s) => s.setActiveScreen)
   const drawerId = useUI((s) => s.drawerOrderId)
   const closeDrawer = useUI((s) => s.closeOrderDrawer)
-  const order = drawerId
-    ? (mockOrders.find((o) => o.id === drawerId) ?? null)
-    : null
+
+  const [order, setOrder] = useState<Order | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!drawerId) { setLoading(false); return }
+    getOrder(drawerId)
+      .then((o) => setOrder(o ?? null))
+      .catch(() => setOrder(null))
+      .finally(() => setLoading(false))
+  }, [drawerId])
 
   const paymentMethod = order?.via_ai ? "UPI" : "Card"
   const paidOn = order?.paid_at
@@ -113,7 +123,13 @@ export default function OrderDetailScreen() {
       </header>
 
       <div className="p-4">
-        {!order ? (
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-32 w-full rounded-xl" />
+          </div>
+        ) : !order ? (
           <Card className="flex flex-col items-center justify-center p-8 text-center">
             <p className="text-sm text-muted-foreground">
               No order selected. Please go back and select an order.

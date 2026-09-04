@@ -1,21 +1,34 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { ArrowLeft, Bot, Send, User } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { useUI } from "@/state/useUI"
-import { mockConversations } from "@/lib/mock/conversations"
+import { getConversation } from "@/lib/api/client"
+import type { Conversation } from "@/lib/types/conversation"
 
 export default function ConversationDetailScreen() {
   const setActiveScreen = useUI((s) => s.setActiveScreen)
   const closeDrawer = useUI((s) => s.closeOrderDrawer)
+  const drawerId = useUI((s) => s.drawerOrderId)
 
-  const conversation = mockConversations[0] ?? null
+  const [conversation, setConversation] = useState<Conversation | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!drawerId) { setLoading(false); return }
+    getConversation(drawerId)
+      .then((c) => setConversation(c ?? null))
+      .catch(() => setConversation(null))
+      .finally(() => setLoading(false))
+  }, [drawerId])
 
   const handleBack = () => {
     closeDrawer()
@@ -40,7 +53,13 @@ export default function ConversationDetailScreen() {
       </header>
 
       <div className="p-4 flex-1">
-        {!conversation ? (
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+        ) : !conversation ? (
           <Card className="flex flex-col items-center justify-center p-8 text-center">
             <p className="text-sm text-muted-foreground mb-4">
               No conversation selected. Please go back to AI Agent.

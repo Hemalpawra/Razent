@@ -145,14 +145,23 @@ export default function AIAgentScreen({
       c.status === "waiting_for_customer" ||
       c.status === "waiting_for_payment",
   ).length
-  const ordersToday = orders.filter((o) =>
-    o.created_at.startsWith("2026-08-31"),
-  ).length
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const ordersToday = orders.filter((o) => o.created_at.startsWith(todayStr)).length
   const revenueToday = orders
-    .filter((o) => o.status === "paid" && o.created_at.startsWith("2026-08-31"))
+    .filter((o) => o.status === "paid" && o.created_at.startsWith(todayStr))
     .reduce((s, o) => s + o.total_paise, 0)
-  const customersHelped = 42
-  const conversionRate = "24.5%"
+  const customersHelped = convData.length
+  const conversionRate = convData.length > 0
+    ? `${((orders.filter((o) => o.via_ai).length / convData.length) * 100).toFixed(1)}%`
+    : "0%"
+
+  const [dateRange, setDateRange] = useState("Last 7 Days")
+  const cycleDateRange = () => {
+    const list = ["Today", "Last 7 Days", "Last 30 Days", "All Time"]
+    const next = list[(list.indexOf(dateRange) + 1) % list.length]
+    setDateRange(next)
+  }
 
   const handleOpen = (id: string) => {
     setSelectedId(id)
@@ -223,12 +232,8 @@ export default function AIAgentScreen({
           </h3>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
             Your AI will appear here once products are imported and customers
-            start chatting. Import products to get started.
+            start chatting.
           </p>
-          <div className="mt-6 flex justify-center gap-2">
-            <Button>Go to Products</Button>
-            <Button variant="outline">Product Import</Button>
-          </div>
         </Card>
       </div>
     )
@@ -247,8 +252,8 @@ export default function AIAgentScreen({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" className="h-9 rounded-lg bg-card">
-            May 20, 2025 - May 27, 2025
+          <Button variant="outline" className="h-9 rounded-lg bg-card" onClick={cycleDateRange}>
+            {dateRange}
             <ChevronDown className="size-4 opacity-60" />
           </Button>
           <Button variant="outline" className="h-9 rounded-lg bg-card">
@@ -284,13 +289,13 @@ export default function AIAgentScreen({
           icon={<Users className="size-4" />}
           label="Customers Helped"
           value={String(customersHelped)}
-          sub="today · 98% without handoff"
+          sub="Active conversation sessions"
         />
         <KpiCard
           icon={<TrendingUp className="size-4" />}
           label="Conversion Rate"
           value={conversionRate}
-          sub="↑ 5.3% vs yesterday"
+          sub="AI assisted orders"
         />
         <KpiCard
           icon={<MessageCircle className="size-4" />}
@@ -307,7 +312,7 @@ export default function AIAgentScreen({
         <KpiCard
           icon={<IndianRupee className="size-4" />}
           label="Revenue Generated Today"
-          value={formatPrice(revenueToday || 12456000)}
+          value={formatPrice(revenueToday)}
           sub="From AI-assisted orders"
           valueIsAmount
         />
@@ -318,59 +323,8 @@ export default function AIAgentScreen({
         <div className="grid gap-3 lg:grid-cols-[70%_30%]">
           {/* Left — Live Conversations */}
           <LiveConversationsCard onOpen={handleOpen} convData={convData} />
-          {/* Right — bundle + missed + needs attention */}
+          {/* Right — needs attention */}
           <div className="space-y-3">
-            <Card className="rounded-xl bg-card border-l-4 border-l-primary">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Lightbulb className="size-4" />
-                  </div>
-                  <CardTitle className="text-sm">Bundle opportunity</CardTitle>
-                  <Badge variant="secondary" className="ml-auto rounded-full">
-                    ₹42k potential
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-5 text-muted-foreground">
-                  Customers who ordered Fresh Robusta Bananas also ordered Amul
-                  Taaza Milk and Farm Fresh Eggs. Bundle recommendations
-                  increased grocery revenue by{" "}
-                  <span className="font-medium text-foreground">24%</span> this
-                  week.
-                </p>
-                <Button size="sm" className="mt-3 h-8 rounded-full">
-                  Create bundle
-                </Button>
-              </CardContent>
-            </Card>
-            <Card className="rounded-xl bg-card border-l-4 border-l-amber-500">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex size-8 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
-                    <TrendingUp className="size-4" />
-                  </div>
-                  <CardTitle className="text-sm">Missed revenue</CardTitle>
-                  <Badge variant="secondary" className="ml-auto rounded-full">
-                    Kitchen
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-5 text-muted-foreground">
-                  Kitchen category had 4 chats for out-of-stock kettle. Premium
-                  suggestion (Espresso Machine) converted 2/4.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-3 h-8 rounded-full bg-card"
-                >
-                  View products
-                </Button>
-              </CardContent>
-            </Card>
             <Card className="rounded-xl bg-card">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-base">Needs Attention</CardTitle>
@@ -379,34 +333,29 @@ export default function AIAgentScreen({
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-1">
-                <AttentionRow
-                  icon={AlertTriangle}
-                  title="Waiting for payment"
-                  desc="1 conversation · ₹8,999 at risk"
-                  count="1"
-                  tone="warning"
-                />
-                <AttentionRow
-                  icon={Users}
-                  title="Human support requested"
-                  desc="Priya Nair asked for help"
-                  count="1"
-                  tone="warning"
-                />
-                <AttentionRow
-                  icon={Package}
-                  title="Out of stock"
-                  desc="Smart Kettle — 1 chat affected"
-                  count="1"
-                  tone="destructive"
-                />
-                <AttentionRow
-                  icon={TrendingUp}
-                  title="Abandoned high-value"
-                  desc="₹15,999 bundle stalled"
-                  count="1"
-                  tone="warning"
-                />
+                {convData.filter((c) => c.status === "waiting_for_payment").length > 0 && (
+                  <AttentionRow
+                    icon={AlertTriangle}
+                    title="Waiting for payment"
+                    desc={`${convData.filter((c) => c.status === "waiting_for_payment").length} conversation awaiting checkout`}
+                    count={String(convData.filter((c) => c.status === "waiting_for_payment").length)}
+                    tone="warning"
+                  />
+                )}
+                {convData.filter((c) => c.status === "waiting_for_customer").length > 0 && (
+                  <AttentionRow
+                    icon={Users}
+                    title="Waiting for customer response"
+                    desc={`${convData.filter((c) => c.status === "waiting_for_customer").length} active customer threads`}
+                    count={String(convData.filter((c) => c.status === "waiting_for_customer").length)}
+                    tone="warning"
+                  />
+                )}
+                {activeCount === 0 && (
+                  <div className="p-4 text-center text-xs text-muted-foreground">
+                    All AI interactions normal. No customer escalations pending.
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

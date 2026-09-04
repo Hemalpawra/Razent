@@ -1,21 +1,33 @@
 "use client" /* Header */ /* Session header */ /* Timeline */ /* Bottom actions */
 
+import { useEffect, useState } from "react"
 import { ArrowLeft } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useUI } from "@/state/useUI"
-import { mockAuditSessions } from "@/lib/mock/audit"
-import { formatPrice } from "@/lib/types/product"
+import { listAuditSessions } from "@/lib/api/client"
+import type { AuditSession } from "@/lib/types/audit"
 
 export default function AuditDetailScreen() {
   const setActiveScreen = useUI((s) => s.setActiveScreen)
   const closeAuditDrawer = useUI((s) => s.closeAuditDrawer)
   const drawerAuditSessionId = useUI((s) => s.drawerAuditSessionId)
 
-  const session = drawerAuditSessionId
-    ? (mockAuditSessions.find((s) => s.session_id === drawerAuditSessionId) ?? null)
-    : null
+  const [session, setSession] = useState<AuditSession | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!drawerAuditSessionId) { setLoading(false); return }
+    listAuditSessions()
+      .then((sessions) => {
+        const found = sessions.find((s) => s.session_id === drawerAuditSessionId) ?? null
+        setSession(found)
+      })
+      .catch(() => setSession(null))
+      .finally(() => setLoading(false))
+  }, [drawerAuditSessionId])
 
   const handleBack = () => {
     closeAuditDrawer()
@@ -36,15 +48,21 @@ export default function AuditDetailScreen() {
         </Button>
         <span className="text-sm font-medium text-foreground">Audit Trail</span>
         <span className="text-xs text-muted-foreground ml-auto">
-          6 sessions
+          Session Detail
         </span>
       </header>
 
       <div className="p-4 flex-1">
-        {!session ? (
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+        ) : !session ? (
           <Card className="flex flex-col items-center justify-center p-8 text-center">
             <p className="text-sm text-muted-foreground mb-4">
-              No audit session selected. Please go back to Audit Trail.
+              No audit session found. Please go back to Audit Trail.
             </p>
             <Button variant="outline" onClick={handleBack} className="mt-4">
               Back to Audit Trail

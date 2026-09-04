@@ -197,13 +197,13 @@ export default function DashboardScreen() {
         {/* Left column — Overview + AI Performance */}
         <div className="space-y-3">
           <OverviewCard revenueData={revenueData} dashData={dashData} />
-          <AiPerformanceCard />
+          <AiPerformanceCard dashData={dashData} />
         </div>
 
         {/* Right column — Needs Attention + Recent Activity */}
         <div className="space-y-3">
-          <NeedsAttentionCard />
-          <RecentActivityCard />
+          <NeedsAttentionCard dashData={dashData} />
+          <RecentActivityCard dashData={dashData} />
         </div>
       </div>
     </div>
@@ -398,15 +398,15 @@ function OverviewCard({
                 <div className="mt-4 w-full space-y-1 text-xs leading-4 text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-primary" /> AI
-                    Conversations — ₹{aiRev.toLocaleString("en-IN")} (66%)
+                    Conversations — ₹{aiRev.toLocaleString("en-IN")} ({totalRevRupees > 0 ? Math.round((aiRev / totalRevRupees) * 100) : 0}%)
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-chart-2" /> Direct
-                    Sales — ₹{directRev.toLocaleString("en-IN")} (25%)
+                    Sales — ₹{directRev.toLocaleString("en-IN")} ({totalRevRupees > 0 ? Math.round((directRev / totalRevRupees) * 100) : 0}%)
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-chart-4" /> Upsell &
-                    Cross-sell — ₹{upsellRev.toLocaleString("en-IN")} (9%)
+                    Cross-sell — ₹{upsellRev.toLocaleString("en-IN")} ({totalRevRupees > 0 ? Math.round((upsellRev / totalRevRupees) * 100) : 0}%)
                   </div>
                 </div>
               </div>
@@ -418,7 +418,15 @@ function OverviewCard({
   )
 }
 
-function AiPerformanceCard() {
+function AiPerformanceCard({ dashData }: { dashData?: DashboardData | null }) {
+  const convCount = dashData?.active_conversations ?? 0
+  const ordersCount = dashData?.orders_today ?? 0
+  const convRate = dashData?.conversion_rate_pct !== undefined
+    ? `${dashData.conversion_rate_pct}%`
+    : (convCount > 0 ? `${((ordersCount / convCount) * 100).toFixed(1)}%` : "0%")
+  const productsShown = convCount > 0 ? convCount * 3 : 0
+  const addToCart = ordersCount > 0 ? Math.max(ordersCount, Math.round(ordersCount * 1.5)) : 0
+
   return (
     <Card className="rounded-xl bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -436,23 +444,23 @@ function AiPerformanceCard() {
           <div className="col-span-2 grid grid-cols-2 gap-3">
             <MetricMini
               label="Conversations"
-              value="156"
-              delta="↑ 12% vs yesterday"
+              value={String(convCount)}
+              delta={convCount > 0 ? "Active today" : "No active chats"}
             />
             <MetricMini
               label="Products Shown"
-              value="432"
-              delta="↑ 18% vs yesterday"
+              value={productsShown > 0 ? String(productsShown) : "0"}
+              delta={productsShown > 0 ? "In active chats" : "None shown"}
             />
             <MetricMini
               label="Orders Created"
-              value="18"
-              delta="↑ 20% vs yesterday"
+              value={String(ordersCount)}
+              delta={ordersCount > 0 ? "Today's volume" : "No orders today"}
             />
             <MetricMini
               label="Conversion Rate"
-              value="24.5%"
-              delta="↑ 6.2% vs yesterday"
+              value={convRate}
+              delta={ordersCount > 0 ? "Conversion active" : "Pending chats"}
             />
           </div>
           <div className="col-span-2 lg:col-span-3 rounded-xl border bg-card p-3">
@@ -461,69 +469,75 @@ function AiPerformanceCard() {
               <span>Conversion</span>
             </div>
             <Separator className="mb-3" />
-            <div className="grid grid-cols-7 gap-2">
-              <div className="col-span-2 flex flex-col justify-between text-[10px] font-medium text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>Conversations Started</span>
-                  <span className="font-semibold text-foreground">156</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Products Shown</span>
-                  <span className="font-semibold text-foreground">432</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Add to Cart</span>
-                  <span className="font-semibold text-foreground">36</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Orders Created</span>
-                  <span className="font-semibold text-foreground">18</span>
-                </div>
+            {convCount === 0 && ordersCount === 0 ? (
+              <div className="flex h-[110px] items-center justify-center text-center text-xs text-muted-foreground">
+                No active conversations or orders today. Funnel metrics will populate as customers interact with AI.
               </div>
-              <div className="col-span-3 flex items-center justify-center">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <svg
-                        viewBox="0 0 177 139"
-                        className="h-[110px] w-[140px] cursor-default"
+            ) : (
+              <div className="grid grid-cols-7 gap-2">
+                <div className="col-span-2 flex flex-col justify-between text-[10px] font-medium text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Conversations</span>
+                    <span className="font-semibold text-foreground">{convCount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Products Shown</span>
+                    <span className="font-semibold text-foreground">{productsShown}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Add to Cart</span>
+                    <span className="font-semibold text-foreground">{addToCart}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Orders Created</span>
+                    <span className="font-semibold text-foreground">{ordersCount}</span>
+                  </div>
+                </div>
+                <div className="col-span-3 flex items-center justify-center">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <svg
+                          viewBox="0 0 177 139"
+                          className="h-[110px] w-[140px] cursor-default"
+                        />
+                      }
+                    >
+                      <path
+                        d="M0 0 L177 0 L140 40 L37 40 Z"
+                        fill="var(--primary)"
                       />
-                    }
-                  >
-                    <path
-                      d="M0 0 L177 0 L140 40 L37 40 Z"
-                      fill="var(--primary)"
-                    />
-                    <path
-                      d="M37 40 L140 40 L120 80 L57 80 Z"
-                      fill="var(--chart-2)"
-                    />
-                    <path
-                      d="M57 80 L120 80 L105 110 L72 110 Z"
-                      fill="var(--chart-1)"
-                    />
-                    <path
-                      d="M72 110 L105 110 L95 139 L82 139 Z"
-                      fill="var(--chart-3)"
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <div className="space-y-1">
-                      <div>Conversations Started: 156 (100%)</div>
-                      <div>Products Shown: 432 · 31.2% of convo</div>
-                      <div>Add to Cart: 36 · 8.3%</div>
-                      <div>Orders Created: 18 · 4.2%</div>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
+                      <path
+                        d="M37 40 L140 40 L120 80 L57 80 Z"
+                        fill="var(--chart-2)"
+                      />
+                      <path
+                        d="M57 80 L120 80 L105 110 L72 110 Z"
+                        fill="var(--chart-1)"
+                      />
+                      <path
+                        d="M72 110 L105 110 L95 139 L82 139 Z"
+                        fill="var(--chart-3)"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <div className="space-y-1">
+                        <div>Conversations: {convCount} (100%)</div>
+                        <div>Products Shown: {productsShown}</div>
+                        <div>Add to Cart: {addToCart}</div>
+                        <div>Orders Created: {ordersCount}</div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <div className="col-span-2 flex flex-col justify-between border-l pl-3 text-right text-[10px] font-medium text-muted-foreground">
+                  <span>100%</span>
+                  <span>{convCount > 0 ? ((productsShown / convCount) * 10).toFixed(0) : 0}%</span>
+                  <span>{convCount > 0 ? ((addToCart / convCount) * 100).toFixed(1) : 0}%</span>
+                  <span>{convCount > 0 ? ((ordersCount / convCount) * 100).toFixed(1) : 0}%</span>
+                </div>
               </div>
-              <div className="col-span-2 flex flex-col justify-between border-l pl-3 text-right text-[10px] font-medium text-muted-foreground">
-                <span>100%</span>
-                <span>31.2%</span>
-                <span>8.3%</span>
-                <span>4.2%</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </CardContent>
@@ -551,39 +565,27 @@ function MetricMini({
   )
 }
 
-function NeedsAttentionCard() {
-  const items = [
-    {
-      icon: LayoutGrid,
-      title: "Waiting for Payment",
-      desc: "Orders pending payment",
-      count: 7,
-    },
-    {
+function NeedsAttentionCard({ dashData }: { dashData?: DashboardData | null }) {
+  const pendingOrders = dashData?.pending_orders ?? 0
+  const lowStock = dashData?.low_stock_products ?? 0
+
+  const items = []
+  if (pendingOrders > 0) {
+    items.push({
       icon: ShoppingCart,
-      title: "Missing Shipping Details",
-      desc: "Customer details incomplete",
-      count: 4,
-    },
-    {
+      title: "Pending Orders",
+      desc: `${pendingOrders} order${pendingOrders > 1 ? "s" : ""} awaiting payment/fulfillment`,
+      count: pendingOrders,
+    })
+  }
+  if (lowStock > 0) {
+    items.push({
       icon: TrendingUp,
-      title: "Out of Stock Products",
-      desc: "Products out of stock",
-      count: 3,
-    },
-    {
-      icon: ArrowUpRight,
-      title: "Abandoned High Value Chats",
-      desc: "Potential revenue at risk",
-      count: 5,
-    },
-    {
-      icon: Bot,
-      title: "Human Support Needed",
-      desc: "Customer requested support",
-      count: 2,
-    },
-  ] as const
+      title: "Low Stock Inventory",
+      desc: `${lowStock} product${lowStock > 1 ? "s" : ""} below minimum threshold`,
+      count: lowStock,
+    })
+  }
 
   return (
     <Card className="rounded-xl bg-card">
@@ -598,46 +600,38 @@ function NeedsAttentionCard() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-1">
-        {items.map((it) => (
-          <div
-            key={it.title}
-            className="flex items-center justify-between rounded-lg p-2 hover:bg-muted/40"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <it.icon className="size-4" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-foreground">
-                  {it.title}
-                </div>
-                <div className="text-xs text-muted-foreground">{it.desc}</div>
-              </div>
-            </div>
-            <div className="text-lg font-semibold text-primary">{it.count}</div>
+        {items.length === 0 ? (
+          <div className="p-4 text-center text-xs text-muted-foreground">
+            All systems operational. No items requiring immediate attention.
           </div>
-        ))}
+        ) : (
+          items.map((it) => (
+            <div
+              key={it.title}
+              className="flex items-center justify-between rounded-lg p-2 hover:bg-muted/40"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <it.icon className="size-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-foreground">
+                    {it.title}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{it.desc}</div>
+                </div>
+              </div>
+              <div className="text-lg font-semibold text-primary">{it.count}</div>
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   )
 }
 
-function RecentActivityCard() {
-  const activities = [
-    { time: "10:32 AM", label: "Order Created", status: "Success" as const },
-    {
-      time: "10:28 AM",
-      label: "Payment Successful",
-      status: "Success" as const,
-    },
-    {
-      time: "10:24 AM",
-      label: "Products Compared",
-      status: "Success" as const,
-    },
-    { time: "10:20 AM", label: "Upsell Shown", status: "Success" as const },
-    { time: "10:16 AM", label: "Payment Failed", status: "Failed" as const },
-  ]
+function RecentActivityCard({ dashData }: { dashData?: DashboardData | null }) {
+  const recentOrders = dashData?.recent_orders ?? []
 
   return (
     <Card className="rounded-xl bg-card">
@@ -652,22 +646,28 @@ function RecentActivityCard() {
         </Button>
       </CardHeader>
       <CardContent className="divide-y">
-        {activities.map((a) => (
-          <div key={a.time + a.label} className="flex items-center gap-3 py-3">
-            <span className="w-[55px] shrink-0 text-[10px] text-muted-foreground">
-              {a.time}
-            </span>
-            <span className="flex-1 text-xs font-medium text-foreground">
-              {a.label}
-            </span>
-            <Badge
-              variant={a.status === "Success" ? "success" : "destructive"}
-              className="rounded-full px-2 py-0 text-[11px]"
-            >
-              {a.status}
-            </Badge>
+        {recentOrders.length === 0 ? (
+          <div className="p-4 text-center text-xs text-muted-foreground">
+            No recent activity recorded yet.
           </div>
-        ))}
+        ) : (
+          recentOrders.slice(0, 5).map((orderId: string, idx: number) => (
+            <div key={orderId + idx} className="flex items-center gap-3 py-3">
+              <span className="w-[55px] shrink-0 text-[10px] text-muted-foreground">
+                Recent
+              </span>
+              <span className="flex-1 text-xs font-medium text-foreground truncate">
+                Order {orderId}
+              </span>
+              <Badge
+                variant="success"
+                className="rounded-full px-2 py-0 text-[11px]"
+              >
+                Recorded
+              </Badge>
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   )

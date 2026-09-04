@@ -166,11 +166,13 @@ export default function ConversationDrawer({
 }) {
   const isMobile = useIsMobile()
 
-  if (isMobile) {
-    return null
-  }
-
-  const titleName = "ChatGPT Assistant"
+  const displayName = conversation?.customer_name ?? "AI Conversation"
+  const displayType = conversation?.type === "agent_to_agent" ? "AI Agent" : "AI Assistant"
+  const displayStatus = conversation?.status ?? "active"
+  const displayStarted = conversation?.created_at
+    ? new Date(conversation.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+    : "—"
+  const messages = conversation?.messages ?? []
 
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
@@ -179,7 +181,7 @@ export default function ConversationDrawer({
           <DrawerTitle className="text-lg font-heading font-medium tracking-tight">
             Agent Conversation
           </DrawerTitle>
-          <DrawerDescription>Chat with AI Assistant</DrawerDescription>
+          <DrawerDescription>Chat with {displayType}</DrawerDescription>
           <Button
             variant="ghost"
             size="icon"
@@ -195,7 +197,7 @@ export default function ConversationDrawer({
           <div className="border-b bg-card px-4 py-4">
             <div className="flex items-center justify-between">
               <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
-                Agent Conversation
+                {displayName}
               </h2>
               <Button
                 variant="ghost"
@@ -216,21 +218,21 @@ export default function ConversationDrawer({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground">
-                    {titleName}
+                    {displayName}
                   </span>
                   <Badge
-                    variant="success"
+                    variant={displayStatus === "active" ? "success" : "secondary"}
                     className="rounded-full px-2 py-0 text-[11px]"
                   >
-                    Active
+                    {displayStatus}
                   </Badge>
                 </div>
                 <div className="text-[11px] leading-4 text-muted-foreground">
-                  Started 10:24 AM · May 27, 2025
+                  Started {displayStarted}
                 </div>
               </div>
               <Badge variant="secondary" className="rounded-full text-[11px]">
-                AI Assistant
+                {displayType}
               </Badge>
             </div>
           </div>
@@ -274,141 +276,35 @@ export default function ConversationDrawer({
                 className="m-0 px-4 py-4 space-y-4"
               >
                 <div className="flex flex-col gap-4">
-                  <Message align="end">
-                    <MessageAvatar>
-                      <Avatar className="size-7">
-                        <AvatarFallback className="bg-muted text-foreground">
-                          <User className="size-3.5" />
-                        </AvatarFallback>
-                      </Avatar>
-                    </MessageAvatar>
-                    <MessageContent className="items-end">
-                      <Bubble variant="muted" align="end">
-                        <BubbleContent>
-                          Looking for an air purifier under ₹20,000 for my
-                          living room.
-                        </BubbleContent>
-                      </Bubble>
-                      <span className="text-[10px] text-muted-foreground">
-                        10:24 AM
-                      </span>
-                    </MessageContent>
-                  </Message>
-
-                  <Message align="start">
-                    <MessageAvatar>
-                      <Avatar className="size-7">
-                        <AvatarFallback className="bg-primary text-primary-foreground">
-                          <Bot className="size-3.5" />
-                        </AvatarFallback>
-                      </Avatar>
-                    </MessageAvatar>
-                    <MessageContent className="items-start">
-                      <Bubble variant="tinted" align="start">
-                        <BubbleContent>
-                          Found 3 options under ₹20,000 — tap to compare:
-                        </BubbleContent>
-                      </Bubble>
-                      <span className="text-[10px] text-muted-foreground">
-                        10:25 AM
-                      </span>
-                    </MessageContent>
-                  </Message>
-
-                  <div className="grid gap-2 pl-8">
-                    {PRODUCTS.map((p) => (
-                      <Card
-                        key={p.id}
-                        className="rounded-xl bg-card p-2.5 shadow-sm"
-                      >
-                        <div className="flex gap-3">
-                          <img
-                            src={p.img}
-                            alt={p.name}
-                            className="size-12 rounded-lg object-cover ring-1 ring-border/40"
-                            loading="lazy"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium leading-4 text-foreground">
-                              {p.name}
-                            </div>
-                            <div className="text-[11px] leading-3 text-muted-foreground">
-                              {p.subtitle}
-                            </div>
-                            <div className="mt-1 flex items-center gap-2">
-                              <span className="text-sm font-semibold text-foreground">
-                                {formatPrice(p.price)}
-                              </span>
-                              <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
-                                <Star className="size-3 fill-amber-500 text-amber-500" />
-                                {p.rating}
-                              </span>
-                            </div>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant={p.added ? "secondary" : "outline"}
-                            className="h-7 shrink-0 rounded-full text-xs"
-                          >
-                            {p.added ? "Added" : "View"}
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-
-                  <Message align="end">
-                    <MessageAvatar>
-                      <Avatar className="size-7">
-                        <AvatarFallback className="bg-muted text-foreground">
-                          <User className="size-3.5" />
-                        </AvatarFallback>
-                      </Avatar>
-                    </MessageAvatar>
-                    <MessageContent className="items-end">
-                      <Bubble variant="muted" align="end">
-                        <BubbleContent>
-                          Go with Air Purifier Pro — looks good.
-                        </BubbleContent>
-                      </Bubble>
-                      <span className="text-[10px] text-muted-foreground">
-                        10:27 AM
-                      </span>
-                    </MessageContent>
-                  </Message>
-
-                  <Message align="start">
-                    <MessageAvatar>
-                      <Avatar className="size-7">
-                        <AvatarFallback className="bg-primary text-primary-foreground">
-                          <Bot className="size-3.5" />
-                        </AvatarFallback>
-                      </Avatar>
-                    </MessageAvatar>
-                    <MessageContent className="items-start">
-                      <Bubble variant="default" align="start">
-                        <BubbleContent>
-                          Added Air Purifier Pro to cart. Shall I proceed to
-                          checkout?
-                        </BubbleContent>
-                      </Bubble>
-                      <div className="mt-2 flex gap-2">
-                        <Button size="sm" className="h-7 rounded-full">
-                          Yes, proceed
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 rounded-full bg-card"
-                        >
-                          Not now
-                        </Button>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground">
-                        10:28 AM
-                      </span>
-                    </MessageContent>
-                  </Message>
+                  {messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
+                      <Bot className="size-8 mb-2 opacity-40" />
+                      <p className="text-sm">No messages in this conversation yet.</p>
+                    </div>
+                  ) : (
+                    messages.map((msg, idx) => {
+                      const isCustomer = msg.role === "customer"
+                      return (
+                        <Message key={msg.id ?? idx} align={isCustomer ? "end" : "start"}>
+                          <MessageAvatar>
+                            <Avatar className="size-7">
+                              <AvatarFallback className={isCustomer ? "bg-muted text-foreground" : "bg-primary text-primary-foreground"}>
+                                {isCustomer ? <User className="size-3.5" /> : <Bot className="size-3.5" />}
+                              </AvatarFallback>
+                            </Avatar>
+                          </MessageAvatar>
+                          <MessageContent className={isCustomer ? "items-end" : "items-start"}>
+                            <Bubble variant={isCustomer ? "muted" : "tinted"} align={isCustomer ? "end" : "start"}>
+                              <BubbleContent>{msg.text}</BubbleContent>
+                            </Bubble>
+                            <span className="text-[10px] text-muted-foreground">
+                              {msg.at ? new Date(msg.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                            </span>
+                          </MessageContent>
+                        </Message>
+                      )
+                    })
+                  )}
                 </div>
 
                 <Separator />
