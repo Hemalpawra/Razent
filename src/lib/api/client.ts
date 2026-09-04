@@ -470,66 +470,55 @@ export async function logAuditEvent(
 // ─────────────────────────────────────────────────────────────────
 
 export async function getDashboard(): Promise<DashboardData> {
+  const merchantId = SEEDED_MERCHANT_ID
   try {
-    const merchantId = await requireMerchantId().catch(() => null)
-    if (merchantId) {
-      const { data, error } = await supabase
-        .from("dashboard_view")
-        .select("*")
-        .eq("merchant_id", merchantId)
-        .maybeSingle()
-      if (!error && data) {
-        return {
-          active_conversations: data.active_conversations ?? 0,
-          orders_today: data.orders_today ?? 0,
-          revenue_month_paise: Number(data.revenue_month_paise ?? 0),
-          ai_status: data.ai_status ?? "active",
-          low_stock_products: data.low_stock_products ?? 0,
-          pending_orders: data.pending_orders ?? 0,
-          recent_orders: data.recent_orders ?? [],
-          needs_attention: data.needs_attention ?? [],
-          // Optional delta fields - not in view yet
-          revenue_vs_prev_pct: undefined,
-          orders_vs_prev_pct: undefined,
-          conversion_vs_prev_pct: undefined,
-          upsell_vs_prev_pct: undefined,
-          aov_vs_prev_pct: undefined,
-          conversion_rate_pct: undefined,
-          upsell_revenue_paise: undefined,
-          aov_paise: undefined,
-          revenue_daily_paise: undefined,
-        }
+    const { data, error } = await supabase
+      .from("dashboard_view")
+      .select("*")
+      .eq("merchant_id", merchantId)
+      .maybeSingle()
+    if (!error && data) {
+      return {
+        active_conversations: Number(data.active_conversations ?? 0),
+        orders_today: Number(data.orders_today ?? 0),
+        revenue_month_paise: Number(data.revenue_month_paise ?? 0),
+        ai_status: (data.ai_status ?? "online") as "online" | "degraded" | "offline",
+        low_stock_products: Number(data.low_stock_products ?? 0),
+        pending_orders: Number(data.pending_orders ?? 0),
+        recent_orders: Array.isArray(data.recent_orders) ? data.recent_orders : [],
+        needs_attention: Array.isArray(data.needs_attention) ? data.needs_attention : [],
+        revenue_vs_prev_pct: undefined,
+        orders_vs_prev_pct: undefined,
+        conversion_vs_prev_pct: undefined,
+        upsell_vs_prev_pct: undefined,
+        aov_vs_prev_pct: undefined,
+        conversion_rate_pct: undefined,
+        upsell_revenue_paise: undefined,
+        aov_paise: undefined,
+        revenue_daily_paise: undefined,
       }
     }
   } catch (err: any) {
-    console.warn("[getDashboard] fetch error, using fallback metrics:", err?.message)
+    console.warn("[getDashboard] fetch error:", err?.message)
   }
   return {
-    active_conversations: 3,
-    orders_today: 12,
-    revenue_month_paise: 18450000,
+    active_conversations: 0,
+    orders_today: 0,
+    revenue_month_paise: 0,
     ai_status: "online",
-    low_stock_products: 1,
-    pending_orders: 2,
-    recent_orders: ["ORD-2026-904101", "ORD-2026-904102", "ORD-2026-904104"],
+    low_stock_products: 0,
+    pending_orders: 0,
+    recent_orders: [],
     needs_attention: [],
-    revenue_vs_prev_pct: 12.5,
-    orders_vs_prev_pct: 8.2,
-    conversion_vs_prev_pct: 3.4,
-    upsell_vs_prev_pct: 15.0,
-    aov_vs_prev_pct: 5.1,
-    conversion_rate_pct: 22.4,
-    upsell_revenue_paise: 3450000,
-    aov_paise: 49500,
-    revenue_daily_paise: [
-      { date: "May 21", revenue_paise: 2450000 },
-      { date: "May 22", revenue_paise: 3100000 },
-      { date: "May 23", revenue_paise: 2890000 },
-      { date: "May 24", revenue_paise: 3950000 },
-      { date: "May 25", revenue_paise: 4200000 },
-      { date: "May 26", revenue_paise: 3800000 },
-      { date: "May 27", revenue_paise: 4850000 },
-    ],
+    revenue_vs_prev_pct: undefined,
+    orders_vs_prev_pct: undefined,
+    conversion_vs_prev_pct: undefined,
+    upsell_vs_prev_pct: undefined,
+    aov_vs_prev_pct: undefined,
+    conversion_rate_pct: undefined,
+    upsell_revenue_paise: undefined,
+    aov_paise: undefined,
+    revenue_daily_paise: undefined,
   }
 }
 

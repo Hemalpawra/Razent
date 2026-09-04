@@ -66,20 +66,27 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     let alive = true
-    getDashboard()
-      .then((d) => {
-        if (alive) {
-          setDashData(d)
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        if (alive) {
-          setDashData(null)
-          setLoading(false)
-        }
-      })
-    return () => { alive = false }
+    const fetchData = () => {
+      getDashboard()
+        .then((d) => {
+          if (alive) {
+            setDashData(d)
+            setLoading(false)
+          }
+        })
+        .catch(() => {
+          if (alive) {
+            setDashData(null)
+            setLoading(false)
+          }
+        })
+    }
+    fetchData()
+    const interval = setInterval(fetchData, 2000)
+    return () => {
+      alive = false
+      clearInterval(interval)
+    }
   }, [])
 
   const revenueData = useMemo(() => {

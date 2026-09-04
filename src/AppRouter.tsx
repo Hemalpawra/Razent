@@ -30,10 +30,10 @@ function RouterApp() {
   return (
     <ThemeProvider>
       <Toaster />
-      <EnvErrorBoundary />
-      <Routes>
-        <Route path="/" element={<StoreHome />} />
-        <Route path="/sign-in" element={<SignInScreen />} />
+      <EnvErrorBoundary>
+        <Routes>
+          <Route path="/" element={<StoreHome />} />
+          <Route path="/sign-in" element={<SignInScreen />} />
 
         {/* Admin console with AppShell layout — 2 flows: private (auth) or public (readOnly VIEW ONLY) */}
         <Route path="/admin" element={<AdminLayout />}>
@@ -49,6 +49,7 @@ function RouterApp() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </EnvErrorBoundary>
     </ThemeProvider>
   )
 }
