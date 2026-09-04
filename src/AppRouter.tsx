@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom"
+import { HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"
 import ThemeProvider from "@/app/ThemeProvider"
 import { Toaster } from "@/components/shared/Toaster"
 import { EnvErrorBoundary } from "@/components/shared/EnvErrorBoundary"
@@ -17,33 +17,27 @@ import AIAgentScreen from "@/components/merchant/AIAgent"
 import AuditTrailScreen from "@/components/merchant/AuditTrail"
 import SettingsScreen from "@/components/merchant/Settings"
 
+function AdminLayout() {
+  const { user, profile, isLoading } = useMerchant()
+  if (isLoading) return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-sm text-muted-foreground">Loading admin...</p></div>
+  const isPrivate = !!user && !!profile
+  return <AppShell readOnly={!isPrivate}><Outlet /></AppShell>
+}
+
 function RouterApp() {
   useEffect(() => { initMerchantAuth() }, [])
-  const { user, profile, isLoading } = useMerchant()
-  const isPrivate = !!user && !!profile
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    )
-  }
 
   return (
     <ThemeProvider>
       <Toaster />
       <EnvErrorBoundary />
       <Routes>
-        {/* Public storefront — always view-only */}
         <Route path="/" element={<StoreHome />} />
-
-        {/* Sign-in for private admin access */}
         <Route path="/sign-in" element={<SignInScreen />} />
 
-        {/* Admin console — private (signed in) = full access; public (no auth) = read-only */}
-        <Route path="/admin/*" element={<AppShell readOnly={!isPrivate} />}>
-          <Route index element={<DashboardScreen />} />
+        {/* Admin console with AppShell layout — 2 flows: private (auth) or public (readOnly VIEW ONLY) */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardScreen />} />
           <Route path="products" element={<ProductsScreen />} />
           <Route path="orders" element={<OrdersScreen />} />
@@ -53,7 +47,6 @@ function RouterApp() {
           <Route path="settings" element={<SettingsScreen />} />
         </Route>
 
-        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ThemeProvider>

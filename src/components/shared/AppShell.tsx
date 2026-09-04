@@ -31,6 +31,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import { useNavigate, useLocation } from "react-router-dom"
 
 const navGroups: {
   label: string
@@ -69,10 +70,25 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
   const drawerOrderId = useUI((s) => s.drawerOrderId)
   const drawerProductId = useUI((s) => s.drawerProductId)
 
+  const navigate = useNavigate()
+  const location = useLocation()
+
   const handleScreenChange = (key: Screen) => {
     if (drawerOrderId) closeOrderDrawer()
     if (drawerProductId) closeProductDrawer()
     setScreen(key)
+    // Navigate to the admin sub-route matching the screen key
+    const routeMap: Record<string, string> = {
+      dashboard: "/admin/",
+      products: "/admin/products",
+      orders: "/admin/orders",
+      analytics: "/admin/analytics",
+      ai_agent: "/admin/ai_agent",
+      audit_trail: "/admin/audit_trail",
+      settings: "/admin/settings",
+    }
+    const path = routeMap[key] || "/admin/"
+    navigate(path)
   }
 
   // Store view — full width, no merchant sidebar chrome
