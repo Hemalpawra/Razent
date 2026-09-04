@@ -157,31 +157,31 @@ export default function DashboardScreen() {
                 icon={<IndianRupee className="size-4" />}
                 label="Revenue Generated"
                 value={dashData ? `₹${(dashData.revenue_month_paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "₹0.00"}
-                delta={dashData ? (dashData.revenue_vs_prev_pct >= 0 ? `↑ ${dashData.revenue_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.revenue_vs_prev_pct).toFixed(1)}%`) : "—"}
+                delta={dashData?.revenue_vs_prev_pct !== undefined ? (dashData.revenue_vs_prev_pct >= 0 ? `↑ ${dashData.revenue_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.revenue_vs_prev_pct).toFixed(1)}%`) : "—"}
               />
               <KpiCard
                 icon={<ShoppingCart className="size-4" />}
                 label="Orders Created"
-                value={dashData ? String(dashData.orders_month) : "0"}
-                delta={dashData ? (dashData.orders_vs_prev_pct >= 0 ? `↑ ${dashData.orders_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.orders_vs_prev_pct).toFixed(1)}%`) : "—"}
+                value={dashData ? String(dashData.orders_today) : "0"}
+                delta={dashData?.orders_vs_prev_pct !== undefined ? (dashData.orders_vs_prev_pct >= 0 ? `↑ ${dashData.orders_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.orders_vs_prev_pct).toFixed(1)}%`) : "—"}
               />
               <KpiCard
                 icon={<Bot className="size-4" />}
                 label="AI Conversion Rate"
-                value={dashData ? `${dashData.conversion_rate_pct}%` : "0%"}
-                delta={dashData ? (dashData.conversion_vs_prev_pct >= 0 ? `↑ ${dashData.conversion_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.conversion_vs_prev_pct).toFixed(1)}%`) : "—"}
+                value={dashData?.conversion_rate_pct !== undefined ? `${dashData.conversion_rate_pct}%` : "0%"}
+                delta={dashData?.conversion_vs_prev_pct !== undefined ? (dashData.conversion_vs_prev_pct >= 0 ? `↑ ${dashData.conversion_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.conversion_vs_prev_pct).toFixed(1)}%`) : "—"}
               />
               <KpiCard
                 icon={<TrendingUp className="size-4" />}
                 label="Upsell Revenue"
-                value={dashData ? `₹${(dashData.upsell_revenue_paise / 100).toLocaleString("en-IN")}` : "₹0"}
-                delta={dashData ? (dashData.upsell_vs_prev_pct >= 0 ? `↑ ${dashData.upsell_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.upsell_vs_prev_pct).toFixed(1)}%`) : "—"}
+                value={dashData?.upsell_revenue_paise !== undefined ? `₹${(dashData.upsell_revenue_paise / 100).toLocaleString("en-IN")}` : "₹0"}
+                delta={dashData?.upsell_vs_prev_pct !== undefined ? (dashData.upsell_vs_prev_pct >= 0 ? `↑ ${dashData.upsell_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.upsell_vs_prev_pct).toFixed(1)}%`) : "—"}
               />
               <KpiCard
                 icon={<Wallet className="size-4" />}
                 label="Avg. Order Value"
-                value={dashData ? `₹${(dashData.aov_paise / 100).toLocaleString("en-IN")}` : "₹0"}
-                delta={dashData ? (dashData.aov_vs_prev_pct >= 0 ? `↑ ${dashData.aov_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.aov_vs_prev_pct).toFixed(1)}%`) : "—"}
+                value={dashData?.aov_paise !== undefined ? `₹${(dashData.aov_paise / 100).toLocaleString("en-IN")}` : "₹0"}
+                delta={dashData?.aov_vs_prev_pct !== undefined ? (dashData.aov_vs_prev_pct >= 0 ? `↑ ${dashData.aov_vs_prev_pct.toFixed(1)}%` : `↓ ${Math.abs(dashData.aov_vs_prev_pct).toFixed(1)}%`) : "—"}
               />
             </div>
 

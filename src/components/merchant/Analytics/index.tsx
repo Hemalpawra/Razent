@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react"
 import {
   IndianRupee,
   ShoppingCart,
@@ -262,13 +263,13 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
   const a = analytics
 
   const totalRevenuePaise = a.revenue_series.reduce(
-    (s, r) => s + r.revenue_paise,
+    (s: number, r: RevenuePoint) => s + r.revenue_paise,
     0,
   )
 
-  const totalOrders = a.orders_by_status.reduce((s, o) => s + o.count, 0)
+  const totalOrders = a.orders_by_status.reduce((s: number, o: StatusCount) => s + o.count, 0)
 
-  const revenueData: { label: string; revenue: number }[] = a.revenue_series.map((r) => ({
+  const revenueData: { label: string; revenue: number }[] = a.revenue_series.map((r: RevenuePoint) => ({
     label: new Date(r.date + "T00:00:00Z").toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -279,10 +280,10 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
 
   const { ordersBySource, revenueBySource } = getSourceGroups(a.orders_by_status)
 
-  const totalSourceOrders = ordersBySource.reduce((s, d) => s + d.value, 0)
+  const totalSourceOrders = ordersBySource.reduce((s: number, d: any) => s + d.value, 0)
 
   const totalSourceRevenue = revenueBySource.reduce(
-    (s, d) => s + d.revenue_paise,
+    (s: number, d: any) => s + d.revenue_paise,
     0,
   )
 
@@ -291,7 +292,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
   // In a real implementation, this would come from a separate query
 
   // AI Conversation Over Time — from revenue_series (approximate)
-  const conversationDaily = a.revenue_series.map((r, i) => ({
+  const conversationDaily = a.revenue_series.map((r: RevenuePoint, i: number) => ({
     label: new Date(r.date + "T00:00:00Z").toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -621,7 +622,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
               </div>
             ) : (
               <div className="divide-y divide-border/50">
-                {a.insights.map((insight) => (
+                {a.insights.map((insight: any) => (
                   <div
                     key={insight.id}
                     className="flex gap-3 px-5 py-4 transition-colors hover:bg-muted/30"
