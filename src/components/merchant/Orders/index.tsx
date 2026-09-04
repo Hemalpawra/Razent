@@ -186,7 +186,7 @@ export default function OrdersScreen() {
       })
 
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [q, filterStatus])
+  }, [orders, q, filterStatus])
 
   // reset page when filters change
 
@@ -269,7 +269,7 @@ export default function OrdersScreen() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" className="h-9 rounded-lg bg-card">
-            May 20 - May 27
+            All Time
             <ChevronDown className="size-4 opacity-60" />
           </Button>
           <Button variant="outline" className="h-9 rounded-lg bg-card">
@@ -398,7 +398,7 @@ export default function OrdersScreen() {
               variant="outline"
               className="hidden h-9 rounded-lg bg-card sm:inline-flex"
             >
-              May 20 - May 27
+              All Time
               <ChevronDown className="size-4 opacity-60" />
             </Button>
             <Button

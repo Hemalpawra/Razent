@@ -82,29 +82,29 @@ function sourceLabel(type: string) {
 const PRODUCTS = [
   {
     id: "p1",
-    name: "Air Purifier Pro",
-    subtitle: "HEPA-13 · 99.97% removal · App control",
-    price: 1699900,
-    rating: 4.8,
-    img: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=240&q=70&auto=format&fit=crop",
+    name: "Fresh Robusta Bananas (1 kg)",
+    subtitle: "Farm fresh · 1 kg bunch · Grade A",
+    price: 4800,
+    rating: 4.9,
+    img: "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=240&q=70&auto=format&fit=crop",
     added: true,
   },
   {
     id: "p2",
-    name: "CleanAir X1",
-    subtitle: "Compact · 360° intake · Sleep mode",
-    price: 1499900,
-    rating: 4.6,
-    img: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=240&q=70&auto=format&fit=crop",
-    added: false,
+    name: "Amul Taaza Toned Milk (1L)",
+    subtitle: "Pasteurised toned milk · 1 Litre pouch",
+    price: 5600,
+    rating: 4.8,
+    img: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=240&q=70&auto=format&fit=crop",
+    added: true,
   },
   {
     id: "p3",
-    name: "PureSense 300",
-    subtitle: "Smart sensing · Auto mode · Filter alert",
-    price: 1899900,
+    name: "Farm Fresh Brown Eggs (6 pcs)",
+    subtitle: "High protein · Farm fresh brown eggs",
+    price: 5200,
     rating: 4.7,
-    img: "https://images.unsplash.com/photo-1581578017093-cd30fce4f9d1?w=240&q=70&auto=format&fit=crop",
+    img: "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=240&q=70&auto=format&fit=crop",
     added: false,
   },
 ]
@@ -334,9 +334,10 @@ export default function AIAgentScreen({
               </CardHeader>
               <CardContent>
                 <p className="text-sm leading-5 text-muted-foreground">
-                  Customers who bought Air Purifier Pro also bought Smart Bulb
-                  4-pack. Bundle recommendations increased revenue by{" "}
-                  <span className="font-medium text-foreground">18%</span> this
+                  Customers who ordered Fresh Robusta Bananas also ordered Amul
+                  Taaza Milk and Farm Fresh Eggs. Bundle recommendations
+                  increased grocery revenue by{" "}
+                  <span className="font-medium text-foreground">24%</span> this
                   week.
                 </p>
                 <Button size="sm" className="mt-3 h-8 rounded-full">
@@ -493,8 +494,7 @@ export default function AIAgentScreen({
                   <MessageContent className="items-end">
                     <Bubble variant="muted" align="end">
                       <BubbleContent>
-                        Looking for an air purifier under ₹20,000 for my living
-                        room.
+                        Need fresh bananas and milk for quick breakfast delivery.
                       </BubbleContent>
                     </Bubble>
                     <span className="text-[10px] text-muted-foreground">
@@ -515,7 +515,7 @@ export default function AIAgentScreen({
                   <MessageContent className="items-start">
                     <Bubble variant="tinted" align="start">
                       <BubbleContent>
-                        Found 3 options under ₹20,000 — tap to compare:
+                        Found fresh organic produce and dairy for 12-minute delivery:
                       </BubbleContent>
                     </Bubble>
                     <span className="text-[10px] text-muted-foreground">
@@ -579,7 +579,7 @@ export default function AIAgentScreen({
                   <MessageContent className="items-end">
                     <Bubble variant="muted" align="end">
                       <BubbleContent>
-                        Go with Air Purifier Pro — looks good.
+                        Add bananas and 1L milk to my basket.
                       </BubbleContent>
                     </Bubble>
                     <span className="text-[10px] text-muted-foreground">
@@ -599,8 +599,7 @@ export default function AIAgentScreen({
                   <MessageContent className="items-start">
                     <Bubble variant="default" align="start">
                       <BubbleContent>
-                        Added Air Purifier Pro to cart. Shall I proceed to
-                        checkout?
+                        Added Fresh Robusta Bananas & Amul Taaza Milk (1L). Total: ₹104. 12-min delivery available. Shall I proceed to autonomous checkout?
                       </BubbleContent>
                     </Bubble>
                     <span className="text-[10px] text-muted-foreground">
@@ -698,7 +697,7 @@ function LiveConversationsCard({
           </CardDescription>
         </div>
         <Badge variant="secondary" className="rounded-full text-[11px]">
-          5 of {convData.length}
+          {Math.min(5, convData.length)} of {convData.length}
         </Badge>
       </CardHeader>
       <div className="overflow-x-auto">
@@ -792,7 +791,7 @@ function LiveConversationsCard({
         </Table>
       </div>
       <div className="flex items-center justify-between border-t bg-card px-4 py-3 text-xs text-muted-foreground">
-        <span>Showing 5 of {convData.length} conversations</span>
+        <span>Showing {Math.min(5, convData.length)} of {convData.length} conversations</span>
         <Button
           variant="outline"
           size="sm"

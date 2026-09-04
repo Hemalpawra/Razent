@@ -52,10 +52,10 @@ const chartConfig = {
 }
 
 const dateRanges = [
-  "May 20 - May 27",
-  "May 13 - May 19",
+  "Today",
   "Last 7 days",
   "Last 30 days",
+  "All time",
 ] as const
 
 export default function DashboardScreen() {
@@ -196,7 +196,7 @@ export default function DashboardScreen() {
       <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
         {/* Left column — Overview + AI Performance */}
         <div className="space-y-3">
-          <OverviewCard revenueData={revenueData} />
+          <OverviewCard revenueData={revenueData} dashData={dashData} />
           <AiPerformanceCard />
         </div>
 
@@ -249,8 +249,10 @@ function KpiCard({
 
 function OverviewCard({
   revenueData = [],
+  dashData,
 }: {
   revenueData?: { date: string; revenue: number }[]
+  dashData?: DashboardData | null
 }) {
   return (
     <Card className="rounded-xl bg-card">
@@ -317,19 +319,30 @@ function OverviewCard({
             Revenue Breakdown
           </div>
           {(() => {
-            const donutData = [
-              {
-                name: "AI Conversations",
-                value: 82750,
-                fill: "var(--primary)",
-              },
-              { name: "Direct Sales", value: 31200, fill: "var(--chart-2)" },
-              {
-                name: "Upsell & Cross-sell",
-                value: 10610,
-                fill: "var(--chart-4)",
-              },
-            ]
+            const totalRevRupees = dashData
+              ? Math.round(dashData.revenue_month_paise / 100)
+              : 0
+            const aiRev = totalRevRupees > 0 ? Math.round(totalRevRupees * 0.66) : 0
+            const directRev = totalRevRupees > 0 ? Math.round(totalRevRupees * 0.25) : 0
+            const upsellRev = totalRevRupees > 0 ? Math.max(0, totalRevRupees - aiRev - directRev) : 0
+
+            const donutData = totalRevRupees > 0
+              ? [
+                  {
+                    name: "AI Conversations",
+                    value: aiRev,
+                    fill: "var(--primary)",
+                  },
+                  { name: "Direct Sales", value: directRev, fill: "var(--chart-2)" },
+                  {
+                    name: "Upsell & Cross-sell",
+                    value: upsellRev,
+                    fill: "var(--chart-4)",
+                  },
+                ]
+              : [
+                  { name: "AI Conversations", value: 1, fill: "var(--primary)" },
+                ]
             const donutConfig = {
               ai: { label: "AI Conversations", color: "var(--primary)" },
               direct: { label: "Direct Sales", color: "var(--chart-2)" },
@@ -375,7 +388,7 @@ function OverviewCard({
                   </ChartContainer>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                     <div className="text-[13px] font-bold leading-none text-foreground">
-                      ₹1,24,560
+                      ₹{totalRevRupees.toLocaleString("en-IN")}
                     </div>
                     <div className="text-[10px] leading-none text-muted-foreground">
                       Total Revenue
@@ -385,15 +398,15 @@ function OverviewCard({
                 <div className="mt-4 w-full space-y-1 text-xs leading-4 text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-primary" /> AI
-                    Conversations — ₹82,750 (66%)
+                    Conversations — ₹{aiRev.toLocaleString("en-IN")} (66%)
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-chart-2" /> Direct
-                    Sales — ₹31,200 (25%)
+                    Sales — ₹{directRev.toLocaleString("en-IN")} (25%)
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-chart-4" /> Upsell &
-                    Cross-sell — ₹10,610 (9%)
+                    Cross-sell — ₹{upsellRev.toLocaleString("en-IN")} (9%)
                   </div>
                 </div>
               </div>

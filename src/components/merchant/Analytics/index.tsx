@@ -262,20 +262,20 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
 
   const a = analytics
 
-  const totalRevenuePaise = a.revenue_series.reduce(
-    (s: number, r: RevenuePoint) => s + r.revenue_paise,
+  const totalRevenuePaise = (a.revenue_series || []).reduce(
+    (s: number, r: RevenuePoint) => s + (Number(r.revenue_paise) || 0),
     0,
   )
 
-  const totalOrders = a.orders_by_status.reduce((s: number, o: StatusCount) => s + o.count, 0)
+  const totalOrders = (a.orders_by_status || []).reduce((s: number, o: StatusCount) => s + (Number(o.count) || 0), 0)
 
-  const revenueData: { label: string; revenue: number }[] = a.revenue_series.map((r: RevenuePoint) => ({
+  const revenueData: { label: string; revenue: number }[] = (a.revenue_series || []).map((r: RevenuePoint) => ({
     label: new Date(r.date + "T00:00:00Z").toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
     }),
 
-    revenue: r.revenue_paise / 100,
+    revenue: (Number(r.revenue_paise) || 0) / 100,
   }))
 
   const { ordersBySource, revenueBySource } = getSourceGroups(a.orders_by_status)
@@ -331,7 +331,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" className="h-9 rounded-xl bg-card">
-            May 20, 2025 - May 27, 2025
+            Last 30 days
             <ChevronDown className="size-4 opacity-60" />
           </Button>
           <Button variant="outline" className="h-9 rounded-xl bg-card">

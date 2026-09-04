@@ -538,13 +538,28 @@ export async function getAnalytics(): Promise<AnalyticsData> {
           status: status as "paid" | "created" | "failed" | "refunded",
           count: Number(count),
         }))
+        const rawSeries = data.daily_revenue ?? data.revenue_series ?? []
+        const revenueSeries = Array.isArray(rawSeries)
+          ? rawSeries.map((r: any) => ({
+              date: r.date,
+              revenue_paise: Number(r.revenue_paise ?? r.revenue ?? 0),
+              orders: Number(r.orders ?? 0),
+            }))
+          : []
+        const rawCategories = data.top_categories ?? []
+        const topCategories = Array.isArray(rawCategories)
+          ? rawCategories.map((c: any) => ({
+              category: c.category,
+              revenue_paise: Number(c.revenue_paise ?? c.revenue ?? 0),
+            }))
+          : []
         return {
-          revenue_series: data.daily_revenue ?? data.revenue_series ?? [],
+          revenue_series: revenueSeries,
           orders_by_status: statusArray,
-          top_categories: data.top_categories ?? [],
+          top_categories: topCategories,
           aov_paise: Number(data.aov_paise ?? 0),
           conversion_rate_pct: Number(data.conversion_rate_pct ?? 0),
-          insights: data.insights ?? [],
+          insights: Array.isArray(data.insights) ? data.insights : [],
         }
       }
     }

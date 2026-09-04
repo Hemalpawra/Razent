@@ -65,7 +65,7 @@ export const mockProducts: Product[] = [
     stock: 200,
     status: "active",
     image_url:
-      "https://images.unsplash.com/photo-1546470427-227df1ed3a1d?w=480&q=80&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=480&q=80&auto=format&fit=crop",
     category: "Vegetables",
     tags: ["fresh", "local"],
     created_at: "2026-01-05T08:30:00Z",

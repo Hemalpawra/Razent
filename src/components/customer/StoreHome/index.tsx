@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 
 import { Button } from "@/components/ui/button"
 
@@ -50,12 +50,13 @@ import {
   trackOrder,
   executeAgentCheckout,
   logAuditEvent,
+  listProducts,
 } from "@/lib/api/client"
 import { orderStore } from "@/lib/storage/orderStore"
 
 import { mockProducts } from "@/lib/mock/products"
 
-import { formatPrice } from "@/lib/types/product"
+import { formatPrice, type Product } from "@/lib/types/product"
 
 import {
   Search,
@@ -104,6 +105,12 @@ import {
   Download,
   Mail,
   Phone,
+  Apple,
+  Carrot,
+  Milk,
+  Cookie,
+  Coffee,
+  ShoppingBag,
 } from "lucide-react"
 
 type StoreView = "home" | "listing" | "detail" | "track-order" | "cart" | "checkout" | "payment-failed" | "payment-success"
@@ -113,46 +120,31 @@ type CartItem = { id: string; qty: number }
 type AIMsg = {
   role: "user" | "assistant"
   text: string
-  products?: typeof mockProducts
+  products?: Product[]
 }
 
-const CATEGORY_DEFS: { name: string; icon: typeof HomeIcon; match: string[] }[] =
-  [
-    { name: "Electronics", icon: Smartphone, match: ["Home", "Security"] },
+const CATEGORY_DEFS: { name: string; icon: any; match: string[] }[] = [
+  { name: "Fruits", icon: Apple, match: ["Fruits"] },
+  { name: "Vegetables", icon: Carrot, match: ["Vegetables"] },
+  { name: "Dairy & Bakery", icon: Milk, match: ["Dairy & Bakery", "Dairy"] },
+  { name: "Snacks & Munchies", icon: Cookie, match: ["Snacks & Munchies", "Snacks"] },
+  { name: "Beverages", icon: Coffee, match: ["Beverages"] },
+  { name: "Household", icon: ShoppingBag, match: ["Household"] },
+]
 
-    { name: "Laptops", icon: Laptop, match: ["Computing"] },
-
-    { name: "Audio", icon: Headphones, match: ["Audio"] },
-
-    {
-      name: "Accessories",
-      icon: PackageCheck,
-      match: ["Networking", "Lighting"],
-    },
-
-    { name: "Mobile", icon: Smartphone, match: ["Wearables"] },
-
-    { name: "Gaming", icon: Gamepad2, match: ["Computing", "Audio"] },
-
-    { name: "Office", icon: Lamp, match: ["Furniture", "Lighting"] },
-
-    { name: "Wearables", icon: Watch, match: ["Wearables", "Fitness"] },
-  ]
-
-function categoryCount(match: string[]) {
-  return mockProducts.filter(
-    (p) => p.status === "active" && match.includes(p.category),
+function categoryCount(match: string[], products: Product[] = mockProducts) {
+  return products.filter(
+    (p) =>
+      p.status === "active" &&
+      match.some((m) => p.category.toLowerCase().includes(m.toLowerCase())),
   ).length
 }
 
 const SAMPLE_PROMPTS = [
-  "I need a laptop under ₹60,000",
-
-  "Compare these headphones",
-
-  "Show me the best option for office work",
-
-  "Air purifier under ₹20,000",
+  "Fresh fruits and milk for breakfast",
+  "Need 1 kg bananas and farm fresh eggs",
+  "Healthy snacks under ₹100",
+  "What vegetables are in stock?",
 ]
 
 // Deterministic pseudo-rating so cards display consistent stars without a real reviews field
@@ -248,9 +240,25 @@ export default function StoreHome() {
     null,
   )
 
+  const [productsList, setProductsList] = useState<Product[]>(mockProducts)
+
+  useEffect(() => {
+    let alive = true
+    listProducts()
+      .then((data) => {
+        if (alive && data && data.length > 0) {
+          setProductsList(data)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const activeProducts = useMemo(
-    () => mockProducts.filter((p) => p.status === "active"),
-    [],
+    () => productsList.filter((p) => p.status === "active"),
+    [productsList],
   )
 
   const featured = useMemo(() => activeProducts.slice(0, 8), [activeProducts])
@@ -261,7 +269,12 @@ export default function StoreHome() {
     if (activeCat) {
       const def = CATEGORY_DEFS.find((c) => c.name === activeCat)
 
-      if (def) list = list.filter((p) => def.match.includes(p.category))
+      if (def)
+        list = list.filter((p) =>
+          def.match.some((m) =>
+            p.category.toLowerCase().includes(m.toLowerCase()),
+          ),
+        )
       else list = list.filter((p) => p.category === activeCat)
     }
 
@@ -450,60 +463,170 @@ export default function StoreHome() {
     })
   }
 
-  function handleAskAI(prompt?: string) {
-    const text = (prompt ?? aiInput).trim()
+  function generateGroceryFallback(query: string, catalog: Product[]): AIMsg {
+    const q = query.toLowerCase()
+    let recs = catalog.filter((p) => {
+      const title = p.title.toLowerCase()
+      const desc = p.description.toLowerCase()
+      const cat = p.category.toLowerCase()
+      return (
+        title.includes(q) ||
+        desc.includes(q) ||
+        cat.includes(q) ||
+        (q.includes("banana") && title.includes("banana")) ||
+        (q.includes("apple") && title.includes("apple")) ||
+        (q.includes("milk") && title.includes("milk")) ||
+        (q.includes("egg") && title.includes("egg")) ||
+        (q.includes("tomato") && title.includes("tomato")) ||
+        (q.includes("onion") && title.includes("onion")) ||
+        (q.includes("bread") && (title.includes("bread") || cat.includes("bakery"))) ||
+        (q.includes("fruit") && cat.includes("fruit")) ||
+        (q.includes("veg") && cat.includes("veg")) ||
+        (q.includes("snack") && cat.includes("snack"))
+      )
+    })
+    if (recs.length === 0) recs = catalog.slice(0, 3)
+    else recs = recs.slice(0, 3)
 
+    return {
+      role: "assistant",
+      text: `Here are ${recs.length} options matching "${query}". 10–15 min quick delivery available. Tap a card to add or view details.`,
+      products: recs,
+    }
+  }
+
+  async function handleAskAI(prompt?: string) {
+    const text = (prompt ?? aiInput).trim()
     if (!text) return
 
     const userMsg: AIMsg = { role: "user", text }
-
-    setAiMsgs((m) => [...m, userMsg])
-
+    const currentMsgs = [...aiMsgs, userMsg]
+    setAiMsgs(currentMsgs)
     setAiInput("")
-
     if (!aiOpen) setAiOpen(true)
 
-    // simple recommendation logic
+    const assistantIndex = currentMsgs.length
+    setAiMsgs((m) => [...m, { role: "assistant", text: "" }])
 
-    setTimeout(() => {
-      const q = text.toLowerCase()
+    const anonKey =
+      (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsc2poc25mdXJ4a3phd2RpbXlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwMTcwNzMsImV4cCI6MjA4ODU5MzA3M30.4O28gqG1Jv15mP4X9f-t4KzD2oK089q7bS-V5eHkI1M"
+    const chatUrl =
+      "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/ragent-chat?surface=store"
 
-      let recs = [...activeProducts]
+    try {
+      const res = await fetch(chatUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${anonKey}`,
+        },
+        body: JSON.stringify({
+          messages: currentMsgs.map((m) => ({
+            role: m.role,
+            content: m.text,
+          })),
+          surface: "store",
+        }),
+      })
 
-      if (q.includes("laptop") || q.includes("60,000") || q.includes("60000"))
-        recs = recs.filter((p) => p.category === "Computing")
-      else if (
-        q.includes("headphone") ||
-        q.includes("audio") ||
-        q.includes("5,000") ||
-        q.includes("5000")
-      )
-        recs = recs.filter((p) => p.category === "Audio")
-      else if (
-        q.includes("purifier") ||
-        q.includes("20,000") ||
-        q.includes("20000")
-      )
-        recs = recs.filter((p) => p.title.toLowerCase().includes("purifier"))
-      else if (q.includes("office"))
-        recs = recs.filter((p) =>
-          ["Furniture", "Lighting", "Computing"].includes(p.category),
-        )
-
-      recs = recs.slice(0, 3)
-
-      if (recs.length === 0) recs = activeProducts.slice(0, 3)
-
-      const reply: AIMsg = {
-        role: "assistant",
-
-        text: `Here are ${recs.length} options that match "${text}". Tap a card to view details or I can compare them for you.`,
-
-        products: recs,
+      if (!res.ok || !res.body) {
+        throw new Error(`Chat API error: ${res.status}`)
       }
 
-      setAiMsgs((m) => [...m, reply])
-    }, 450)
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let accumulated = ""
+      let recProducts: Product[] = []
+      let buffer = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed.startsWith("data:")) continue
+          const dataStr = trimmed.slice(5).trim()
+          if (dataStr === "[DONE]") break
+
+          try {
+            const data = JSON.parse(dataStr)
+            if (data.type === "text" && data.text) {
+              accumulated += data.text
+              setAiMsgs((prev) => {
+                const next = [...prev]
+                const target = next[assistantIndex]
+                if (target) {
+                  next[assistantIndex] = {
+                    ...target,
+                    text: accumulated,
+                    products:
+                      recProducts.length > 0 ? recProducts : target.products,
+                  }
+                }
+                return next
+              })
+            } else if (
+              data.type === "tool" &&
+              data.name === "add_to_cart" &&
+              data.args?.product_id
+            ) {
+              addToCart(data.args.product_id)
+            } else if (
+              data.type === "tool-result" &&
+              data.name === "search_catalog" &&
+              data.result
+            ) {
+              const items = Array.isArray(data.result)
+                ? data.result
+                : data.result.products || []
+              if (items.length > 0) {
+                const matched = items
+                  .map(
+                    (it: any) =>
+                      activeProducts.find(
+                        (p) => p.id === it.id || p.id === it.external_id,
+                      ) || it,
+                  )
+                  .slice(0, 3)
+                recProducts = matched
+                setAiMsgs((prev) => {
+                  const next = [...prev]
+                  const target = next[assistantIndex]
+                  if (target) {
+                    next[assistantIndex] = { ...target, products: matched }
+                  }
+                  return next
+                })
+              }
+            }
+          } catch {
+            // chunk boundary
+          }
+        }
+      }
+
+      if (!accumulated.trim()) {
+        const fallback = generateGroceryFallback(text, activeProducts)
+        setAiMsgs((prev) => {
+          const next = [...prev]
+          next[assistantIndex] = fallback
+          return next
+        })
+      }
+    } catch (err) {
+      console.warn("[handleAskAI] stream failed, using grocery fallback:", err)
+      const fallback = generateGroceryFallback(text, activeProducts)
+      setAiMsgs((prev) => {
+        const next = [...prev]
+        next[assistantIndex] = fallback
+        return next
+      })
+    }
   }
 
   const initials = storeProfile.storeName
@@ -703,14 +826,13 @@ export default function StoreHome() {
                   <CardContent className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
                     <div className="flex flex-col justify-center">
                       <Badge variant="secondary" className="w-fit">
-                        New · AI shopping assistant live
+                        Instant Delivery · 10–15 Minutes SLA
                       </Badge>
                       <h1 className="mt-3 font-heading text-2xl font-semibold leading-tight tracking-tight md:text-[30px]">
-                        Technology that moves with you
+                        Groceries delivered in minutes
                       </h1>
                       <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                        Smart products for everyday use — curated, verified, and
-                        ready to compare with AI. Free delivery over ₹1,499.
+                        Fresh farm produce, dairy, snacks & everyday essentials powered by autonomous agentic commerce.
                       </p>
                       <div className="mt-5 flex flex-wrap items-center gap-2">
                         <Button size="lg" onClick={() => setView("listing")}>
@@ -778,7 +900,7 @@ export default function StoreHome() {
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
                   {CATEGORY_DEFS.map(({ name, icon: Icon, match }) => {
-                    const n = categoryCount(match)
+                    const n = categoryCount(match, activeProducts)
 
                     return (
                       <button

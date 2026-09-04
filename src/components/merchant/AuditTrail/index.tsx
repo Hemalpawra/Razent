@@ -133,7 +133,7 @@ export default function AuditTrailScreen() {
 
       return true
     })
-  }, [q, eventFilter, resultFilter, actorFilter])
+  }, [auditData, q, eventFilter, resultFilter, actorFilter])
 
   const openDrawer = (s: AuditSession, e: AuditEvent | null = null) => {
     setSelectedSession(s)
@@ -162,7 +162,7 @@ export default function AuditTrailScreen() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" className="h-9 rounded-lg bg-card">
-            May 20, 2025 - May 27, 2025
+            All Time
             <ChevronDownIcon className="size-4 opacity-60" />
           </Button>
           <Button variant="outline" className="h-9 rounded-lg bg-card">
@@ -275,7 +275,7 @@ export default function AuditTrailScreen() {
               size="sm"
               className="h-9 rounded-lg bg-card"
             >
-              May 20–27
+              All Time
             </Button>
           </div>
           <div className="flex items-center gap-2">
