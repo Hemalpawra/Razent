@@ -506,6 +506,20 @@ export const AIAssistantScreen: React.FC = () => {
         throw new Error(`Edge function returned ${res.status}`)
       }
 
+      const contentType = res.headers.get("content-type") || ""
+      if (contentType.includes("application/json")) {
+        const json = await res.json()
+        accumulatedText = json.text || json.reply || json.message || ""
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantTempId
+              ? { ...m, text: accumulatedText, isStreaming: false }
+              : m,
+          ),
+        )
+        return
+      }
+
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ""

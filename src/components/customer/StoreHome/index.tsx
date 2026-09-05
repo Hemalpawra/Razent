@@ -716,6 +716,20 @@ export default function StoreHome() {
         throw new Error(`Chat API error: ${res.status}`)
       }
 
+      const contentType = res.headers.get("content-type") || ""
+      if (contentType.includes("application/json")) {
+        const json = await res.json()
+        const replyText = json.text || json.reply || json.message || ""
+        setAiMsgs((prev) => {
+          const next = [...prev]
+          if (next[assistantIndex]) {
+            next[assistantIndex] = { ...next[assistantIndex], text: replyText }
+          }
+          return next
+        })
+        return
+      }
+
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let accumulated = ""

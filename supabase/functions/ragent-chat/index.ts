@@ -440,8 +440,15 @@ Deno.serve(async (req: Request) => {
     const g = guard(lastUser.content)
     if (!g.ok) {
       return new Response(
-        JSON.stringify({ refusal: true, reason: g.reason, text: g.reply }),
-        { headers: { "content-type": "application/json" } },
+        `data: {"type":"text","text":${JSON.stringify(g.reply)}}\n\ndata: [DONE]\n\n`,
+        {
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+          },
+        },
       )
     }
   }
