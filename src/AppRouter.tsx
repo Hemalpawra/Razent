@@ -19,10 +19,9 @@ import AuditTrailScreen from "@/components/merchant/AuditTrail"
 import SettingsScreen from "@/components/merchant/Settings"
 
 function AdminLayout() {
-  const { user, profile, isLoading } = useMerchant()
+  const { role, isLoading } = useMerchant()
   if (isLoading) return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-sm text-muted-foreground">Loading admin...</p></div>
-  const isPrivate = !!user && !!profile
-  return <AppShell readOnly={!isPrivate}><Outlet /></AppShell>
+  return <AppShell readOnly={role === "view_only"}><Outlet /></AppShell>
 }
 
 function RouterApp() {

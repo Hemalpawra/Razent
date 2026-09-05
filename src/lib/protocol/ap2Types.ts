@@ -112,15 +112,37 @@ export interface PaymentMandate {
 }
 
 // ============================================================================
-// 2. NPCI & RBI COMPLIANCE SPECIFICATIONS
+// 2. NPCI UPI AUTOPAY & TEST PAYMENT CREDENTIAL CONFIGURATION
 // ============================================================================
 
+export interface SavedPaymentCard {
+  id: string
+  network: "Visa" | "Mastercard" | "RuPay" | "Diners" | "Amex"
+  cardNumber: string // Formatted e.g. "4100 2800 0000 1007"
+  maskedNumber: string // e.g. "•••• •••• •••• 1007"
+  cardType: "Debit" | "Credit" | "Prepaid"
+  cardSubType: "Consumer" | "Business"
+  expiry: string // e.g. "12/29"
+  cvv: string // e.g. "423"
+  tokenReference: string
+  isDefault?: boolean
+}
+
+export interface SavedUPICredential {
+  id: string
+  vpa: string
+  label: string
+  flow: "success" | "failure" | "custom"
+  description: string
+  isDefault?: boolean
+}
+
 export interface NPCIMandateConfig {
-  /** NPCI standard limit: ₹15,000 max without PIN */
+  /** Maximum recurring threshold allowed by NPCI without PIN (₹15,000) */
   max_recurring_limit_rupees: number
-  /** User configured per-transaction cap (e.g. ₹2,000) */
+  /** User configured per-transaction cap (e.g. ₹2,500) */
   user_delegated_limit_rupees: number
-  /** UPI VPA for pre-authorized debit (e.g. user@okhdfcbank) */
+  /** UPI VPA for pre-authorized debit (e.g. success@razorpay) */
   upi_vpa: string
   /** AutoPay mandate status */
   mandate_status: "active" | "paused" | "revoked"
@@ -132,6 +154,12 @@ export interface NPCIMandateConfig {
   created_at: string
   /** 24h pre-debit SMS/push notification opt-in */
   pre_debit_notification: boolean
+  /** Active selected payment method: "upi" or "card" */
+  active_payment_type?: "upi" | "card"
+  /** Active selected card ID if active_payment_type === "card" */
+  selected_card_id?: string
+  /** Active selected UPI ID if active_payment_type === "upi" */
+  selected_upi_id?: string
 }
 
 // ============================================================================

@@ -2,6 +2,7 @@
 
 // derive timeline
 
+import { useState } from "react"
 import {
   XIcon,
   FileTextIcon,
@@ -27,6 +28,9 @@ import { Separator } from "@/components/ui/separator"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { formatPrice } from "@/lib/types/order"
 import type { Order } from "@/lib/types/order"
+import { useMerchant } from "@/state/useMerchant"
+import { toast } from "sonner"
+import { refundOrder } from "@/lib/api/client"
 
 interface OrderDrawerProps {
   open: boolean
@@ -52,6 +56,48 @@ export default function OrderDrawer({
   order,
 }: OrderDrawerProps) {
   const isMobile = useIsMobile()
+  const { role, hasPermission } = useMerchant()
+  const canRefund = hasPermission("refund_orders")
+  const [isRefunding, setIsRefunding] = useState(false)
+
+  const handleViewConversation = () => {
+    if (role === "view_only") {
+      toast.info("You are using the view-only merchant account. Conversation details are restricted.")
+      return
+    }
+    onClose()
+    window.location.hash = "/admin/ai_agent"
+  }
+
+  const handleViewTracking = () => {
+    if (!order?.id) return
+    window.open(`/#/?track=${order.id}`, "_blank")
+  }
+
+  const handleRefund = async () => {
+    if (!order) return
+    if (!canRefund) {
+      toast.error("You do not have permission to refund orders.")
+      return
+    }
+    if (order.status === "refunded") {
+      toast.info("This order has already been refunded.")
+      return
+    }
+    setIsRefunding(true)
+    try {
+      const ok = await refundOrder(order.id)
+      if (ok) {
+        toast.success(`Order #${order.id} refunded successfully`)
+        onClose()
+      } else {
+        toast.error("Failed to refund order. Please try again.")
+      }
+    } finally {
+      setIsRefunding(false)
+    }
+  }
+
   const paymentMethod = order?.via_ai ? "UPI" : "Card"
   const paidOn = order?.paid_at
     ? new Date(order.paid_at).toLocaleString("en-IN", {
@@ -302,11 +348,24 @@ export default function OrderDrawer({
 
               <section className="px-6 py-4 space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline">View Conversation</Button>
-                  <Button variant="outline">View Tracking</Button>
+                  <Button variant="outline" onClick={handleViewConversation}>
+                    View Conversation
+                  </Button>
+                  <Button variant="outline" onClick={handleViewTracking}>
+                    View Tracking
+                  </Button>
                 </div>
-                <Button variant="default" className="w-full bg-primary">
-                  Refund Order
+                <Button
+                  variant={order.status === "refunded" ? "secondary" : "default"}
+                  className="w-full bg-primary"
+                  disabled={isRefunding || order.status === "refunded"}
+                  onClick={handleRefund}
+                >
+                  {isRefunding
+                    ? "Processing Refund..."
+                    : order.status === "refunded"
+                      ? "Order Refunded"
+                      : "Refund Order"}
                 </Button>
               </section>
             </div>

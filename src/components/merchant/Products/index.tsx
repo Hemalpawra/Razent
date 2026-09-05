@@ -52,6 +52,8 @@ import ProductDrawer from "./ProductDrawer"
 import { useUI } from "@/state/useUI"
 import { useIsMobile } from "@/hooks/use-mobile"
 
+import { useMerchant } from "@/state/useMerchant"
+
 function getSku(p: Product): string {
   const any = p as unknown as Record<string, string>
   if (any.sku) return any.sku
@@ -69,6 +71,13 @@ export default function ProductsScreen() {
   const openProductDrawer = useUI((s) => s.openProductDrawer)
   const closeProductDrawer = useUI((s) => s.closeProductDrawer)
   const drawerProductId = useUI((s) => s.drawerProductId)
+  const { hasPermission } = useMerchant()
+  const canEdit = hasPermission("edit_products")
+  const canDelete = hasPermission("delete_products")
+  const canImport = hasPermission("import_products")
+  const canExport = hasPermission("export_data")
+
+  const [isAddOpen, setIsAddOpen] = useState(false)
   const [q, setQ] = useState("")
   const [statusFilter, setStatusFilter] = useState<ProductStatus | "all">("all")
   const [products, setProducts] = useState<Product[]>([])
@@ -320,26 +329,31 @@ export default function ProductsScreen() {
             </Button>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {canImport && (
+              <Button
+                variant="outline"
+                className="h-9 rounded-md gap-1.5"
+                onClick={() => setImportOpen(true)}
+              >
+                <Upload className="size-4" />
+                Import
+              </Button>
+            )}
             <Button
               variant="outline"
-              className="h-9 rounded-md gap-1.5"
-              onClick={() => setImportOpen(true)}
-            >
-              <Upload className="size-4" />
-              Import
-            </Button>
-            <Button
-              variant="outline"
+              disabled={!canExport || products.length === 0}
               className="h-9 rounded-md border-primary text-primary hover:bg-primary/5 hover:text-primary gap-1.5"
               onClick={handleExport}
             >
               <Download className="size-4" />
               Export
             </Button>
-            <Button className="h-9 rounded-md" onClick={() => openProductDrawer(null)}>
-              <Plus className="size-4" />
-              Add Product
-            </Button>
+            {canEdit && (
+              <Button className="h-9 rounded-md" onClick={() => setIsAddOpen(true)}>
+                <Plus className="size-4" />
+                Add Product
+              </Button>
+            )}
           </div>
         </div>
 
@@ -550,18 +564,20 @@ export default function ProductsScreen() {
                             >
                               <Eye className="size-3.5" /> View details
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                await deleteProduct(p.id)
-                                setProducts((prev) =>
-                                  prev.filter((x) => x.id !== p.id),
-                                )
-                              }}
-                            >
-                              <Trash2 className="size-3.5" /> Delete
-                            </DropdownMenuItem>
+                            {canDelete && (
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={async (e) => {
+                                  e.stopPropagation()
+                                  await deleteProduct(p.id)
+                                  setProducts((prev) =>
+                                    prev.filter((x) => x.id !== p.id),
+                                  )
+                                }}
+                              >
+                                <Trash2 className="size-3.5" /> Delete
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -630,9 +646,13 @@ export default function ProductsScreen() {
       </Card>
 
       <ProductDrawer
-        open={drawerProductId !== null}
-        onClose={closeProductDrawer}
-        product={products.find((p) => p.id === drawerProductId) ?? null}
+        open={drawerProductId !== null || isAddOpen}
+        onClose={() => {
+          closeProductDrawer()
+          setIsAddOpen(false)
+        }}
+        product={isAddOpen ? null : (products.find((p) => p.id === drawerProductId) ?? null)}
+        onProductUpdated={() => loadProducts(true)}
       />
 
       <ImportModal

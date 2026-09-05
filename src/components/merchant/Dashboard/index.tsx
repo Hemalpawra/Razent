@@ -13,6 +13,8 @@ import {
   ArrowUpRight,
   Truck,
 } from "lucide-react"
+import { useMerchant } from "@/state/useMerchant"
+import { toast } from "sonner"
 import {
   Card,
   CardContent,
@@ -101,19 +103,47 @@ export default function DashboardScreen() {
       : []
   }, [dashData])
 
+  const { hasPermission } = useMerchant()
+  const canExport = hasPermission("export_data")
+
   const handleExport = () => {
-    const csv = ["Revenue,Orders", "124560,18", "110000,15", "88000,12"].join(
-      "\n",
-    )
+    if (!canExport) {
+      toast.error("You do not have permission to export dashboard data.")
+      return
+    }
+    if (!dashData) {
+      toast.info("No dashboard data to export")
+      return
+    }
+    const headers = ["Metric", "Value"]
+    const rows: string[][] = [
+      ["Revenue Month (INR)", (dashData.revenue_month_paise / 100).toFixed(2)],
+      ["Orders Today", String(dashData.orders_today)],
+      ["AI Conversion Rate (%)", String(dashData.conversion_rate_pct)],
+      ["Settlement Success Rate (%)", String(dashData.settlement_success_pct)],
+      ["Avg Processing Time (ms)", String(dashData.avg_latency_ms)],
+    ]
+    if (dashData.revenue_daily_paise && dashData.revenue_daily_paise.length > 0) {
+      headers.push("Date", "Daily Revenue (INR)")
+      dashData.revenue_daily_paise.forEach((d: any, idx: number) => {
+        if (rows[idx]) {
+          rows[idx].push(d.date, (d.revenue_paise / 100).toFixed(2))
+        } else {
+          rows.push(["", "", d.date, (d.revenue_paise / 100).toFixed(2)])
+        }
+      })
+    }
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "dashboard-export.csv"
+    a.download = `dashboard-analytics-${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(a)
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
+    toast.success("Dashboard data exported")
   }
 
   return (
@@ -147,14 +177,16 @@ export default function DashboardScreen() {
             {dateRanges[rangeIdx]}
             <ChevronDown className="size-4 opacity-60" />
           </Button>
-          <Button
-            variant="outline"
-            className="h-9 rounded-lg bg-card"
-            onClick={handleExport}
-          >
-            <Download className="size-4" />
-            Export
-          </Button>
+          {canExport && (
+            <Button
+              variant="outline"
+              className="h-9 rounded-lg bg-card"
+              onClick={handleExport}
+            >
+              <Download className="size-4" />
+              Export
+            </Button>
+          )}
         </div>
       </div>
 

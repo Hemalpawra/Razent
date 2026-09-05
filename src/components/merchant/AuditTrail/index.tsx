@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRangePicker"
 import { cn } from "@/lib/utils"
+import { useMerchant } from "@/state/useMerchant"
+import { toast } from "sonner"
 
 import {
   Select,
@@ -83,6 +85,9 @@ export default function AuditTrailScreen() {
   const closeAuditDrawer = useUI((s) => s.closeAuditDrawer)
   const drawerAuditSessionId = useUI((s) => s.drawerAuditSessionId)
 
+  const { hasPermission } = useMerchant()
+  const canExport = hasPermission("export_audit")
+
   const [auditData, setAuditData] = useState<AuditSession[]>([])
 
   const loadAuditData = async (isManual = false) => {
@@ -90,6 +95,7 @@ export default function AuditTrailScreen() {
     try {
       const data = await listAuditSessions()
       setAuditData(data)
+      if (isManual) toast.success("Audit logs refreshed")
     } finally {
       if (isManual) setTimeout(() => setIsRefreshing(false), 500)
     }
@@ -166,7 +172,14 @@ export default function AuditTrailScreen() {
   }, [auditData, q, eventFilter, resultFilter, actorFilter, dateFilter])
 
   const handleExportLogs = () => {
-    if (!auditData || auditData.length === 0) return
+    if (!canExport) {
+      toast.error("You do not have permission to export audit logs.")
+      return
+    }
+    if (!auditData || auditData.length === 0) {
+      toast.info("No audit logs to export")
+      return
+    }
     const headers = ["Session ID", "Order ID", "Customer", "Started At", "Status", "Events Count", "Last Event"]
     const rows = filtered.map((s) => [
       s.session_id,
@@ -234,39 +247,13 @@ export default function AuditTrailScreen() {
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
-            Audit Trail
-          </h1>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Review every important AI commerce event in one place.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <DateRangePicker value={dateFilter} onChange={setDateFilter} />
-          <Button
-            variant="outline"
-            className="h-9 rounded-lg bg-card gap-1.5"
-            onClick={handleExportLogs}
-          >
-            <DownloadIcon className="size-4" />
-            Export
-          </Button>
-          <div className="hidden items-center gap-3 pl-2 lg:flex">
-            <div className="flex size-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              MS
-            </div>
-            <div className="leading-none">
-              <div className="text-xs font-bold text-foreground">
-                Merchant Store
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                Super Admin
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-col gap-1">
+        <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
+          Audit Trail
+        </h1>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Review every important AI commerce event in one place.
+        </p>
       </div>
 
       {/* KPI 5 cards */}
@@ -367,28 +354,16 @@ export default function AuditTrailScreen() {
             >
               <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 rounded-lg bg-card"
-              onClick={() => {
-                setQ("")
-                setEventFilter("all")
-                setResultFilter("all")
-                setActorFilter("all")
-                setDateFilter({ preset: "all", label: "All Time", startDate: null, endDate: null })
-              }}
-            >
-              <RotateCcwIcon className="size-3.5 mr-1" /> Reset
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 rounded-lg border-primary text-primary hover:bg-primary/5 gap-1.5"
-              onClick={handleExportLogs}
-            >
-              <DownloadIcon className="size-3.5" /> Export logs
-            </Button>
+            {canExport && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-lg border-primary text-primary hover:bg-primary/5 gap-1.5"
+                onClick={handleExportLogs}
+              >
+                <DownloadIcon className="size-3.5" /> Export logs
+              </Button>
+            )}
           </div>
         </div>
 

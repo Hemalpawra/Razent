@@ -1,0 +1,84 @@
+{
+  "ucp": {
+    "version": "2026-01-23",
+    "specification": "https://ucp.dev/specification/overview",
+    "transports_supported": ["rest", "a2a", "mcp"],
+    "services": {
+      "dev.ucp.shopping": {
+        "rest": {
+          "endpoint": "https://razent.store/api/ucp/shopping",
+          "openapi": "https://razent.store/api/ucp/shopping/openapi.json"
+        },
+        "a2a": {
+          "endpoint": "https://razent.store/api/a2a",
+          "agent_card": "https://razent.store/.well-known/agent.json"
+        },
+        "mcp": {
+          "endpoint": "https://razent.store/api/mcp",
+          "openrpc": "https://razent.store/api/mcp/openrpc.json"
+        }
+      },
+      "dev.ucp.common": {
+        "rest": {
+          "endpoint": "https://razent.store/api/ucp/common"
+        }
+      }
+    },
+    "capabilities": [
+      {
+        "id": "dev.ucp.shopping.catalog",
+        "version": "1.0.0",
+        "description": "Product catalog discovery, inventory lookup, and category filtering"
+      },
+      {
+        "id": "dev.ucp.shopping.cart",
+        "version": "1.0.0",
+        "description": "Cart session lifecycle management with real-time tax calculation"
+      },
+      {
+        "id": "dev.ucp.shopping.checkout",
+        "version": "1.0.0",
+        "description": "Autonomous and human-present checkout sessions"
+      },
+      {
+        "id": "dev.ucp.shopping.orders",
+        "version": "1.0.0",
+        "description": "Order lifecycle tracking, delivery ETA, and webhook status updates"
+      }
+    ],
+    "extensions": [
+      {
+        "id": "dev.ucp.shopping.ap2_mandate",
+        "version": "2025.0",
+        "specification": "https://github.com/google-agentic-commerce/AP2",
+        "mandates": ["IntentMandate", "CartMandate", "PaymentMandate"],
+        "required_for_autonomous_checkout": true
+      }
+    ],
+    "payment_handlers": [
+      {
+        "id": "dev.ucp.payment.upi",
+        "rail": "NPCI_UPI_AUTOPAY",
+        "currency": "INR",
+        "max_recurring_limit_paise": 1500000,
+        "test_credentials": {
+          "success_vpa": "success@razorpay",
+          "failure_vpa": "failure@razorpay"
+        }
+      },
+      {
+        "id": "dev.ucp.payment.card_token",
+        "rail": "RBI_COF_TOKENIZATION",
+        "networks": ["Visa", "Mastercard", "RuPay", "Diners", "Amex"],
+        "requires_3ds_step_up_above_paise": 1500000
+      }
+    ]
+  },
+  "business": {
+    "id": "b57fec42-c785-466e-b225-3f7a27edcccb",
+    "name": "Razent Instant Retail",
+    "country": "IN",
+    "currency": "INR",
+    "settlement": "Razorpay Escrow (T+1/T+2)"
+  }
+}

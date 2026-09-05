@@ -2,7 +2,6 @@ import type { ReactNode } from "react"
 import {
   LayoutDashboard,
   Package,
-  Upload,
   Bot,
   ShoppingCart,
   FileText,
@@ -10,11 +9,13 @@ import {
   Settings,
   Store,
   Shield,
+  LogOut,
 } from "lucide-react"
 import { Outlet } from "react-router-dom"
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
 import StoreHome from "@/components/customer/StoreHome"
 import { useUI, type Screen } from "@/state/useUI"
+import { useMerchant } from "@/state/useMerchant"
 import {
   Sidebar,
   SidebarContent,
@@ -31,6 +32,8 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { useNavigate, useLocation } from "react-router-dom"
 
 const navGroups: {
@@ -42,7 +45,6 @@ const navGroups: {
     items: [
       { label: "Dashboard", key: "dashboard", icon: LayoutDashboard },
       { label: "Products", key: "products", icon: Package },
-      { label: "Product Import", key: "product_import", icon: Upload },
     ],
   },
   {
@@ -70,16 +72,16 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
   const drawerOrderId = useUI((s) => s.drawerOrderId)
   const drawerProductId = useUI((s) => s.drawerProductId)
 
+  const { role: merchantRole, signOut } = useMerchant()
   const navigate = useNavigate()
-  const location = useLocation()
+  const isViewOnly = readOnly || merchantRole === "view_only"
 
   const handleScreenChange = (key: Screen) => {
     if (drawerOrderId) closeOrderDrawer()
     if (drawerProductId) closeProductDrawer()
     setScreen(key)
-    // Navigate to the admin sub-route matching the screen key
     const routeMap: Record<string, string> = {
-      dashboard: "/admin/",
+      dashboard: "/admin/dashboard",
       products: "/admin/products",
       orders: "/admin/orders",
       analytics: "/admin/analytics",
@@ -87,8 +89,13 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
       audit_trail: "/admin/audit_trail",
       settings: "/admin/settings",
     }
-    const path = routeMap[key] || "/admin/"
+    const path = routeMap[key] || "/admin/dashboard"
     navigate(path)
+  }
+
+  const handleSignOut = async () => {
+    await signOut()
+    navigate("/sign-in")
   }
 
   // Store view — full width, no merchant sidebar chrome
@@ -103,7 +110,7 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
               className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
             >
               <Store className="size-3.5" />
-              Merchant
+              Merchant Console
             </button>
             <button
               type="button"
@@ -111,11 +118,11 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
               className="inline-flex items-center gap-1.5 rounded-md bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm"
             >
               <ShoppingCart className="size-3.5" />
-              Store
+              Customer Store
             </button>
           </div>
           <span className="hidden text-xs text-muted-foreground lg:inline">
-            Customer storefront — full width
+            Customer Storefront
           </span>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
@@ -135,7 +142,7 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
       >
         <SidebarHeader className="border-b border-sidebar-border px-3 py-3">
           <div className="flex items-center gap-2 px-1">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               <Shield className="size-4" />
             </div>
             <div className="leading-none">
@@ -143,11 +150,10 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
                 Razent
               </div>
               <div className="text-[11px] text-muted-foreground">
-                Merchant AI Gateway
+                Merchant Gateway
               </div>
             </div>
           </div>
-          {/* Merchant / Store switch — now in sidebar, slim fixed */}
           <div className="mt-3 inline-flex w-full rounded-lg border bg-muted p-1">
             <button
               type="button"
@@ -172,6 +178,7 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
                 if (drawerOrderId) closeOrderDrawer()
                 if (drawerProductId) closeProductDrawer()
                 setRole("store")
+                navigate("/")
               }}
               className={
                 "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +
@@ -215,33 +222,50 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
         <SidebarFooter className="border-t border-sidebar-border p-3">
           <div className="flex items-center gap-2 rounded-lg bg-sidebar-accent px-3 py-2">
             <div className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              MS
+              {isViewOnly ? "VM" : "AM"}
             </div>
             <div className="min-w-0 flex-1 leading-none">
-              <div className="truncate text-xs font-semibold text-sidebar-foreground">
-                Merchant Store
-                {readOnly && (
-                  <span className="ml-1.5 inline-flex rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+              <div className="flex items-center gap-1.5 truncate text-xs font-semibold text-sidebar-foreground">
+                <span>{isViewOnly ? "View Merchant" : "Admin Merchant"}</span>
+              </div>
+              <div className="mt-1">
+                {isViewOnly ? (
+                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-3.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 font-medium">
                     VIEW ONLY
-                  </span>
+                  </Badge>
+                ) : (
+                  <Badge variant="default" className="text-[9px] px-1.5 py-0 h-3.5 bg-primary/20 text-primary font-medium">
+                    ADMIN
+                  </Badge>
                 )}
               </div>
-              <div className="truncate text-[11px] text-muted-foreground">
-                {readOnly ? "Public — read-only mode" : "Super Admin"}
-              </div>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 text-muted-foreground hover:text-destructive shrink-0"
+              onClick={handleSignOut}
+              title="Sign Out"
+            >
+              <LogOut className="size-3.5" />
+            </Button>
           </div>
         </SidebarFooter>
       </Sidebar>
 
       <SidebarInset>
-        {/* Top bar — simple per-page: trigger + theme only. No floating role switch */}
+        {/* Top bar — single clean bar per screen */}
         <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="h-6" />
           <span className="text-sm font-medium text-foreground capitalize">
             {String(activeScreen).replace(/_/g, " ")}
           </span>
+          {isViewOnly && (
+            <Badge variant="outline" className="hidden sm:inline-flex text-[11px] border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-normal">
+              View-only mode · Modifications restricted
+            </Badge>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
           </div>
@@ -256,7 +280,7 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
         <footer className="border-t bg-background/40 py-3 text-center text-xs text-muted-foreground">
           <div className="mx-auto flex max-w-[1360px] flex-col items-center justify-between gap-2 px-4 md:flex-row">
             <p>
-              © 2026 Merchant AI Gateway — shadcn base-mira · Figma 1920WLight.
+              © 2026 Razent Merchant Gateway · Live Supabase Data
             </p>
             <p className="font-mono text-[11px]">C:\Users\hemal\Ragent</p>
           </div>

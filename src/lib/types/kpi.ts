@@ -31,6 +31,8 @@ export type DashboardData = {
   upsell_vs_prev_pct?: number
   aov_vs_prev_pct?: number
   conversion_rate_pct?: number
+  settlement_success_pct?: number
+  avg_latency_ms?: number
   upsell_revenue_paise?: number
   aov_paise?: number
   revenue_daily_paise?: { date: string; revenue_paise: number }[]

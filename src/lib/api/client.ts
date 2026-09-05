@@ -23,7 +23,7 @@
  */
 import type { AnalyticsData } from "@/lib/types/analytics"
 import type { DashboardData } from "@/lib/types/kpi"
-import type { Order } from "@/lib/types/order"
+import type { Order, OrderStatus } from "@/lib/types/order"
 import type { Product, ProductStatus } from "@/lib/types/product"
 import type { AuditEvent, AuditSession } from "@/lib/types/audit"
 import type { Conversation } from "@/lib/types/conversation"
@@ -325,6 +325,45 @@ export async function listOrders(): Promise<Order[]> {
   }
 }
 
+export async function updateOrderStatus(
+  orderId: string,
+  status: OrderStatus,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("orders")
+      .update({ status, updated_at: new Date().toISOString() })
+      .or(`external_id.eq.${orderId},id.eq.${orderId}`)
+    if (error) {
+      console.error("[updateOrderStatus] error:", error)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.error("[updateOrderStatus] error:", err)
+    return false
+  }
+}
+
+export async function refundOrder(orderId: string): Promise<boolean> {
+  const ok = await updateOrderStatus(orderId, "refunded")
+  if (ok) {
+    logAuditEvent({
+      event: {
+        id: `audit-refund-${orderId}-${Date.now()}`,
+        type: "order_refunded",
+        timestamp: new Date().toISOString(),
+        actor: "merchant",
+        source: "store",
+        result: "Success",
+        reason: `Order ${orderId} refunded by admin`,
+        payload_summary: `action=refund order_id=${orderId}`,
+      },
+    }).catch(() => {})
+  }
+  return ok
+}
+
 export async function getOrder(id: string): Promise<Order | null> {
   try {
     const { data, error } = await supabase
@@ -586,6 +625,7 @@ export async function listAuditSessions(): Promise<AuditSession[]> {
 }
 
 export type LogAuditEventInput = {
+  session_id?: string
   order_id?: string | null
   customer?: string
   actor_label?: string

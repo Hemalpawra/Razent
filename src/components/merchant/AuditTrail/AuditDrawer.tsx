@@ -1,5 +1,6 @@
 "use client" // Mobile handled in AuditTrailScreen
 
+import { useState } from "react"
 import {
   XIcon,
   FileTextIcon,
@@ -26,6 +27,8 @@ import { Separator } from "@/components/ui/separator"
 import type { AuditSession, AuditEvent, AuditResult } from "@/lib/types/audit"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useUI } from "@/state/useUI"
+import { useMerchant } from "@/state/useMerchant"
+import { toast } from "sonner"
 
 function resultVariant(
   r: AuditResult,
@@ -66,6 +69,8 @@ export default function AuditDrawer({
 }) {
   const isMobile = useIsMobile()
   const setActiveScreen = useUI((s) => s.setActiveScreen)
+  const { role } = useMerchant()
+  const [activeTab, setActiveTab] = useState("summary")
 
   if (isMobile) {
     return null
@@ -85,6 +90,48 @@ export default function AuditDrawer({
   const source = event?.source ?? session?.events[0]?.source ?? "system"
   const actor = event?.actor ?? session?.customer ?? "system"
   const result = event?.result ?? session?.status ?? "Success"
+
+  const relatedProduct =
+    event?.related_product ||
+    session?.events.find((e) => e.related_product)?.related_product ||
+    null
+
+  const handleViewConversation = () => {
+    if (role === "view_only") {
+      toast.info("You are using the view-only merchant account. Conversation details are restricted.")
+      return
+    }
+    onClose()
+    window.location.hash = "/admin/ai_agent"
+  }
+
+  const handleViewOrder = () => {
+    if (!session?.order_id) {
+      toast.info("No order associated with this audit session.")
+      return
+    }
+    onClose()
+    useUI.getState().openOrderDrawer(session.order_id)
+    window.location.hash = "/admin/orders"
+  }
+
+  const handleViewProduct = () => {
+    onClose()
+    window.location.hash = "/admin/products"
+    if (relatedProduct) {
+      toast.info(`Filtering products for: ${relatedProduct}`)
+    }
+  }
+
+  const handleViewInvoice = () => {
+    if (!session?.order_id) {
+      toast.info("No invoice found for this session.")
+      return
+    }
+    onClose()
+    useUI.getState().openOrderDrawer(session.order_id)
+    window.location.hash = "/admin/orders"
+  }
 
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
@@ -106,34 +153,24 @@ export default function AuditDrawer({
         </DrawerHeader>
 
         <DrawerBody className="p-4 space-y-4">
-          <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <DrawerTitle className="text-base leading-tight">
-                  {title}
-                </DrawerTitle>
-                <Badge
-                  variant={resultVariant(severity)}
-                  className="rounded-full text-[11px]"
-                >
-                  {severity}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1 truncate">
-                {new Date(ts).toLocaleString("en-IN", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </p>
+          <div className="border-b border-border/60 pb-4">
+            <div className="flex items-center gap-2">
+              <DrawerTitle className="text-base leading-tight">
+                {title}
+              </DrawerTitle>
+              <Badge
+                variant={resultVariant(severity)}
+                className="rounded-full text-[11px]"
+              >
+                {severity}
+              </Badge>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="shrink-0 p-1 rounded-md hover:bg-muted/30"
-            >
-              <XIcon className="size-4" />
-            </Button>
+            <p className="text-xs text-muted-foreground mt-1 truncate">
+              {new Date(ts).toLocaleString("en-IN", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </p>
           </div>
 
           {!session ? (
@@ -143,7 +180,7 @@ export default function AuditDrawer({
           ) : (
             <>
               <div className="flex-1 overflow-y-auto">
-                <Tabs defaultValue="summary" className="w-full">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                   <div className="sticky top-0 z-10 bg-popover border-b px-4">
                     <TabsList className="w-full justify-start rounded-none border-0 bg-transparent p-0 h-auto gap-4 overflow-x-auto">
                       <TabsTrigger
@@ -277,7 +314,7 @@ export default function AuditDrawer({
                         <Row label="Reason" value={event?.reason ?? "—"} />
                         <Row
                           label="Related product"
-                          value={event?.related_product ?? "Air Purifier Pro"}
+                          value={relatedProduct ?? "—"}
                         />
                       </CardContent>
                     </Card>
@@ -325,8 +362,8 @@ export default function AuditDrawer({
                       <Badge variant="outline" className="rounded-full">
                         status {event?.status_code ?? 200}
                       </Badge>
-                      <span>ip {event?.metadata?.ip ?? "203.0.113.42"}</span>
-                      <span>region {event?.metadata?.region ?? "IN-KA"}</span>
+                      <span>ip {event?.metadata?.ip ?? "—"}</span>
+                      <span>region {event?.metadata?.region ?? "—"}</span>
                     </div>
                   </TabsContent>
 
@@ -382,18 +419,21 @@ export default function AuditDrawer({
                       label="Related conversation"
                       sub={session.session_id}
                       btn="View Conversation"
+                      onClick={handleViewConversation}
                     />
                     <LinkedRow
                       icon={PackageIcon}
                       label="Related order"
                       sub={session.order_id ?? "No order yet"}
                       btn="View Order"
+                      onClick={handleViewOrder}
                     />
                     <LinkedRow
                       icon={FileTextIcon}
                       label="Related product"
-                      sub="Air Purifier Pro"
+                      sub={relatedProduct ?? "No related product"}
                       btn="View Product"
+                      onClick={handleViewProduct}
                     />
                     <LinkedRow
                       icon={ReceiptIcon}
@@ -401,18 +441,21 @@ export default function AuditDrawer({
                       sub={
                         session.order_id
                           ? `INV-${session.order_id.slice(-6).toUpperCase()}`
-                          : "—"
+                          : "No invoice"
                       }
                       btn="View Invoice"
+                      onClick={handleViewInvoice}
                     />
                   </TabsContent>
                 </Tabs>
               </div>
 
               <div className="mt-4 flex gap-2 border-t border-border/60 pt-4">
-                <Button className="flex-1 rounded-lg">View Full Trail</Button>
-                <Button variant="outline" className="rounded-lg bg-card">
-                  Export Event
+                <Button
+                  className="flex-1 rounded-lg"
+                  onClick={() => setActiveTab("timeline")}
+                >
+                  View Full Trail
                 </Button>
                 <Button
                   variant="outline"
@@ -458,11 +501,13 @@ function LinkedRow({
   label,
   sub,
   btn,
+  onClick,
 }: {
   icon: typeof FileTextIcon
   label: string
   sub: string
   btn: string
+  onClick?: () => void
 }) {
   return (
     <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-3">
@@ -481,6 +526,7 @@ function LinkedRow({
         variant="outline"
         size="sm"
         className="h-6 rounded-lg bg-card shrink-0 text-xs"
+        onClick={onClick}
       >
         <EyeIcon className="size-3.5" /> {btn}
       </Button>

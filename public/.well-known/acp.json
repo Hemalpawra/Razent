@@ -1,14 +1,15 @@
 {
   "protocol": "acp",
-  "version": "2026-03",
+  "version": "2026-04-17",
   "provider": "OpenAI / Stripe Agentic Commerce Standard",
   "merchant_name": "Razent Instant Retail",
+  "merchant_id": "b57fec42-c785-466e-b225-3f7a27edcccb",
   "catalog": {
     "search_endpoint": "/api/a2a/acp/catalog",
     "categories": [
       "Fruits",
       "Vegetables",
-      "Dairy & Bakery",0
+      "Dairy & Bakery",
       "Snacks & Munchies",
       "Beverages",
       "Household"
@@ -22,7 +23,31 @@
     "tax_rate_percent": 18
   },
   "checkout": {
+    "endpoints": {
+      "create": "/api/a2a/acp/checkouts",
+      "get": "/api/a2a/acp/checkouts/:id",
+      "update": "/api/a2a/acp/checkouts/:id",
+      "complete": "/api/a2a/acp/checkouts/:id/complete",
+      "cancel": "/api/a2a/acp/checkouts/:id/cancel"
+    },
     "mandate_bridge": "ap2",
     "settlement_rail": "ncpi_uap"
-  }
+  },
+  "payment_handlers": [
+    {
+      "id": "dev.acp.tokenized.card",
+      "type": "tokenized_card",
+      "requires_delegate_payment": true,
+      "supported_networks": ["Visa", "Mastercard", "RuPay", "Diners", "Amex"]
+    },
+    {
+      "id": "dev.acp.upi_autopay",
+      "type": "upi_mandate",
+      "ceiling_inr": 15000,
+      "test_modes": {
+        "success_vpa": "success@razorpay",
+        "failure_vpa": "failure@razorpay"
+      }
+    }
+  ]
 }

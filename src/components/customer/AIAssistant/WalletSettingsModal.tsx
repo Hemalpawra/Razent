@@ -20,8 +20,17 @@ import {
   saveStoredNPCIConfig,
   DEFAULT_NPCI_CONFIG,
 } from "@/lib/protocol/agenticCommerce"
-import type { NPCIMandateConfig } from "@/lib/protocol/ap2Types"
+import {
+  getSavedTestCards,
+  saveTestCards,
+  getActivePaymentSelection,
+  saveActivePaymentSelection,
+  DEFAULT_TEST_UPI_METHODS,
+  type ActivePaymentSelection,
+} from "@/lib/protocol/regulatoryWrapper"
+import type { NPCIMandateConfig, SavedPaymentCard } from "@/lib/protocol/ap2Types"
 import { toast } from "sonner"
+import { Copy, AlertTriangle } from "lucide-react"
 
 interface WalletSettingsModalProps {
   isOpen: boolean
@@ -55,11 +64,20 @@ export const WalletSettingsModal: React.FC<WalletSettingsModalProps> = ({
   const [activeTab, setActiveTab] = useState<"mandate" | "payment" | "profile" | "protocol">("mandate")
   const [mandateConfig, setMandateConfig] = useState<NPCIMandateConfig>(DEFAULT_NPCI_CONFIG)
   const [profile, setProfile] = useState<CustomerProfile>(DEFAULT_PROFILE)
+  const [savedCards, setSavedCards] = useState<SavedPaymentCard[]>(getSavedTestCards)
+  const [activePayment, setActivePayment] = useState<ActivePaymentSelection>(getActivePaymentSelection)
+  const [customUpi, setCustomUpi] = useState("")
   const [isSaved, setIsSaved] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
       setMandateConfig(getStoredNPCIConfig())
+      setSavedCards(getSavedTestCards())
+      const storedActive = getActivePaymentSelection()
+      setActivePayment(storedActive)
+      if (storedActive.type === "upi" && storedActive.upiVpa) {
+        setCustomUpi(storedActive.upiVpa)
+      }
       try {
         const storedProfile = localStorage.getItem("razent_customer_profile")
         if (storedProfile) {
@@ -73,19 +91,65 @@ export const WalletSettingsModal: React.FC<WalletSettingsModalProps> = ({
   if (!isOpen) return null
 
   const handleSave = () => {
-    saveStoredNPCIConfig(mandateConfig)
+    const updatedConfig: NPCIMandateConfig = {
+      ...mandateConfig,
+      active_payment_type: activePayment.type,
+      selected_card_id: activePayment.cardId,
+      selected_upi_id: activePayment.upiVpa,
+      upi_vpa: activePayment.upiVpa || mandateConfig.upi_vpa,
+    }
+    saveStoredNPCIConfig(updatedConfig)
+    saveActivePaymentSelection(activePayment)
+    saveTestCards(savedCards)
     try {
       localStorage.setItem("razent_customer_profile", JSON.stringify(profile))
     } catch {}
     if (onUpdateConfig) {
-      onUpdateConfig(mandateConfig)
+      onUpdateConfig(updatedConfig)
     }
     setIsSaved(true)
-    toast.success("Wallet & NPCI AutoPay settings updated successfully.")
+    toast.success("Wallet & delegated payment settings updated successfully.")
     setTimeout(() => {
       setIsSaved(false)
       onClose()
     }, 400)
+  }
+
+  const selectCard = (card: SavedPaymentCard) => {
+    const next: ActivePaymentSelection = { type: "card", cardId: card.id }
+    setActivePayment(next)
+    saveActivePaymentSelection(next)
+    const updatedConfig: NPCIMandateConfig = {
+      ...mandateConfig,
+      active_payment_type: "card",
+      selected_card_id: card.id,
+    }
+    setMandateConfig(updatedConfig)
+    saveStoredNPCIConfig(updatedConfig)
+    if (onUpdateConfig) onUpdateConfig(updatedConfig)
+    toast.success(`Selected ${card.network} ${card.cardType} (${card.cardSubType}) as primary payment method`)
+  }
+
+  const selectUpi = (vpa: string) => {
+    const next: ActivePaymentSelection = { type: "upi", upiVpa: vpa }
+    setActivePayment(next)
+    setCustomUpi(vpa)
+    saveActivePaymentSelection(next)
+    const updatedConfig: NPCIMandateConfig = {
+      ...mandateConfig,
+      active_payment_type: "upi",
+      upi_vpa: vpa,
+      selected_upi_id: vpa,
+    }
+    setMandateConfig(updatedConfig)
+    saveStoredNPCIConfig(updatedConfig)
+    if (onUpdateConfig) onUpdateConfig(updatedConfig)
+    toast.success(`Selected UPI (${vpa}) as primary payment method`)
+  }
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text)
+    toast.success(`Copied ${label} to clipboard`)
   }
 
   const toggleMandateStatus = () => {
@@ -351,58 +415,237 @@ export const WalletSettingsModal: React.FC<WalletSettingsModalProps> = ({
 
           {/* TAB 2: Payment Methods */}
           {activeTab === "payment" && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Saved UPI Virtual Payment Address (VPA)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={mandateConfig.upi_vpa}
-                    onChange={(e) =>
-                      setMandateConfig({ ...mandateConfig, upi_vpa: e.target.value })
-                    }
-                    placeholder="e.g. yourname@okhdfcbank"
-                    className="flex-1 px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-                  />
-                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-medium">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Verified
+            <div className="space-y-5">
+              {/* Active Selection Banner */}
+              <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                    {activePayment.type === "card" ? (
+                      <CreditCard className="w-5 h-5" />
+                    ) : (
+                      <Zap className="w-5 h-5 text-emerald-500" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                      Active Payment Method for AI Orders
+                    </span>
+                    <span className="text-sm font-bold text-foreground">
+                      {activePayment.type === "card"
+                        ? (() => {
+                            const c = savedCards.find((x) => x.id === activePayment.cardId)
+                            return c
+                              ? `${c.network} ${c.cardType} (${c.maskedNumber})`
+                              : "Selected Card"
+                          })()
+                        : `UPI AutoPay: ${activePayment.upiVpa || mandateConfig.upi_vpa}`}
+                    </span>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  This UPI ID will be charged for AI-ordered grocery deliveries via UPI AutoPay.
-                </p>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Primary
+                </span>
               </div>
 
-              {/* Saved Tokenized Card */}
-              <div className="p-4 rounded-xl border border-border bg-card space-y-3">
+              {/* Section 1: Test UPI Credentials */}
+              <div className="space-y-3 p-4 rounded-xl border border-border bg-card">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">HDFC Bank RuPay Debit Card</p>
-                      <p className="text-xs text-muted-foreground font-mono">•••• •••• •••• 4242</p>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-emerald-500" />
+                    <span className="text-sm font-semibold text-foreground">
+                      UPI Test Credentials (NPCI Sandbox)
+                    </span>
                   </div>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-mono">
-                    Tokenized
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                    Razorpay UPI
                   </span>
                 </div>
-                <div className="text-xs text-muted-foreground border-t border-border pt-2 flex justify-between">
-                  <span>Network: RuPay Global</span>
-                  <span>Expires: 08/29</span>
+                <p className="text-xs text-muted-foreground">
+                  At Checkout or in AI Assistant, use test UPI IDs to verify instantaneous e-mandate success or simulated failure flows:
+                </p>
+
+                {/* Quick Test UPI Flow Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => selectUpi("success@razorpay")}
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all ${
+                      activePayment.type === "upi" && activePayment.upiVpa === "success@razorpay"
+                        ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500"
+                        : "border-border hover:bg-muted/40"
+                    }`}
+                  >
+                    <div className="w-4 h-4 rounded-full border border-emerald-500 flex items-center justify-center shrink-0 mt-0.5">
+                      {activePayment.type === "upi" && activePayment.upiVpa === "success@razorpay" && (
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold text-foreground">success@razorpay</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold">
+                          Success Flow
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Simulates instantaneous AutoPay mandate & payment success.
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => selectUpi("failure@razorpay")}
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all ${
+                      activePayment.type === "upi" && activePayment.upiVpa === "failure@razorpay"
+                        ? "border-destructive bg-destructive/10 ring-1 ring-destructive"
+                        : "border-border hover:bg-muted/40"
+                    }`}
+                  >
+                    <div className="w-4 h-4 rounded-full border border-destructive flex items-center justify-center shrink-0 mt-0.5">
+                      {activePayment.type === "upi" && activePayment.upiVpa === "failure@razorpay" && (
+                        <div className="w-2 h-2 rounded-full bg-destructive" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold text-foreground">failure@razorpay</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-semibold">
+                          Failure Flow
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Simulates bank decline, insufficient balance, or timeout.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Custom UPI Field */}
+                <div className="pt-2 space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Or specify a Custom UPI VPA:</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customUpi}
+                      onChange={(e) => setCustomUpi(e.target.value)}
+                      placeholder="e.g. user@okhdfcbank"
+                      className="flex-1 px-3 py-2 rounded-xl border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (customUpi.trim()) selectUpi(customUpi.trim())
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-border hover:bg-muted text-xs font-semibold"
+                    >
+                      Use Custom
+                    </button>
+                  </div>
+                </div>
+
+                {/* Watch Out Notice */}
+                <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold block text-amber-700 dark:text-amber-300">Watch Out!</span>
+                    <span className="leading-relaxed">
+                      In test mode, payment cancellation will result in a successful payment. Use live mode to test real payment cancellation on UPI.
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Security Banner */}
-              <div className="p-3 rounded-xl bg-muted/50 border border-border flex items-center gap-2 text-xs text-muted-foreground">
-                <Lock className="w-4 h-4 text-primary shrink-0" />
-                <span>
-                  Razorpay & RBI tokenization active. Your full card numbers, CVV, and UPI PIN are never accessible to Razent AI or any model.
+              {/* Section 2: Saved Test Cards (RBI Tokenized) */}
+              <div className="space-y-3 p-4 rounded-xl border border-border bg-card">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-semibold text-foreground">
+                      Saved Test Cards (RBI Network Tokenized)
+                    </span>
+                  </div>
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                    CoF Sandbox
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Choose which card you want the AI assistant and checkout to charge. All cards are tokenized under RBI Card-on-File guidelines:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                  {savedCards.map((card) => {
+                    const isSelected =
+                      activePayment.type === "card" && activePayment.cardId === card.id
+                    return (
+                      <div
+                        key={card.id}
+                        className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                          isSelected
+                            ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
+                            : "border-border hover:bg-muted/30"
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded bg-muted text-foreground border border-border">
+                              {card.network}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-muted/60 text-muted-foreground">
+                                {card.cardType} · {card.cardSubType}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mt-2.5 flex items-center justify-between">
+                            <span className="font-mono text-sm font-semibold tracking-wider text-foreground">
+                              {card.cardNumber}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(card.cardNumber.replace(/\s+/g, ""), "Card number")}
+                              className="p-1 text-muted-foreground hover:text-foreground rounded"
+                              title="Copy card number"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground font-mono">
+                            <span>Exp: {card.expiry}</span>
+                            <span>CVV: {card.cvv}</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-border/60 flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]">
+                            {card.tokenReference}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => selectCard(card)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              isSelected
+                                ? "bg-emerald-500 text-white shadow-xs"
+                                : "bg-muted hover:bg-muted/80 text-foreground"
+                            }`}
+                          >
+                            {isSelected ? "Active" : "Use this Card"}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Security & Privacy Banner */}
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border flex items-start gap-2.5 text-xs text-muted-foreground">
+                <Lock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <span className="leading-relaxed">
+                  <strong>RBI Compliance & Privacy:</strong> Full card numbers, CVVs, and UPI PINs are strictly isolated. The AI assistant receives only encrypted token references and executes orders strictly within your configured spend caps.
                 </span>
               </div>
             </div>

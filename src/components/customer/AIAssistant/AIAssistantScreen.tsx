@@ -21,6 +21,9 @@ import {
   AlertCircle,
   Loader2,
   PackageCheck,
+  Lock,
+  CreditCard,
+  AlertTriangle,
 } from "lucide-react"
 import { useTheme } from "@/state/useTheme"
 import { useSettings } from "@/state/useSettings"
@@ -38,6 +41,11 @@ import {
   createAP2PaymentMandate,
   verifyAP2IntentMandate,
 } from "@/lib/protocol/agenticCommerce"
+import {
+  sanitizeUserChatInput,
+  getActivePaymentSelection,
+  getSavedTestCards,
+} from "@/lib/protocol/regulatoryWrapper"
 import type { Product } from "@/lib/types/product"
 import type { NPCIMandateConfig, CartMandate, PaymentMandate } from "@/lib/protocol/ap2Types"
 import WalletSettingsModal from "./WalletSettingsModal"
@@ -81,7 +89,7 @@ export const AIAssistantScreen: React.FC = () => {
     {
       id: "msg_welcome",
       role: "assistant",
-      text: `Hello! I'm Razent, your AI shopping assistant. I have live access to our grocery catalog. Ask me to find products, recommend items, or place delegated orders directly under your NPCI AutoPay spending cap.`,
+      text: `Hello! I'm Razent, your AI shopping assistant. I have live access to our grocery catalog. Ask me to find products, recommend items, or place delegated orders directly under your NPCI AutoPay spending cap.\n\n🔒 Security Notice: Please do not share any personal information, card numbers, CVV, or passwords in this chat. All payment methods and limits are securely configured in your Wallet Settings.`,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ])
@@ -111,7 +119,7 @@ export const AIAssistantScreen: React.FC = () => {
           setCatalog(data.filter((p) => p.status === "active"))
         }
       })
-      .catch(() => {})
+      .catch(() => { })
     return () => {
       alive = false
     }
@@ -200,9 +208,17 @@ export const AIAssistantScreen: React.FC = () => {
       }
 
       // 3. Create Payment Mandate
+      const activePay = getActivePaymentSelection()
+      const allCards = getSavedTestCards()
+      const activeCard = allCards.find((c) => c.id === activePay.cardId)
+      const paymentMethodAccount =
+        activePay.type === "card" && activeCard
+          ? `${activeCard.network} (${activeCard.maskedNumber})`
+          : (activePay.upiVpa || npciConfig.upi_vpa)
+
       const paymentMandate: PaymentMandate = createAP2PaymentMandate(
         cartMandate,
-        npciConfig.upi_vpa,
+        paymentMethodAccount,
       )
 
       // 4. Execute autonomous checkout
@@ -210,13 +226,13 @@ export const AIAssistantScreen: React.FC = () => {
       const customer = storedProfileStr
         ? JSON.parse(storedProfileStr)
         : {
-            fullName: "Customer",
-            email: "customer@razent.store",
-            phone: "+91 98765 43210",
-            addressLine: "Indiranagar 100ft Rd",
-            city: "Bengaluru",
-            postalCode: "560038",
-          }
+          fullName: "Customer",
+          email: "customer@razent.store",
+          phone: "+91 98765 43210",
+          addressLine: "Indiranagar 100ft Rd",
+          city: "Bengaluru",
+          postalCode: "560038",
+        }
 
       const checkoutRes = await executeAgentCheckout({
         order: {
@@ -249,6 +265,10 @@ export const AIAssistantScreen: React.FC = () => {
           via_ai: true,
           commerce_protocol: "ap2",
           mandate_id: paymentMandate.mandate_chain_id,
+          notes:
+            activePay.type === "card" && activeCard
+              ? `Charged via tokenized ${activeCard.network} ${activeCard.cardType} (${activeCard.maskedNumber})`
+              : `Charged via UPI AutoPay (${activePay.upiVpa || npciConfig.upi_vpa})`,
           created_at: new Date().toISOString(),
         },
         mandate: {
@@ -318,19 +338,27 @@ export const AIAssistantScreen: React.FC = () => {
         })),
       )
 
-      const paymentMandate = createAP2PaymentMandate(cartMandate, npciConfig.upi_vpa)
+      const activePay = getActivePaymentSelection()
+      const allCards = getSavedTestCards()
+      const activeCard = allCards.find((c) => c.id === activePay.cardId)
+      const paymentMethodAccount =
+        activePay.type === "card" && activeCard
+          ? `${activeCard.network} (${activeCard.maskedNumber})`
+          : (activePay.upiVpa || npciConfig.upi_vpa)
+
+      const paymentMandate = createAP2PaymentMandate(cartMandate, paymentMethodAccount)
 
       const storedProfileStr = localStorage.getItem("razent_customer_profile")
       const customer = storedProfileStr
         ? JSON.parse(storedProfileStr)
         : {
-            fullName: "Customer",
-            email: "customer@razent.store",
-            phone: "+91 98765 43210",
-            addressLine: "Indiranagar 100ft Rd",
-            city: "Bengaluru",
-            postalCode: "560038",
-          }
+          fullName: "Customer",
+          email: "customer@razent.store",
+          phone: "+91 98765 43210",
+          addressLine: "Indiranagar 100ft Rd",
+          city: "Bengaluru",
+          postalCode: "560038",
+        }
 
       const checkoutRes = await executeAgentCheckout({
         order: {
@@ -361,6 +389,10 @@ export const AIAssistantScreen: React.FC = () => {
           via_ai: true,
           commerce_protocol: "ap2",
           mandate_id: paymentMandate.mandate_chain_id,
+          notes:
+            activePay.type === "card" && activeCard
+              ? `Charged via tokenized ${activeCard.network} ${activeCard.cardType} (${activeCard.maskedNumber})`
+              : `Charged via UPI AutoPay (${activePay.upiVpa || npciConfig.upi_vpa})`,
           created_at: new Date().toISOString(),
         },
         mandate: {
@@ -443,6 +475,26 @@ export const AIAssistantScreen: React.FC = () => {
       textareaRef.current.style.height = "auto"
     }
 
+    // RBI Compliance: Scan and intercept any sensitive card credentials (PAN, CVV, OTP)
+    const sanitization = sanitizeUserChatInput(query)
+    if (sanitization.hasSensitiveData) {
+      const userMessage: ChatMessage = {
+        id: `msg_user_${Date.now()}`,
+        role: "user",
+        text: sanitization.sanitizedText,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }
+      const warningMessage: ChatMessage = {
+        id: `msg_warn_${Date.now()}`,
+        role: "assistant",
+        text: `🛡️ ${sanitization.warningMessage}\n\n🔒 Please do not share any card numbers, CVVs, or OTPs in chat. Your payment credentials and AutoPay limits are securely configured in your Wallet Settings.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }
+      setMessages((prev) => [...prev, userMessage, warningMessage])
+      toast.warning("Sensitive financial data detected and redacted per RBI guidelines.")
+      return
+    }
+
     const userMessage: ChatMessage = {
       id: `msg_user_${Date.now()}`,
       role: "user",
@@ -475,7 +527,7 @@ export const AIAssistantScreen: React.FC = () => {
         text: m.text,
         at: new Date().toISOString(),
       })),
-    }).catch(() => {})
+    }).catch(() => { })
 
     const anonKey =
       (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
@@ -545,10 +597,10 @@ export const AIAssistantScreen: React.FC = () => {
                 prev.map((m) =>
                   m.id === assistantTempId
                     ? {
-                        ...m,
-                        text: accumulatedText,
-                        products: recProducts.length > 0 ? recProducts : m.products,
-                      }
+                      ...m,
+                      text: accumulatedText,
+                      products: recProducts.length > 0 ? recProducts : m.products,
+                    }
                     : m,
                 ),
               )
@@ -571,7 +623,7 @@ export const AIAssistantScreen: React.FC = () => {
                 )
               }
             }
-          } catch {}
+          } catch { }
         }
       }
 
@@ -582,11 +634,11 @@ export const AIAssistantScreen: React.FC = () => {
           prev.map((m) =>
             m.id === assistantTempId
               ? {
-                  ...m,
-                  text: fallback.text,
-                  products: fallback.products,
-                  isStreaming: false,
-                }
+                ...m,
+                text: fallback.text,
+                products: fallback.products,
+                isStreaming: false,
+              }
               : m,
           ),
         )
@@ -604,11 +656,11 @@ export const AIAssistantScreen: React.FC = () => {
         prev.map((m) =>
           m.id === assistantTempId
             ? {
-                ...m,
-                text: fallback.text,
-                products: fallback.products,
-                isStreaming: false,
-              }
+              ...m,
+              text: fallback.text,
+              products: fallback.products,
+              isStreaming: false,
+            }
             : m,
         ),
       )
@@ -709,29 +761,40 @@ export const AIAssistantScreen: React.FC = () => {
       {/* ── Chat Messages Canvas ───────────────────────────────── */}
       <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6">
         <div className="max-w-3xl mx-auto space-y-6">
-          {/* NPCI Trust Banner */}
-          <div className="flex items-center justify-between p-3 rounded-xl border border-border/80 bg-muted/30 text-xs">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>
-                Delegated purchasing active under <strong>NPCI UPI AutoPay</strong> guidelines. PIN-less orders allowed up to ₹{npciConfig.user_delegated_limit_rupees}.
-              </span>
+          {/* NPCI Trust & Security Notices */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border/80 bg-muted/30 text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>
+                  Delegated purchasing active under <strong>NPCI UPI AutoPay</strong> guidelines. PIN-less orders allowed up to ₹{npciConfig.user_delegated_limit_rupees}.
+                </span>
+              </div>
+              <button
+                onClick={() => setIsWalletModalOpen(true)}
+                className="text-primary hover:underline font-medium shrink-0 ml-2"
+              >
+                Configure
+              </button>
             </div>
-            <button
-              onClick={() => setIsWalletModalOpen(true)}
-              className="text-primary hover:underline font-medium shrink-0 ml-2"
-            >
-              Configure
-            </button>
+
+            {/* Privacy & Financial Security Banner */}
+            <div className="flex items-start justify-between p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 text-xs text-muted-foreground">
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <Lock className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">
+                  <strong className="text-foreground">Security Notice:</strong> Please do <strong>not</strong> share any personal information, full card numbers, CVV, or passwords in chat. Payment credentials are encrypted in your <button onClick={() => setIsWalletModalOpen(true)} className="text-primary hover:underline font-semibold">Wallet Settings</button>.
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Message List */}
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex gap-3 ${
-                msg.role === "user" ? "justify-end" : "justify-start"
-              }`}
+              className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"
+                }`}
             >
               {/* Bot Avatar */}
               {msg.role === "assistant" && (
@@ -742,17 +805,15 @@ export const AIAssistantScreen: React.FC = () => {
 
               {/* Message Content Container */}
               <div
-                className={`max-w-[85%] sm:max-w-[75%] space-y-3 ${
-                  msg.role === "user" ? "items-end text-right" : "items-start text-left"
-                }`}
+                className={`max-w-[85%] sm:max-w-[75%] space-y-3 ${msg.role === "user" ? "items-end text-right" : "items-start text-left"
+                  }`}
               >
                 {/* Bubble */}
                 <div
-                  className={`inline-block px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                    msg.role === "user"
+                  className={`inline-block px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.role === "user"
                       ? "bg-primary text-primary-foreground rounded-tr-sm shadow-sm"
                       : "bg-card border border-border text-foreground rounded-tl-sm shadow-sm"
-                  }`}
+                    }`}
                 >
                   {msg.text ? (
                     <div className="whitespace-pre-wrap">{msg.text}</div>
@@ -954,7 +1015,7 @@ export const AIAssistantScreen: React.FC = () => {
                   handleSendMessage()
                 }
               }}
-              placeholder="Ask for groceries, prices, recipes, or say 'Buy 1L milk'..."
+              placeholder="Ask for anything "
               className="w-full py-3 pl-4 pr-12 text-sm bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none max-h-32"
             />
 
@@ -975,7 +1036,7 @@ export const AIAssistantScreen: React.FC = () => {
 
           {/* Disclaimer */}
           <p className="text-[10px] text-center text-muted-foreground">
-            Razent AI Assistant operates under Google AP2 cryptographic mandate verification and NPCI UPI AutoPay standards (Up to ₹15,000 PIN-less ceiling).
+            Razent AI Assistant is still in development can make mistakes. (Do not share card details or CVV in chat)
           </p>
         </div>
       </footer>

@@ -1,9 +1,9 @@
 {
-  "$schema": "https://agent-payments-protocol.org/schemas/a2a-manifest-v1.json",
+  "specification": "https://github.com/google-agentic-commerce/AP2",
   "name": "Razent Universal Commerce Agent",
-  "description": "Agent-to-Agent instant retail commerce endpoint with Google AP2 trust mandates and OpenAI/Stripe ACP semantic layer.",
+  "description": "Agent-to-Agent instant retail commerce endpoint supporting UCP discovery, OpenAI ACP checkout sessions, Google AP2 cryptographic trust mandates, and NPCI/RBI multi-payment guardrails.",
   "version": "1.0.0",
-  "protocols_supported": ["acp", "ap2", "ncpi_uap", "x402"],
+  "protocols_supported": ["ucp", "acp", "ap2", "ncpi_uap", "x402"],
   "merchant": {
     "merchant_id": "b57fec42-c785-466e-b225-3f7a27edcccb",
     "business_name": "Razent Instant Retail",
@@ -13,6 +13,9 @@
     "category": "Quick-Commerce Grocery & Essentials"
   },
   "endpoints": {
+    "ucp_discovery": "/.well-known/ucp.json",
+    "acp_manifest": "/.well-known/acp.json",
+    "ap2_trust": "/.well-known/ap2.json",
     "acp_catalog": "/api/a2a/acp/catalog",
     "acp_cart": "/api/a2a/acp/cart",
     "ap2_intent_mandate": "/api/a2a/ap2/mandate/intent",
@@ -25,6 +28,7 @@
     "human_present_auth": true,
     "human_not_present_delegation": true,
     "npci_autopay_max_limit_inr": 15000,
-    "settlement_rail": "NPCI_UPI_AUTOPAY"
+    "settlement_rail": "NPCI_UPI_AUTOPAY",
+    "test_modes_supported": true
   }
 }

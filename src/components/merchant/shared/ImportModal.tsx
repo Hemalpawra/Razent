@@ -1,5 +1,6 @@
 import { useState, useRef } from "react"
-import { Upload, FileText, CheckCircle2, AlertCircle, X, Download } from "lucide-react"
+import { Upload, FileText, CheckCircle2, AlertCircle, X, Download, FileSpreadsheet } from "lucide-react"
+import * as XLSX from "xlsx"
 import {
   Dialog,
   DialogContent,
@@ -40,7 +41,7 @@ export function ImportModal({
   open,
   onClose,
   title = "Import Data",
-  description = "Upload a CSV file or paste CSV text to bulk import records.",
+  description = "Upload CSV or Excel (.xlsx) file, or paste CSV text to import records.",
   sampleCsv,
   onImport,
 }: ImportModalProps) {
@@ -55,16 +56,42 @@ export function ImportModal({
     const file = e.target.files?.[0]
     if (!file) return
     setFileName(file.name)
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string
-      if (text) {
-        setPastedText(text)
-        const rows = parseCSV(text)
-        setParsedRows(rows)
+
+    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls")
+    if (isExcel) {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        try {
+          const data = new Uint8Array(ev.target?.result as ArrayBuffer)
+          const workbook = XLSX.read(data, { type: "array" })
+          const firstSheet = workbook.SheetNames[0]
+          const sheet = workbook.Sheets[firstSheet]
+          const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { raw: false, defval: "" })
+          const normalized: Record<string, string>[] = rows.map((r) => {
+            const obj: Record<string, string> = {}
+            Object.entries(r).forEach(([k, v]) => {
+              obj[k] = String(v ?? "")
+            })
+            return obj
+          })
+          setParsedRows(normalized)
+        } catch (err) {
+          console.error("Excel parse error:", err)
+        }
       }
+      reader.readAsArrayBuffer(file)
+    } else {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string
+        if (text) {
+          setPastedText(text)
+          const rows = parseCSV(text)
+          setParsedRows(rows)
+        }
+      }
+      reader.readAsText(file)
     }
-    reader.readAsText(file)
   }
 
   const handleTextChange = (text: string) => {
@@ -113,7 +140,7 @@ export function ImportModal({
             </div>
             <div className="text-xs text-muted-foreground flex justify-center gap-4">
               <span className="text-emerald-600 font-medium">
-                {importResult.success} records imported
+                {importResult.success} records imported to database
               </span>
               {importResult.errors > 0 && (
                 <span className="text-destructive font-medium">
@@ -140,16 +167,19 @@ export function ImportModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 onChange={handleFileChange}
                 className="hidden"
               />
-              <Upload className="size-8 mx-auto text-muted-foreground mb-2" />
+              <div className="flex justify-center gap-2 mb-2 text-muted-foreground">
+                <Upload className="size-6" />
+                <FileSpreadsheet className="size-6 text-emerald-600" />
+              </div>
               <div className="text-xs font-medium text-foreground">
-                {fileName ? fileName : "Click to select or drop CSV file"}
+                {fileName ? fileName : "Click to select or drop CSV or Excel (.xlsx) file"}
               </div>
               <div className="text-[11px] text-muted-foreground mt-0.5">
-                Supports standard comma-separated values (.csv)
+                Supports standard comma-separated values (.csv) and Microsoft Excel (.xlsx / .xls)
               </div>
             </div>
 
@@ -173,7 +203,7 @@ export function ImportModal({
                 rows={4}
                 value={pastedText}
                 onChange={(e) => handleTextChange(e.target.value)}
-                placeholder="id,title,price,stock&#10;prod_1,Amul Milk,68,50"
+                placeholder="title,price,category,stock&#10;Amul Milk 1L,68,Dairy,50"
                 className="font-mono text-xs bg-muted/20"
               />
             </div>
@@ -184,7 +214,7 @@ export function ImportModal({
                   Ready to import:
                 </span>
                 <Badge variant="secondary" className="font-mono">
-                  {parsedRows.length} valid rows found
+                  {parsedRows.length} valid records parsed
                 </Badge>
               </div>
             )}
@@ -198,7 +228,7 @@ export function ImportModal({
                 disabled={parsedRows.length === 0 || loading}
                 onClick={handleExecuteImport}
               >
-                {loading ? "Importing…" : `Import ${parsedRows.length > 0 ? `(${parsedRows.length})` : ""}`}
+                {loading ? "Importing to DB…" : `Import ${parsedRows.length > 0 ? `(${parsedRows.length})` : ""}`}
               </Button>
             </div>
           </div>

@@ -18,12 +18,25 @@
       "method": "https://npci.org.in/upi-autopay",
       "rail": "UPI",
       "max_limit_paise": 1500000,
-      "settlement": "Razorpay Instant Reserve"
+      "settlement": "Razorpay Instant Reserve",
+      "sandbox_test_vpa": {
+        "success": "success@razorpay",
+        "failure": "failure@razorpay"
+      }
     },
     {
       "method": "https://w3c.github.io/payment-request",
       "rail": "CardTokenization",
-      "requires_3ds_step_up": true
+      "token_standards": ["RBI_CoF_Tokenization"],
+      "requires_3ds_step_up_above_paise": 1500000,
+      "test_cards": [
+        { "network": "Visa", "cardNumber": "4100 2800 0000 1007", "cardType": "Debit", "cardSubType": "Consumer" },
+        { "network": "Mastercard", "cardNumber": "5555 5100 0008 1006", "cardType": "Credit", "cardSubType": "Business" },
+        { "network": "Mastercard", "cardNumber": "5180 2872 0009 1001", "cardType": "Prepaid", "cardSubType": "Consumer" },
+        { "network": "RuPay", "cardNumber": "6527 6589 0000 1005", "cardType": "Credit", "cardSubType": "Consumer" },
+        { "network": "Diners", "cardNumber": "3608 280009 1007", "cardType": "Credit", "cardSubType": "Consumer" },
+        { "network": "Amex", "cardNumber": "3402 560004 01007", "cardType": "Credit", "cardSubType": "Consumer" }
+      ]
     }
   ],
   "cryptographic_verification": {

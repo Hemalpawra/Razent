@@ -27,6 +27,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRangePicker"
 import { ImportModal } from "@/components/merchant/shared/ImportModal"
 import { cn } from "@/lib/utils"
+import { useMerchant } from "@/state/useMerchant"
+import { toast } from "sonner"
 
 import {
   Table,
@@ -138,6 +140,9 @@ function getSource(order: Order): { label: string; icon: typeof Bot } {
 const PAGE_SIZE_DEFAULT = 10
 
 export default function OrdersScreen() {
+  const { hasPermission } = useMerchant()
+  const canExport = hasPermission("export_data")
+
   const openDrawer = useUI((s) => s.openOrderDrawer)
 
   const drawerId = useUI((s) => s.drawerOrderId)
@@ -164,6 +169,7 @@ export default function OrdersScreen() {
       const { listOrders } = await import("@/lib/api/client")
       const o = await listOrders()
       setOrders(o)
+      toast.success("Orders refreshed")
     } catch {
       setOrders([] as Order[])
     } finally {
@@ -234,7 +240,14 @@ export default function OrdersScreen() {
   }, [orders, q, filterStatus, dateFilter])
 
   const handleExport = () => {
-    if (!orders || orders.length === 0) return
+    if (!canExport) {
+      toast.error("You do not have permission to export orders.")
+      return
+    }
+    if (!orders || orders.length === 0) {
+      toast.info("No orders to export")
+      return
+    }
     const headers = ["Order ID", "Date", "Customer", "Email", "Phone", "Status", "Shipping Status", "Items Count", "Total (INR)"]
     const rows = filtered.map((o) => [
       o.id,
@@ -404,48 +417,13 @@ export default function OrdersScreen() {
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
-            Orders
-          </h1>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            View and manage all orders created through your store
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <DateRangePicker value={dateFilter} onChange={setDateFilter} />
-          <Button
-            variant="outline"
-            className="h-9 rounded-lg bg-card gap-1.5"
-            onClick={() => setImportOpen(true)}
-          >
-            <Upload className="size-4" />
-            Import
-          </Button>
-          <Button
-            variant="outline"
-            className="h-9 rounded-lg bg-card gap-1.5"
-            onClick={handleExport}
-          >
-            <Download className="size-4" />
-            Export
-          </Button>
-          <div className="hidden items-center gap-3 pl-2 lg:flex">
-            <div className="flex size-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              MS
-            </div>
-            <div className="leading-none">
-              <div className="text-xs font-bold text-foreground">
-                Merchant Store
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                Super Admin
-              </div>
-            </div>
-            <ChevronDown className="size-3.5 opacity-60" />
-          </div>
-        </div>
+      <div className="flex flex-col gap-1">
+        <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
+          Orders
+        </h1>
+        <p className="text-sm leading-6 text-muted-foreground">
+          View and manage all orders created through your store
+        </p>
       </div>
 
       {/* KPI row — 5 cards */}
@@ -490,64 +468,22 @@ export default function OrdersScreen() {
       </div>
 
       {/* Table Card */}
-      <Card className="overflow-hidden rounded-xl bg-card py-0">
-        {/* Toolbar — required buttons: search, More Filters, refresh, overflow, date, Export */}
+      <Card className="overflow-hidden rounded-xl bg-card py-0">        {/* Clean Single Toolbar */}
         <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 items-center gap-2">
-            <div className="relative w-full max-w-[320px]">
-              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value)
-
-                  setPage(1)
-                }}
-                placeholder="Search by order id or customer…"
-                className="h-9 bg-card pl-9"
-              />
-            </div>
-            <Button
-              variant="outline"
-              className="hidden h-9 shrink-0 rounded-lg bg-card sm:inline-flex"
-              onClick={() => {
-                const nextStatus: Record<string, OrderStatus | "all"> = {
-                  all: "paid",
-                  paid: "created",
-                  created: "failed",
-                  failed: "refunded",
-                  refunded: "all",
-                }
-                setFilterStatus(nextStatus[filterStatus] ?? "all")
+          <div className="relative w-full max-w-[320px]">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value)
                 setPage(1)
               }}
-            >
-              <SlidersHorizontal className="size-3.5" />
-              Status: {filterStatus === "all" ? "All" : filterStatus}
-            </Button>
-            {/* mobile More Filters icon */}
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-9 bg-card sm:hidden"
-              aria-label="More Filters"
-              onClick={() => {
-                const nextStatus: Record<string, OrderStatus | "all"> = {
-                  all: "paid",
-                  paid: "created",
-                  created: "failed",
-                  failed: "refunded",
-                  refunded: "all",
-                }
-                setFilterStatus(nextStatus[filterStatus] ?? "all")
-                setPage(1)
-              }}
-            >
-              <SlidersHorizontal className="size-4" />
-            </Button>
+              placeholder="Search by order id or customer…"
+              className="h-9 bg-card pl-9"
+            />
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="icon"
@@ -559,31 +495,16 @@ export default function OrdersScreen() {
               <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
             </Button>
             <DateRangePicker value={dateFilter} onChange={setDateFilter} />
-            <Button
-              variant="outline"
-              className="hidden h-9 rounded-lg bg-card sm:inline-flex gap-1.5"
-              onClick={() => setImportOpen(true)}
-            >
-              <Upload className="size-4" />
-              Import
-            </Button>
-            <Button
-              variant="outline"
-              className="hidden h-9 rounded-lg bg-card sm:inline-flex gap-1.5"
-              onClick={handleExport}
-            >
-              <Download className="size-4" />
-              Export
-            </Button>
-            {/* On mobile keep compact Export */}
-            <Button
-              variant="outline"
-              className="h-9 rounded-lg bg-card sm:hidden gap-1.5"
-              onClick={handleExport}
-            >
-              <Download className="size-4" />
-              Export
-            </Button>
+            {canExport && (
+              <Button
+                variant="outline"
+                className="h-9 rounded-lg bg-card gap-1.5"
+                onClick={handleExport}
+              >
+                <Download className="size-4" />
+                <span>Export</span>
+              </Button>
+            )}
           </div>
         </div>
 
