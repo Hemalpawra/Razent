@@ -1,0 +1,28 @@
+{
+  "protocol": "acp",
+  "version": "2026-03",
+  "provider": "OpenAI / Stripe Agentic Commerce Standard",
+  "merchant_name": "Razent Instant Retail",
+  "catalog": {
+    "search_endpoint": "/api/a2a/acp/catalog",
+    "categories": [
+      "Fruits",
+      "Vegetables",
+      "Dairy & Bakery",0
+      "Snacks & Munchies",
+      "Beverages",
+      "Household"
+    ],
+    "supports_instant_delivery": true,
+    "delivery_time_window": "10-15 minutes"
+  },
+  "cart": {
+    "create_endpoint": "/api/a2a/acp/cart",
+    "currency": "INR",
+    "tax_rate_percent": 18
+  },
+  "checkout": {
+    "mandate_bridge": "ap2",
+    "settlement_rail": "ncpi_uap"
+  }
+}

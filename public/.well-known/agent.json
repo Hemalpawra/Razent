@@ -1,0 +1,30 @@
+{
+  "$schema": "https://agent-payments-protocol.org/schemas/a2a-manifest-v1.json",
+  "name": "Razent Universal Commerce Agent",
+  "description": "Agent-to-Agent instant retail commerce endpoint with Google AP2 trust mandates and OpenAI/Stripe ACP semantic layer.",
+  "version": "1.0.0",
+  "protocols_supported": ["acp", "ap2", "ncpi_uap", "x402"],
+  "merchant": {
+    "merchant_id": "b57fec42-c785-466e-b225-3f7a27edcccb",
+    "business_name": "Razent Instant Retail",
+    "country": "IN",
+    "currency": "INR",
+    "npci_mic": "RAZENT9876",
+    "category": "Quick-Commerce Grocery & Essentials"
+  },
+  "endpoints": {
+    "acp_catalog": "/api/a2a/acp/catalog",
+    "acp_cart": "/api/a2a/acp/cart",
+    "ap2_intent_mandate": "/api/a2a/ap2/mandate/intent",
+    "ap2_cart_mandate": "/api/a2a/ap2/mandate/cart",
+    "ap2_execute_payment": "/api/a2a/ap2/mandate/execute",
+    "a2a_chat_stream": "/functions/v1/ragent-chat"
+  },
+  "capabilities": {
+    "autonomous_purchases": true,
+    "human_present_auth": true,
+    "human_not_present_delegation": true,
+    "npci_autopay_max_limit_inr": 15000,
+    "settlement_rail": "NPCI_UPI_AUTOPAY"
+  }
+}

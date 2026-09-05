@@ -1,0 +1,34 @@
+{
+  "protocol": "ap2",
+  "version": "1.0.0",
+  "specification": "https://github.com/google-agentic-commerce/AP2",
+  "trust_framework": "Google Agent Payments Protocol",
+  "roles_supported": ["Merchant", "Merchant Payment Processor"],
+  "mandate_types": [
+    "IntentMandate",
+    "CartMandate",
+    "PaymentMandate"
+  ],
+  "modalities": [
+    "HumanPresent",
+    "HumanNotPresent"
+  ],
+  "supported_payment_methods": [
+    {
+      "method": "https://npci.org.in/upi-autopay",
+      "rail": "UPI",
+      "max_limit_paise": 1500000,
+      "settlement": "Razorpay Instant Reserve"
+    },
+    {
+      "method": "https://w3c.github.io/payment-request",
+      "rail": "CardTokenization",
+      "requires_3ds_step_up": true
+    }
+  ],
+  "cryptographic_verification": {
+    "algorithm": "RS256",
+    "hash_algorithm": "SHA-256",
+    "jwt_expiration_seconds": 900
+  }
+}

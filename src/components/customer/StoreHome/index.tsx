@@ -947,7 +947,9 @@ export default function StoreHome() {
             </Button>
             <Button
               size="sm"
-              onClick={() => setAiOpen((v) => !v)}
+              onClick={() => {
+                window.location.hash = "#/assistant"
+              }}
               className="hidden sm:inline-flex"
             >
               <Sparkles className="size-4 mr-1.5" /> AI Assistant
@@ -1900,6 +1902,19 @@ export default function StoreHome() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="size-8 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setAiOpen(false)
+                    window.location.hash = "#/assistant"
+                  }}
+                  title="Expand to dedicated full screen"
+                  aria-label="Expand to full screen"
+                >
+                  <Maximize2 className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="size-8 rounded-full hover:bg-muted"
                   onClick={() => setAiOpen(false)}
                   aria-label="Close Assistant"
@@ -2123,7 +2138,9 @@ export default function StoreHome() {
       {/* Floating AI Assistant Button when closed */}
       {!aiOpen && (
         <button
-          onClick={() => setAiOpen(true)}
+          onClick={() => {
+            window.location.hash = "#/assistant"
+          }}
           className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-xl ring-1 ring-primary/20 hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
           aria-label="AI Assistant"
         >

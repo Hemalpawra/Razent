@@ -8,6 +8,10 @@ import {
   Eye,
   Download,
   RotateCw,
+  ShieldCheck,
+  Lock,
+  ExternalLink,
+  Zap,
 } from "lucide-react"
 import {
   Card,
@@ -401,6 +405,58 @@ export default function AIAgentScreen({
                     All AI interactions normal. No customer escalations pending.
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* A2A Protocol & Google AP2 Status */}
+            <Card className="rounded-xl bg-card">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                    <Zap className="size-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">A2A Protocol & AP2</CardTitle>
+                    <CardDescription className="text-xs">Agent-to-Agent Commerce</CardDescription>
+                  </div>
+                </div>
+                <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px]">
+                  Active
+                </Badge>
+              </CardHeader>
+              <CardContent className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
+                  <span className="text-muted-foreground">Protocol Stack:</span>
+                  <span className="font-mono font-medium text-foreground">ACP + Google AP2</span>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
+                  <span className="text-muted-foreground">NPCI AutoPay Ceiling:</span>
+                  <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">₹15,000 / order</span>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
+                  <span className="text-muted-foreground">Cart Hash Mandates:</span>
+                  <span className="font-mono font-medium text-foreground">SHA-256 Enforced</span>
+                </div>
+                <div className="pt-1 flex flex-col gap-1.5">
+                  <a
+                    href="/.well-known/agent.json"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2 rounded-lg border border-border hover:bg-muted/60 transition-colors text-primary font-mono text-[11px]"
+                  >
+                    <span>/.well-known/agent.json</span>
+                    <ExternalLink className="size-3" />
+                  </a>
+                  <a
+                    href="/.well-known/ap2.json"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2 rounded-lg border border-border hover:bg-muted/60 transition-colors text-primary font-mono text-[11px]"
+                  >
+                    <span>/.well-known/ap2.json</span>
+                    <ExternalLink className="size-3" />
+                  </a>
+                </div>
               </CardContent>
             </Card>
           </div>

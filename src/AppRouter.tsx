@@ -7,6 +7,7 @@ import { initMerchantAuth, useMerchant } from "@/state/useMerchant"
 
 import { AppShell } from "@/components/shared/AppShell"
 import StoreHome from "@/components/customer/StoreHome"
+import AIAssistantScreen from "@/components/customer/AIAssistant/AIAssistantScreen"
 import SignInScreen from "@/components/auth/SignInScreen"
 
 import DashboardScreen from "@/components/merchant/Dashboard"
@@ -33,6 +34,7 @@ function RouterApp() {
       <EnvErrorBoundary>
         <Routes>
           <Route path="/" element={<StoreHome />} />
+          <Route path="/assistant" element={<AIAssistantScreen />} />
           <Route path="/sign-in" element={<SignInScreen />} />
 
         {/* Admin console with AppShell layout — 2 flows: private (auth) or public (readOnly VIEW ONLY) */}
