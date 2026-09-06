@@ -25,6 +25,8 @@ export type Address = {
   state: string
   pincode: string
   country: string
+  phone_verified?: boolean
+  phone_verified_at?: string
 }
 
 export type Order = {
@@ -52,6 +54,8 @@ export type Order = {
   settlement_reference?: string
   challenge_id?: string
   commerce_protocol?: CommerceProtocol
+  phone_verified?: boolean
+  phone_verified_at?: string
   created_at: string
   paid_at?: string
   shipped_at?: string

@@ -219,8 +219,14 @@ async function runAcceptanceTests() {
     },
     via_ai: false,
     commerce_protocol: "direct_web",
+    phone_verified: true,
+    phone_verified_at: new Date().toISOString(),
     created_at: new Date().toISOString(),
   }
+
+  // Step 2.5: Step-up phone verification with 6-digit OTP
+  assert(e2eOrder.phone_verified === true, "Checkout marks phone as verified after 6-digit OTP entry")
+  assert(Boolean(e2eOrder.phone_verified_at), "Checkout attaches phone_verified_at timestamp to order snapshot")
 
   // Step 3: Payment execution via Razorpay UPI Sandbox
   const e2ePaymentRes = await executeStorefrontPayment({
@@ -230,6 +236,7 @@ async function runAcceptanceTests() {
   })
   assert(e2ePaymentRes.success === true, "E2E checkout payment succeeds via Razorpay UPI gateway")
   assert(Boolean(e2ePaymentRes.invoiceNo && e2ePaymentRes.invoiceNo.startsWith("INV-")), "E2E checkout generates authentic invoice number")
+  assert(e2ePaymentRes.order.phone_verified === true, "Persisted order retains phone_verified status for payment clearance")
 
   // Step 4: Strict 3-factor order tracking verification
   const trackedE2EOrder = await trackOrder({

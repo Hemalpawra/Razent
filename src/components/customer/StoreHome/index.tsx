@@ -60,6 +60,7 @@ import {
   listProducts,
 } from "@/lib/api/client"
 import { InvoiceModal, type InvoiceData } from "./InvoiceModal"
+import { CheckoutOtpModal } from "./CheckoutOtpModal"
 import { orderStore } from "@/lib/storage/orderStore"
 import { toast } from "sonner"
 import { mockProducts } from "@/lib/mock/products"
@@ -105,6 +106,8 @@ import {
   Truck as TruckIcon,
   Tag as TagIcon,
   Check,
+  CheckCircle2,
+  Lock,
   Eye,
   Heart,
   Share2,
@@ -4877,9 +4880,7 @@ function CheckoutView({
   )
 
   const [showNewAddr, setShowNewAddr] = useState(false)
-
   const [newAddr, setNewAddr] = useState<Partial<Address>>({})
-
   const [paying, setPaying] = useState(false)
 
   const [paymentType, setPaymentType] = useState<"upi" | "card" | "razorpay">("upi")
@@ -4889,22 +4890,26 @@ function CheckoutView({
 
   const [addrError, setAddrError] = useState<string | null>(null)
 
+  // Step-up phone verification state (Phone number → 6-digit OTP → Verify → Razorpay)
+  const [verifiedPhones, setVerifiedPhones] = useState<Set<string>>(new Set())
+  const [otpModalOpen, setOtpModalOpen] = useState(false)
+  const [pendingPay, setPendingPay] = useState(false)
+
+  const activeAddress = addresses.find((a) => a.id === selectedAddr) || addresses[0]
+  const activePhoneClean = (activeAddress?.phone || "9876543210").replace(/[^\d]/g, "").slice(-10) || "9876543210"
+  const isPhoneVerified = verifiedPhones.has(activePhoneClean)
+
   const shippingCost =
     shippingMethod === "express" ? 9900 : cartTotal > 149900 ? 0 : 4900
 
   const tax = Math.round((cartTotal + shippingCost) * 0.18)
-
   const total = cartTotal + shippingCost + tax
 
-  const handlePay = async () => {
-    if (!selectedAddr && !showNewAddr) {
-      setAddrError("Select a delivery address")
-      return
-    }
-    setAddrError(null)
+  const executePayment = async (targetAddr?: Address, forceVerified = false) => {
+    const address = targetAddr || activeAddress
+    const currentClean = (address?.phone || "9876543210").replace(/[^\d]/g, "").slice(-10)
+    const verified = forceVerified || verifiedPhones.has(currentClean)
 
-    // Build a real Order shape from cart + selected address + shipping.
-    const address = addresses.find((a) => a.id === selectedAddr) || addresses[0]
     const items = cart.map((c) => {
       const p = (products || []).find((x) => x.id === c.id) || mockProducts.find((x) => x.id === c.id)
       return {
@@ -4927,6 +4932,8 @@ function CheckoutView({
         state: rawAddr.state ?? "Karnataka",
         pincode: rawAddr.pincode ?? "560001",
         country: rawAddr.country ?? "IN",
+        phone_verified: verified,
+        phone_verified_at: verified ? new Date().toISOString() : undefined,
       }
       : {
         full_name: SAVED_ADDRESSES[0]?.name ?? "Customer",
@@ -4937,6 +4944,8 @@ function CheckoutView({
         state: SAVED_ADDRESSES[0]?.state ?? "Karnataka",
         pincode: SAVED_ADDRESSES[0]?.pincode ?? "560001",
         country: "IN",
+        phone_verified: verified,
+        phone_verified_at: verified ? new Date().toISOString() : undefined,
       }
     const orderId = `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
     const order: import("@/lib/types/order").Order = {
@@ -4951,6 +4960,8 @@ function CheckoutView({
       shipping_address: shippingAddress,
       via_ai: false,
       commerce_protocol: "direct_web",
+      phone_verified: verified,
+      phone_verified_at: verified ? new Date().toISOString() : undefined,
       notes: "Created via storefront checkout with Razorpay",
       created_at: new Date().toISOString(),
     }
@@ -5134,6 +5145,24 @@ function CheckoutView({
     }
   }
 
+  const handlePay = async () => {
+    if (!selectedAddr && !showNewAddr) {
+      setAddrError("Select a delivery address")
+      return
+    }
+    setAddrError(null)
+
+    // Step-up verification rule: Phone number must be confirmed with 6-digit OTP before Razorpay payment
+    if (!isPhoneVerified) {
+      setPendingPay(true)
+      setOtpModalOpen(true)
+      toast.info("Please confirm your mobile number with the 6-digit OTP to proceed to payment.")
+      return
+    }
+
+    await executePayment(activeAddress)
+  }
+
   if (cart.length === 0) {
     return (
       <section className="px-4 pb-12">
@@ -5150,7 +5179,7 @@ function CheckoutView({
         <div>
           <h1 className="font-heading text-2xl font-semibold">Checkout</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Enter delivery details and complete payment with Razorpay.
+            Enter delivery details, confirm mobile via OTP, and complete payment with Razorpay.
           </p>
         </div>
 
@@ -5160,7 +5189,7 @@ function CheckoutView({
             {/* Address */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base">Delivery address</CardTitle>
+                <CardTitle className="text-base">Delivery address & Contact</CardTitle>
                 <Button
                   variant="outline"
                   size="sm"
@@ -5177,59 +5206,81 @@ function CheckoutView({
                 )}
                 {!showNewAddr ? (
                   <div className="grid gap-3">
-                    {addresses.map((a) => (
-                      <label
-                        key={a.id}
-                        className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${
-                          selectedAddr === a.id
-                            ? "border-primary bg-primary/5"
-                            : "hover:bg-muted/40"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="addr"
-                          checked={selectedAddr === a.id}
-                          onChange={() => setSelectedAddr(a.id)}
-                          className="mt-1"
-                        />
-                        <div className="min-w-0 flex-1 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{a.label}</span>
-                            <Badge variant="outline" className="text-[11px]">
-                              {a.pincode}
-                            </Badge>
-                          </div>
-                          <div className="mt-1 font-medium">
-                            {a.name} · {a.phone}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {a.email}
-                          </div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {a.line1}, {a.city}, {a.state} — {a.pincode}
-                          </div>
-                          <div className="mt-2 flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs text-destructive"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                if (addresses.length > 1) {
-                                  setAddresses((prev) => prev.filter((x) => x.id !== a.id))
-                                  if (selectedAddr === a.id) {
-                                    setSelectedAddr(addresses.find((x) => x.id !== a.id)!.id)
+                    {addresses.map((a) => {
+                      const aPhoneClean = (a.phone || "").replace(/[^\d]/g, "").slice(-10)
+                      const aVerified = verifiedPhones.has(aPhoneClean)
+
+                      return (
+                        <label
+                          key={a.id}
+                          className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${
+                            selectedAddr === a.id
+                              ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                              : "hover:bg-muted/40"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="addr"
+                            checked={selectedAddr === a.id}
+                            onChange={() => setSelectedAddr(a.id)}
+                            className="mt-1"
+                          />
+                          <div className="min-w-0 flex-1 text-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-foreground">{a.label}</span>
+                                <Badge variant="outline" className="text-[11px]">
+                                  {a.pincode}
+                                </Badge>
+                              </div>
+                              {aVerified ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1 font-medium"
+                                >
+                                  <CheckCircle2 className="size-3" /> Mobile Verified
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[11px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 font-medium"
+                                >
+                                  <Lock className="size-3" /> OTP Required
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="mt-1 font-medium text-foreground">
+                              {a.name} · {a.phone}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {a.email}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {a.line1}, {a.city}, {a.state} — {a.pincode}
+                            </div>
+                            <div className="mt-2 flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-destructive"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  if (addresses.length > 1) {
+                                    setAddresses((prev) => prev.filter((x) => x.id !== a.id))
+                                    if (selectedAddr === a.id) {
+                                      setSelectedAddr(addresses.find((x) => x.id !== a.id)!.id)
+                                    }
                                   }
-                                }
-                              }}
-                            >
-                              Remove
-                            </Button>
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      </label>
-                    ))}
+                        </label>
+                      )
+                    })}
                   </div>
                 ) : (
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -5244,9 +5295,9 @@ function CheckoutView({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Mobile</Label>
+                      <Label className="text-xs">Mobile Number</Label>
                       <Input
-                        placeholder="98765 43210"
+                        placeholder="9876543210"
                         value={newAddr.phone || ""}
                         onChange={(e) =>
                           setNewAddr((s) => ({ ...s, phone: e.target.value }))
@@ -5286,7 +5337,7 @@ function CheckoutView({
                     <div className="space-y-1">
                       <Label className="text-xs">State</Label>
                       <Input
-                        placeholder="KA"
+                        placeholder="Karnataka"
                         value={newAddr.state || ""}
                         onChange={(e) =>
                           setNewAddr((s) => ({ ...s, state: e.target.value }))
@@ -5296,7 +5347,7 @@ function CheckoutView({
                     <div className="space-y-1">
                       <Label className="text-xs">Pincode</Label>
                       <Input
-                        placeholder="560034"
+                        placeholder="560001"
                         value={newAddr.pincode || ""}
                         onChange={(e) =>
                           setNewAddr((s) => ({ ...s, pincode: e.target.value }))
@@ -5322,6 +5373,7 @@ function CheckoutView({
                             city: newAddr.city?.trim() || "Bengaluru",
                             state: newAddr.state?.trim() || "Karnataka",
                             pincode: newAddr.pincode.trim(),
+                            country: "IN",
                           }
                           setAddresses((prev) => [createdAddr, ...prev])
                           setSelectedAddr(newId)
@@ -5343,6 +5395,43 @@ function CheckoutView({
                         Cancel
                       </Button>
                     </div>
+                  </div>
+                )}
+
+                {/* Step-up Phone Verification Callout Banner */}
+                {!showNewAddr && (
+                  <div className="pt-1">
+                    {isPhoneVerified ? (
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs">
+                        <div className="flex items-center gap-2.5 text-emerald-700 dark:text-emerald-300">
+                          <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+                          <span>
+                            Mobile <b>+91 {activePhoneClean}</b> verified for order dispatch & payment security.
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-primary/20 bg-primary/5 text-xs">
+                        <div className="flex items-start gap-2.5">
+                          <div className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                            <Lock className="size-3.5" />
+                          </div>
+                          <div>
+                            <div className="font-semibold text-foreground">Step-up Mobile Verification</div>
+                            <div className="text-muted-foreground mt-0.5">
+                              Verify <b>+91 {activePhoneClean}</b> with a 6-digit OTP before Razorpay payment.
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => setOtpModalOpen(true)}
+                          className="gap-1.5 shrink-0 h-8"
+                        >
+                          <Smartphone className="size-3.5" /> Verify Mobile
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -5660,6 +5749,28 @@ function CheckoutView({
           </div>
         </div>
       </div>
+
+      {/* Step-up Phone Verification OTP Modal */}
+      <CheckoutOtpModal
+        open={otpModalOpen}
+        phone={activeAddress?.phone || "9876543210"}
+        onClose={() => {
+          setOtpModalOpen(false)
+          setPendingPay(false)
+        }}
+        onVerified={(verifiedPhone) => {
+          const clean = verifiedPhone.replace(/[^\d]/g, "").slice(-10) || "9876543210"
+          setVerifiedPhones((prev) => new Set(prev).add(clean))
+          setOtpModalOpen(false)
+          if (pendingPay) {
+            setPendingPay(false)
+            // Auto-trigger payment with verified state
+            setTimeout(() => {
+              executePayment(activeAddress, true)
+            }, 300)
+          }
+        }}
+      />
     </section>
   )
 }

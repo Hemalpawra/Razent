@@ -110,6 +110,8 @@ function mapDbOrder(row: any): Order {
     challenge_id: row.challenge_id ?? undefined,
     tracking: row.tracking ?? undefined,
     notes: row.notes ?? undefined,
+    phone_verified: row.phone_verified ?? row.shipping_address?.phone_verified ?? undefined,
+    phone_verified_at: row.phone_verified_at ?? row.shipping_address?.phone_verified_at ?? undefined,
     created_at: row.created_at,
     paid_at: row.paid_at ?? undefined,
     shipped_at: row.shipped_at ?? undefined,
@@ -1009,6 +1011,10 @@ export async function createStorefrontOrder(order: Order): Promise<Order> {
     throw error
   }
   const mapped = mapDbOrder(data)
+  if (order.phone_verified) {
+    mapped.phone_verified = true
+    mapped.phone_verified_at = order.phone_verified_at || mapped.phone_verified_at || new Date().toISOString()
+  }
   orderStore.upsert(mapped)
   return mapped
 }
