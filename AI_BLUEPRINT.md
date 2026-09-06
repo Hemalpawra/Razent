@@ -1,216 +1,192 @@
-# AI Blueprint — Merchant AI Gateway (Razent)
+# AI Blueprint — Razent (Agentic Commerce & Instant Retail Platform)
 
-> Single source of truth for every future task in `C:\Users\hemal\Ragent\Razent`. Read this before touching any file.
-
-## 1. What the app is
-
-A **Razorpay-themed merchant AI commerce gateway**. One Vite 8 + React 19 + Tailwind v4 + shadcn (`base-mira`) app, **single page, no react-router**. The "pages" are a `Screen` union in state — the `AppShell` renders whichever screen is active.
-
-- **Merchant screens** (dashboard): 8 screens — `dashboard`, `products`, `product_import`, `orders`, `analytics`, `audit_trail`, `ai_agent`, `settings`. Use the ** Sidebar** (slim, fixed `14.5rem`) and the **simple top bar**.
-- **Customer screens** (storefront): built inside `StoreHome`. In "Store" mode there is **no merchant sidebar**.
-
-Data: **mocks today, Supabase tomorrow**. Every data call flows through `lib/api/client.ts` (the seam). Swapping mocks → Supabase is a one-file change; call sites never change. Pricing is in **paise** (Razorpay convention).
+> Single source of truth for every task in `C:\Users\hemal\Ragent\Razent`. Read this before modifying any file.
 
 ---
 
-## 2. Repo tree + file jobs + touch rules
+## 1. What the App Is
+
+**Razent** is an **Agentic Commerce & Instant Retail Platform** built with **Vite 8 + React 19 + Tailwind v4 + shadcn UI (`base-mira`)**, integrated with **Supabase**, **Razorpay**, **Google AP2 / ACP Agentic Protocols**, and **NPCI/RBI regulatory compliance wrappers**.
+
+### Dual Interface Architecture
+1. **Customer Storefront & Autonomous Shopping**:
+   - **`StoreHome` (`/#/`)**: High-converting grocery/retail storefront with product listings, search/filters, category tabs, product quick-view drawers, cart management, instant checkout, and order tracking.
+   - **Dedicated Full-Screen AI Assistant (`/#/assistant`)**: Standalone conversational AI shopping assistant (`AIAssistantScreen.tsx`) powered by Supabase Edge Functions (`ragent-chat`), streaming responses via SSE, database-grounded product search, interactive order review cards, and autonomous checkout.
+   - **Delegated AI Wallet & Settings Modal (`WalletSettingsModal.tsx`)**: Allows customers to view saved payment methods, set autonomous delegated spending limits per order/day, inspect AP2/ACP mandates, and configure NPCI UPI AutoPay controls.
+2. **Merchant Operations Portal (`/#/merchant/*`)**:
+   - Protected back-office interface for store owners and operators.
+   - 8 operational screens: `Dashboard`, `Products`, `ProductImport`, `Orders`, `Analytics`, `AuditTrail`, `AIAgent`, `Settings`.
+   - Uses the **AppShell Sidebar** (slim, fixed `14.5rem`), top bar with breadcrumbs and theme controls, and full-bleed data tables with 560px sheet detail drawers.
+3. **Authentication & Routing**:
+   - Handled via `AppRouter.tsx` using `HashRouter` for zero-configuration client-side hosting.
+   - Merchant sign-in via `SignInScreen.tsx` (`/#/signin`) with role-based access control (`merchant` vs `customer`).
+
+---
+
+## 2. Agentic Commerce Protocols & Standards
+
+Razent implements standardized protocols enabling AI agents (ChatGPT, Claude, Gemini, Grok, and custom LangChain/ADK autonomous agents) to discover products, negotiate orders, and execute delegated transactions:
+
+### Discovery Endpoints (`public/.well-known/`)
+- **`agent.json`**: Agent-to-Agent (A2A) manifest describing Razent's agent capabilities, supported interaction modes, tool schemas, and operational boundaries.
+- **`acp.json`**: Agentic Commerce Protocol (ACP) discovery document detailing catalog endpoints, payment schemes, settlement channels, and protocol versioning.
+- **`ap2.json`**: Google Agent Payment Protocol (AP2) configuration specifying supported mandate formats, verification algorithms, and X-402 payment challenge endpoints.
+- **`ucp.json`**: Universal Commerce Protocol (UCP) capability profile for cross-network catalog federations.
+
+### Core Protocol Implementations
+- **`src/lib/protocol/ap2Types.ts`**: Types for AP2 Payment Mandates, Delegated Authority tokens, X-402 challenge payloads, cart settlement structures, and agent authorization states.
+- **`src/lib/protocol/agenticCommerce.ts`**: Verification engine for AP2 mandates, cryptographic challenge generators, autonomous order approval checks, and sandbox settlement triggers.
+- **`src/lib/protocol/regulatoryWrapper.ts`**: NPCI UPI AutoPay and RBI e-mandate regulatory wrapper:
+  - Enforces cooling-off periods (minimum 24-hour notice before recurring execution).
+  - Validates transaction amounts against explicit user-authorized per-transaction and daily spending caps.
+  - Manages mandate lifecycle states (`ACTIVE`, `PAUSED`, `REVOKED`).
+  - Strict security guardrails rejecting any transmission of sensitive credentials (CVV, full card numbers, PINs, OTPs) to LLMs.
+  - Pre-seeded test sandbox credentials for verification:
+    - **Test Cards**: Visa Debit, Mastercard Business Credit, Mastercard Prepaid, RuPay Credit, Diners, Amex.
+    - **Test UPI IDs**: `success@razorpay` (auto-authorized success) and `failure@razorpay` (simulated decline / limit refusal).
+
+---
+
+## 3. Data & Backend Layer
+
+Razent utilizes a **Supabase-first data architecture** with seamless in-memory mock resilience:
+
+```
+[Postgres Database (Supabase)]  <--->  [Supabase Edge Functions (/ragent-chat)]
+               ▲                                      ▲
+               │                                      │ (SSE Chat / Intent / RAG)
+       [lib/api/supabase.ts]                  [AIAssistantScreen.tsx]
+               ▲
+               │
+       [lib/api/client.ts]  <-- The Unified Data Seam
+               ▲
+               ├───────────────────────────────────────────────┐
+               ▼                                               ▼
+       [Customer Views]                               [Merchant Views]
+  (StoreHome, AIAssistant)                  (Dashboard, Products, Orders, Audit, etc.)
+```
+
+1. **The Data Seam (`src/lib/api/client.ts`)**:
+   - Every UI component invokes `client.ts` functions (`listProducts`, `getOrder`, `updateOrderStatus`, `logAuditEvent`, `upsertConversation`, `getDashboardData`, `getAnalyticsData`).
+   - Connects directly to Supabase tables (`products`, `orders`, `conversations`, `audit_sessions`).
+   - If Supabase is unreachable or offline, client functions gracefully fallback to rich in-memory seed data (`src/lib/mock/*`), preventing any UI degradation.
+2. **Edge Function Chat (`supabase/functions/ragent-chat/index.ts`)**:
+   - Server-sent events (SSE) streaming chat API.
+   - Catalog-grounded retrieval matching live products against user query intents.
+   - Autonomous tool emission (`suggest_products`, `checkout_mandate`, `create_order`).
+3. **Audit Trail System (`logAuditEvent`)**:
+   - Comprehensive audit logging for all interactions (user actions, AI agent tool executions, Razorpay payments, and AP2/ACP settlements).
+   - Sessions grouped in `audit_sessions` table with granular timeline events.
+
+---
+
+## 4. Repo Directory Structure & File Touch Rules
 
 ```
 Razent/
-├─ AGENTS.md                 # Figma Make host rules — READ ONLY (don't edit)
-├─ AI_RULES.md               # Project rules — READ ONLY (don't edit)
-├─ AI_BLUEPRINT.md           # THIS FILE — edit only after planning
-├─ AI_BLUEPRINT_INDEX.md     # quick links index
-├─ CLAUDE.md                 # dev notes
-├─ components.json           # shadcn config (base-mira) — DON'T EDIT
-├─ index.html                # Figma-managed shell — DON'T EDIT structure
-├─ package.json              # deps — add deps only (pnpm add)
-├─ pnpm-lock.yaml            # lock — DON'T edit by hand
-├─ tsconfig.json             # TS config — edit only to add paths/types
-├─ vite.config.ts            # Vite — Figma-managed plugins — DON'T EDIT
-├─ product-import-template-spec.json  # xlsx skill spec — edit when template columns change
 ├─ public/
-│  ├─ product-import-template.csv     # shipped sample CSV (downloadable)
-│  └─ product-import-template.xlsx    # shipped sample XLSX (downloadable)
+│  ├─ .well-known/
+│  │  ├─ agent.json                   # A2A agent manifest (discovery)
+│  │  ├─ acp.json                     # Agentic Commerce Protocol discovery
+│  │  ├─ ap2.json                     # Google AP2 protocol configuration
+│  │  └─ ucp.json                     # Universal Commerce Protocol discovery
+│  ├─ product-import-template.csv     # Sample CSV import template
+│  └─ product-import-template.xlsx    # Sample XLSX import template
+├─ supabase/
+│  ├─ functions/
+│  │  └─ ragent-chat/
+│  │     └─ index.ts                  # Supabase Edge Function: SSE AI streaming & RAG
+│  └─ migrations/                     # SQL schema migrations (orders, products, audit)
 ├─ src/
-│  ├─ main.tsx              # React entrypoint — touch if changing providers
-│  ├─ App.tsx               # root screen router — edit only when adding/removing a Screen
-│  ├─ index.css             # theme tokens only — light `#F5F5F5`, dark oklch. Edit ONLY here for theme color
-│  ├─ vite-env.d.ts         # Vite types — leave alone
-│  ├─ app/
-│  │  └─ ThemeProvider.tsx  # `<html class="dark">` toggle — edit when theme logic changes
-│  │                         # deps: useTheme. Used by: App, ThemeToggle
+│  ├─ main.tsx                        # React 19 entrypoint + ThemeProvider
+│  ├─ AppRouter.tsx                   # HashRouter: / (store), /assistant, /signin, /merchant/*
+│  ├─ App.tsx                         # Legacy screen mapper & fallback router
+│  ├─ index.css                       # Global design system & theme tokens
 │  ├─ lib/
-│  │  ├─ utils.ts            # `cn` helper — edit if switching clsx/twMerge
-│  │  ├─ api/client.ts       # **DATA SEAM** — returns mocks; future Supabase. Edit here to wire backend
-│  │  │                     # deps: lib/mock/*. Used by: Products (listProducts/deleteProduct), Orders, Dashboard, Analytics
-│  │  ├─ mock/               # all fake data
-│  │  │  ├─ products.ts      # 34 products — add/remove product rows here
-│  │  │  ├─ orders.ts        # 14 orders — add/remove orders; source of Track Order truth
-│  │  │  ├─ conversations.ts # mockConversations — feed for AI Agent live table + drawer
-│  │  │  ├─ analytics.ts     # synthesized analytics (charts) — derives from orders/products
-│  │  │  ├─ kpis.ts          # mockDashboard — aggregates for Dashboard KPIs
-│  │  │  └─ audit.ts         # mockAuditSessions — 6 sessions, event paths; feeds AuditTrail table + drawer
-│  │  └─ types/              # type roots — EDIT these first when a shape changes
-│  │     ├─ product.ts       # Product, ProductStatus, formatPrice
-│  │     ├─ order.ts         # Order, OrderStatus, ShippingStatus, Address, formatPrice
-│  │     ├─ conversation.ts  # Conversation, ChatMessage, ConversationType/Status
-│  │     ├─ audit.ts         # AuditSession, AuditEvent, AuditResult/Actor/Source
-│  │     ├─ kpi.ts           # KPI, DashboardData
-│  │     └─ analytics.ts     # RevenuePoint, StatusCount, CategoryShare, AnalyticsData
-│  ├─ state/                # all client state (Zustand)
-│  │  ├─ useUI.ts           # global UI: activeScreen, role, drawers. THE nav state. Edit when adding screen/drawer
-│  │  ├─ useTheme.ts        # ThemeMode (light/dark/system) + persisted. Used by ThemeProvider, ThemeToggle
-│  │  └─ useSettings.ts     # merchant settings + storeProfile (persist). Used by StoreHome, Settings, TrackOrder
-│  ├─ hooks/
-│  │  └─ use-mobile.ts      # useIsMobile (768bp) — guard mobile layouts
+│  │  ├─ utils.ts                     # cn helper (clsx + twMerge)
+│  │  ├─ api/
+│  │  │  ├─ supabase.ts               # Supabase client & auth helpers
+│  │  │  └─ client.ts                 # UNIFIED DATA SEAM (all UI calls flow here)
+│  │  ├─ protocol/
+│  │  │  ├─ ap2Types.ts               # Google AP2 & ACP TypeScript type definitions
+│  │  │  ├─ agenticCommerce.ts        # AP2 mandate validation & challenge generation
+│  │  │  └─ regulatoryWrapper.ts      # NPCI/RBI compliance, test credentials, sanitization
+│  │  ├─ types/                       # Strict entity models
+│  │  │  ├─ product.ts                # Product, ProductStatus, formatPrice
+│  │  │  ├─ order.ts                  # Order, OrderStatus, ShippingStatus, Address
+│  │  │  ├─ conversation.ts           # Conversation, ChatMessage, AIMsg
+│  │  │  ├─ audit.ts                  # AuditSession, AuditEvent, AuditActor, AuditSource
+│  │  │  ├─ kpi.ts                    # KPI, DashboardData (telemetry & metrics)
+│  │  │  └─ analytics.ts              # RevenuePoint, CategoryShare, AnalyticsData
+│  │  ├─ mock/                        # Resilient in-memory fallback datasets
+│  │  │  ├─ products.ts               # 34 standard grocery/tech products
+│  │  │  ├─ orders.ts                 # Seed orders for tracking & merchant views
+│  │  │  ├─ conversations.ts          # Seed conversations for AI agent monitoring
+│  │  │  ├─ audit.ts                  # Seed audit sessions & event chains
+│  │  │  ├─ kpis.ts                   # Seed metrics & performance indicators
+│  │  │  └─ analytics.ts              # Seed charts, revenue series & funnels
+│  │  └─ storage/
+│  │     └─ orderStore.ts             # Browser local storage sync for client orders
+│  ├─ state/
+│  │  ├─ useUI.ts                     # Active screens, roles, drawer toggles
+│  │  ├─ useTheme.ts                  # Light/Dark theme persistence
+│  │  ├─ useSettings.ts               # Merchant store profile & operational preferences
+│  │  ├─ useMerchant.ts               # Authenticated merchant session state
+│  │  └─ useError.ts                  # Global toast & error interceptor
 │  ├─ components/
-│  │  ├─ ui/                # **shadcn primitives only** — base-mira. Touch only to patch a primitive
-│  │  │   (avatar, badge, bubble, button, calendar, card, chart, checkbox, dialog, dropdown-menu, empty,
-│  │  │    input, label, message, popover, select, separator, sheet, skeleton, sidebar, switch, table,
-│  │  │    tabs, textarea, tooltip)
-│  │  ├─ shared/            # cross-cutting
-│  │  │  ├─ AppShell.tsx   # **SHELL** — Sidebar + top bar + footer. Role-aware (store=plain, merchant=sidebar). Edit to change chrome, nav groups, switch placement
-│  │  │  ├─ ThemeToggle.tsx  # sun/moon/monitor popover → useTheme.setMode
-│  │  │  ├─ PageHeader.tsx  # reusable title + actions
-│  │  │  └─ EmptyState.tsx  # reusable empty state (uses ui/empty)
-│  │  ├─ merchant/          # 8 merchant screens (+ drawers)
-│  │  │  ├─ Dashboard/index.tsx          # KPIs + sales area chart + donut + funnel + needs attention + recent activity
-│  │  │  ├─ Products/index.tsx           # product table + filters + ProductDrawer wiring
-│  │  │  ├─ Products/ProductDrawer.tsx   # 560px right sheet drawer — 4 tabs Overview/Inventory/AI&Visibility/Activity
-│  │  │  ├─ Orders/index.tsx             # orders table + KPIs + OrderDrawer wiring
-│  │  │  ├─ Orders/OrderDrawer.tsx       # 560px right sheet — 7 sections (items, amount, invoice, customer, payment, timeline, actions)
-│  │  │  ├─ Analytics/index.tsx          # Area chart + 2 donut charts + funnel + top products + AI bars
-│  │  │  ├─ AIAgent/index.tsx            # live conversations table + right bundle cards; split layout when open
-│  │  │  ├─ AIAgent/ConversationDrawer.tsx # 560px sheet — 4-tab conversation (mobile fallback) ChatGPT Assistant header
-│  │  │  ├─ AuditTrail/index.tsx         # session-grouped table + filters + AuditDrawer wiring
-│  │  │  ├─ AuditTrail/AuditDrawer.tsx   # 560px sheet — 5 tabs Summary/Details/Payload/Timeline/Linked Items
-│  │  │  ├─ ProductImport/index.tsx      # Tabs: CSV/Excel/Manual; 2-col validation/preview; Media upload w/ preview
-│  │  │  └─ Settings/index.tsx           # hub (5 cards) → 5 pages: store/ai/business/shipping/notifications
-│  │  └─ customer/
-│  │     └─ StoreHome/index.tsx          # **THE storefront** — home/listing/detail/track/cart/checkout/payment-failed/success + AI split workspace
+│  │  ├─ ui/                          # shadcn primitives (base-mira)
+│  │  ├─ shared/                      # AppShell, ThemeToggle, PageHeader, EmptyState
+│  │  ├─ auth/                        # SignInScreen
+│  │  ├─ customer/
+│  │  │  ├─ StoreHome/                # Customer storefront, checkout, order tracking
+│  │  │  └─ AIAssistant/
+│  │  │     ├─ AIAssistantScreen.tsx  # Full-screen conversational AI assistant
+│  │  │     └─ WalletSettingsModal.tsx# Delegated spend limits & NPCI wallet settings
+│  │  └─ merchant/                    # Back-office screens
+│  │     ├─ Dashboard/                # KPIs, revenue charts, AI status
+│  │     ├─ Products/                 # Product catalog & ProductDrawer
+│  │     ├─ ProductImport/            # CSV/Excel/Manual product batch ingestion
+│  │     ├─ Orders/                   # Order management & OrderDrawer
+│  │     ├─ Analytics/                # Sales, conversion funnels, AI attribution
+│  │     ├─ AIAgent/                  # Customer conversation inspection & drawer
+│  │     ├─ AuditTrail/               # Compliance & protocol audit log explorer
+│  │     └─ Settings/                 # Store profile, business, AI & delivery rules
 ```
 
-### File touch map (when → what)
+### File Touch Map
 
-| When you need to… | Edit this file(s) | Cascade / depends on |
+| Goal / Task | Primary File(s) to Modify | Secondary Cascades |
 |---|---|---|
-| Add a new merchant screen | `useUI.addScreen`, `App.tsx` screenMap, `AppShell` nav group | rebuild + test screen renders |
-| Switch light/dark token | `src/index.css` `:root`/`.dark` | affects every screen | Add a new data entity (e.g. coupon) | `lib/types/*` (new), `lib/mock/*` (new), `lib/api/client.ts` (new fn) | screens using it |
-| Fix the shell width / sidebar width / switch placement | `components/shared/AppShell.tsx` | everything (layout anchor) |
-| Remove the merchant sidebar from a customer screen | `AppShell.tsx` store branch (already isolated) — confirm `StoreHome` doesn't import merchant nav |
-| Make a date picker / export button work | screen header file (Dashboard/Orders/AIAgent/AuditTrail) — date cycle `useState`, export downloads CSV blob |
-| Fix a chart w/out tooltip | screen's chart block — every `Area/Bar/Pie/funnel-SVG` must wrap `ChartTooltip` or `Tooltip` |
-| Widen a table | `Table` wrapper → `min-w-[900px]` + `overflow-x-auto` card | the parent Card |
-| Make a row open a drawer | `TableRow onClick` + Eye button `stopPropagation`; drawer is already 560px Sheet | screen + its `*Drawer` |
-| Add a KPI card field | `lib/types/kpi.ts`, `lib/mock/kpis.ts`, `Dashboard/index.tsx` KpiCard |
-| Change StoreHome layout / AI split | `StoreHome/index.tsx` (large) | AppShell store branch |
-| Add a Settings field | `useSettings.ts` (state+defaults), `Settings/index.tsx` |
-| Add a mock product → affects many | `lib/mock/products.ts` | Dashboard/AI Agent/StoreHome/Analytics/Orders |
-| Fix Track Order black screen | `StoreHome` `TrackOrder`/`generateMockOrder` + useSettings import |
-| Ship a change (process) | `pnpm build` then `pnpm format`, commit, `git push` |
+| **Add/Modify an API Endpoint** | `src/lib/api/client.ts` | `src/lib/types/*`, corresponding screen |
+| **Update AP2 / ACP Protocol Types** | `src/lib/protocol/ap2Types.ts` | `src/lib/protocol/agenticCommerce.ts`, `public/.well-known/*.json` |
+| **Adjust RBI/NPCI Wallet Rules** | `src/lib/protocol/regulatoryWrapper.ts` | `WalletSettingsModal.tsx`, `StoreHome/index.tsx` |
+| **Update AI Assistant UI / Chat Flow** | `AIAssistantScreen.tsx` | `supabase/functions/ragent-chat/index.ts` |
+| **Change Storefront Layout or Cart** | `src/components/customer/StoreHome/index.tsx` | `orderStore.ts`, `client.ts` |
+| **Add a New Route or Page** | `src/AppRouter.tsx` | `src/state/useUI.ts`, `src/components/shared/AppShell.tsx` |
+| **Add a Merchant Metric / KPI** | `src/lib/types/kpi.ts` | `src/components/merchant/Dashboard/index.tsx` |
+| **Modify Theme Tokens** | `src/index.css` | Affects all components |
 
 ---
 
-## 3. Data flow
+## 5. Architectural & Development Mandates
 
-```
-[lib/types/*]  <- strict shapes
-        ▲            (types imported by mocks + client)
-[lib/mock/*]   <- seed data + derived (analytics, kpis)
-       │             (mock files import from ./orders, ./products)
-[lib/api/client.ts] <- single async seam: listProducts, getOrder, getDashboard, getAnalytics
-       │
-       ▼  every screen calls the client fn, NEVER the mock directly... (exceptions: screens that import mock for derived data: Analytics imports mockOrders/mockProducts for charts, Dashboard imports mockDashboard/kpi, AI Agent imports mockConversations)
-       │  (this is acceptable for read-only derived chart data; for mutations swap client fn)
-[React screen]  ->  Zustand (useUI / useTheme / useSettings)  ->  shadcn ui component  ->  DOM
-       │                       ▲
-       │                       └ state: activeScreen, role, drawer ids, theme mode, merchant settings
-       ▼
-[AppShell] chooses: role === "store" → plain full-width StoreHome; role === "merchant" → Sidebar + top bar + screen child
-```
-
-**Paise convention:** all money in DB is `*_paise`. `formatPrice()` converts to `₹` string. Never store rupees as a number.
-
-**Mock derivation rule:** `lib/mock/analytics.ts` and `lib/mock/kpis.ts` import from `orders.ts`/`products.ts` and synthesize. If you change a mock shape, these still derive correctly because they read typed fields.
+1. **Paise Financial Standard**:
+   - All prices in database, state, and protocol payloads are integers representing **paise** (`price_paise`, `totalPaise`).
+   - Never store floating-point rupees in state or DB.
+   - Use `formatPrice(paise)` for all currency UI rendering.
+2. **Payment & Security Guardrails**:
+   - **Zero Secret Ingestion**: Never log, store, or feed CVV numbers, card PINs, full PANs, or OTPs into AI chat messages or Edge Functions.
+   - Autonomous purchasing by AI assistant requires active delegated consent (validated via `verifyAP2Mandate` or `WalletSettingsModal`).
+3. **Design System Consistency**:
+   - Use only theme tokens defined in `src/index.css` (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `primary`, `border`).
+   - Do not hardcode arbitrary hex values or unvetted CSS colors.
+   - Responsive drawers use `w-[560px] max-w-[96vw]`.
+4. **Build & Type Integrity**:
+   - Strict TypeScript: no unhandled `any` in public signatures.
+   - Validate with `npx tsc --noEmit` and `npm run build` before pushing to `origin/main`.
+5. **Git Push Rule**:
+   - Always commit and push changes directly to `main` branch to keep remote repository in sync.
 
 ---
 
-## 4. UI states
-
-### Role switch (in `AppShell`)
-- `role === "merchant"` → `SidebarProvider` + slim Sidebar (`14.5rem`) + simple top bar (`h-12`: trigger + page title + ThemeToggle) + `max-w-[1360px]` centered content + footer.
-- `role === "store"` → **no Sidebar, no top bar chrome** — just a tiny border strip with Merchant/Store toggle + ThemeToggle, then `StoreHome` full-width.
-
-### Screen rendering (`App.tsx`)
-`activeScreen` in `useUI` → `screenMap[activeScreen]` → renders inside `AppShell > SidebarInset > content div`.
-
-### Drawers (all same pattern)
-`Sheet`, `SheetContent`, `className="w-[560px] max-w-[96vw]"`, `showCloseButton={false}`, X top-left, scrollable body.
-- `OrderDrawer` — opened via `useUI.openOrderDrawer(id)` (so any screen can open it).
-- `ProductDrawer` — opened via `useUI.openProductDrawer(id)`.
-- `ConversationDrawer` — opened via local state in `AIAgent`.
-- `AuditDrawer` — opened via local state in `AuditTrail`.
-
-### AI split workspace (pattern)
-Both **StoreHome** and **AIAgent** use the **same layout primitive**:
-```tsx
-<div className="grid gap-3 lg:grid-cols-[1fr_380px]">
-  <main className="lg:col-span-1 xl:h-[calc(100vh-140px)] xl:overflow-auto">store / list content</main>
-  <aside className="xl:sticky xl:top-[64px] xl:h-[calc(100vh-140px)] xl:overflow-auto">
-    {/* Message / Bubble / Avatar thread, product cards, quick chips, Input at bottom */}
-  </aside>
-</div>
-```
-- `aiOpen` state toggles: closed = single column full-width store; open = split.
-- Footer is **never** rendered when `aiOpen` is true (wrapped `{!aiOpen && <footer/>}`).
-- Never a small drawer for AI — always the split. The `ConversationDrawer` Sheet is **mobile-only fallback**.
-
-### KPI responsive rule (apply everywhere)
-- `grid-cols-2 sm:grid-cols-2 lg:grid-cols-5` (mobile 2-col)
-- icon wrapper: `hidden size-11 shrink-0 ... sm:flex` (icons hidden on mobile)
-
----
-
-## 5. API flow / "backend later"
-
-1. Every async function in `lib/api/client.ts` returns its mock today (`await delay(80)`).
-2. Types in `lib/types/*` are the contract. Keep field names stable.
-3. When Supabase lands: replace the `mock*` import + body of each client fn with a Supabase RPC/REST call. **Do not** change screen call sites.
-4. `formatPrice` is duplicated in `product.ts` and `order.ts` — harmless; screens import from whichever their type lives in.
-
----
-
-## 6. Shared parts (don't duplicate)
-
-- **`@tailwindcss`/theme vars** — `src/index.css` is the only place colors live. No hexes in components.
-- **`cn`** — `src/lib/utils.ts`. Import everywhere you merge classes.
-- **KPI card shape** — each screen has its own `KpiCard` (slightly different props). That's fine — they're presentational. If it drifts, copy the Dashboard one as the canonical shape.
-- **Drawer shell** — 560px Sheet pattern (copy one of the existing `*Drawer.tsx`).
-- **Date cycle** — `useState` cycling an array + Export downloads CSV blob via `URL.createObjectURL`.
-
----
-
-## 7. Rules for what NOT to change
-
-1. **Never touch `AGENTS.md`, `AI_RULES.md`, `components.json`, `index.html` structure, `vite.config.ts` plugins.** These are Figma Make–owned.
-2. **Always shadcn primitives only.** No raw `<div>` as a button; reuse `Button`, `Card`, `Sheet`, `Table`, `TooltipProvider` once in `App.tsx`.
-3. **No hardcoded hex colors.** Theme tokens only (`bg-card`, `text-foreground`, `primary`, `chart-*`, `muted-foreground`, etc).
-4. **Every chart/visual has a tooltip.** `ChartTooltip` on Area/Bar/Pie, `Tooltip` on funnel SVG bars.
-5. **Side drawers = 560px (`w-[560px] max-w-[96vw]`).`**
-6. **Merchant pages = Sidebar + clean full-width.** Store pages = no Sidebar.
-7. **Pricing in paise** in types/mocks; render via `formatPrice`.
-8. **`pnpm build` green = ship signal.** Always build before commit/push.
-9. **Commit+push every change** (`git push origin main`). Keep `dist/` local-only.
-10. **Mobile KPI:** `grid-cols-2` + `hidden sm:flex` on icons — don't regress.
-
----
-
-## 8. Quick start for an agent working here
-
-1. `read AI_BLUEPRINT.md` + `AI_RULES.md` + `AGENTS.md`.
-2. See the **file touch map** in §2 to find where the change lives.
-3. Edit → `pnpm build` → fix → commit+push.
-4. If the dev server isn't running: `terminal(background=true)` `npx vite --port 8443 --host 0.0.0.0`, then `curl :8443 → 200`.
-
-Last updated: 2026-09-02, post-`fda64ed` layout polish. This file is canonical — when in doubt, follow it.
+*Last updated: 2026-09-06 — Canonical blueprint reflecting current Razent architecture, AP2/ACP protocols, NPCI compliance, HashRouter, and Supabase integration.*
