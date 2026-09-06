@@ -44,6 +44,7 @@ import { Bubble } from "@/components/ui/bubble"
 import { GenerativeProductCard } from "./GenerativeProductCard"
 import { ProductDetailsModal } from "./ProductDetailsModal"
 import { InvoiceModal, type InvoiceData } from "../StoreHome/InvoiceModal"
+import { executeChatAgentTurn } from "@/lib/agent/chatAgent"
 
 const QUICK_PROMPTS = [
   "Show me healthy snacks under ₹500",
@@ -138,169 +139,6 @@ export const AIAssistantScreen: React.FC = () => {
     navigate("/?view=checkout")
   }
 
-  // Assistant Query Processing using RAG & Vector Search
-  const processAssistantQuery = async (query: string) => {
-    const q = query.toLowerCase().trim()
-    setToolExecution("search_catalog")
-
-    // 1. Off-topic domain check
-    const OFF_TOPIC = /\b(narendra|modi|bjp|congress|politics|election|prime minister|president|weather|homework|write code|who is|capital of)\b/i
-    if (OFF_TOPIC.test(q)) {
-      setToolExecution(null)
-      return {
-        text: `I am ${storeProfile.storeName}'s AI shopping assistant. What products can I help you find or order from our catalog today?`,
-        products: [],
-      }
-    }
-
-    // 2. Contextual Ordinal Referencing (e.g. "Add the first one to my cart", "Add the second one")
-    const addOrdinalMatch = q.match(/add\s+(?:the\s+)?(first|1st|second|2nd|third|3rd|fourth|4th|last)\s+(?:one\s+)?to\s+(?:my\s+)?cart/i)
-    if (addOrdinalMatch && activeRecProducts.length > 0) {
-      setToolExecution("add_to_cart")
-      const ordinal = addOrdinalMatch[1].toLowerCase()
-      let targetIndex = 0
-      if (ordinal === "second" || ordinal === "2nd") targetIndex = 1
-      else if (ordinal === "third" || ordinal === "3rd") targetIndex = 2
-      else if (ordinal === "fourth" || ordinal === "4th") targetIndex = 3
-      else if (ordinal === "last") targetIndex = activeRecProducts.length - 1
-
-      const targetProduct = activeRecProducts[targetIndex] || activeRecProducts[0]
-      if (targetProduct) {
-        addToCart(targetProduct, 1)
-        setToolExecution(null)
-        return {
-          text: `✅ Done! **${targetProduct.title}** has been added to your cart.`,
-          products: [],
-        }
-      }
-    }
-
-    // 3. Contextual Buy Referencing (e.g. "Buy the second one", "Buy the first one")
-    const buyOrdinalMatch = q.match(/buy\s+(?:the\s+)?(first|1st|second|2nd|third|3rd|fourth|4th|last)\s*(?:one)?/i)
-    if (buyOrdinalMatch && activeRecProducts.length > 0) {
-      setToolExecution("prepare_checkout")
-      const ordinal = buyOrdinalMatch[1].toLowerCase()
-      let targetIndex = 0
-      if (ordinal === "second" || ordinal === "2nd") targetIndex = 1
-      else if (ordinal === "third" || ordinal === "3rd") targetIndex = 2
-      else if (ordinal === "fourth" || ordinal === "4th") targetIndex = 3
-      else if (ordinal === "last") targetIndex = activeRecProducts.length - 1
-
-      const targetProduct = activeRecProducts[targetIndex] || activeRecProducts[0]
-      if (targetProduct) {
-        prepareCheckout(targetProduct, 1)
-        setToolExecution(null)
-        return {
-          text: `🛒 Sure! I'll take you to checkout for the **${targetProduct.title}**.`,
-          checkoutAction: {
-            title: `Go to Checkout →`,
-            product: targetProduct,
-          },
-          products: [],
-        }
-      }
-    }
-
-    // 4. Cart Inquiries
-    if (/\b(what is in my cart|show cart|view cart|my cart|cart items)\b/i.test(q)) {
-      setToolExecution("retrieve_cart")
-      if (cartItems.length === 0) {
-        setToolExecution(null)
-        return {
-          text: "Your cart is currently empty. Would you like me to recommend some popular healthy snacks or essentials?",
-          products: catalog.slice(0, 4),
-        }
-      }
-      const cartSummary = cartItems
-        .map((i) => `• ${i.qty}× **${i.product.title}** (₹${(i.product.price_paise * i.qty) / 100})`)
-        .join("\n")
-      const totalRupees = cartItems.reduce((acc, i) => acc + i.product.price_paise * i.qty, 0) / 100
-      setToolExecution(null)
-      return {
-        text: `Here is what is in your cart (${cartItems.length} items, Total: **₹${totalRupees}**):\n\n${cartSummary}\n\nReady to complete your order? Say "checkout" or click below.`,
-        products: cartItems.map((i) => i.product).slice(0, 4),
-      }
-    }
-
-    // 5. Checkout Intent
-    if (/\b(checkout|proceed to checkout|buy now|place order|pay now)\b/i.test(q)) {
-      if (cartItems.length === 0) {
-        setToolExecution(null)
-        return {
-          text: "Your cart is empty. Please add items before proceeding to checkout.",
-          products: catalog.slice(0, 4),
-        }
-      }
-      setToolExecution(null)
-      setTimeout(() => navigate("/?view=checkout"), 500)
-      return {
-        text: "Taking you to secure checkout to verify your phone number and delivery address...",
-        products: [],
-      }
-    }
-
-    // 6. Order Tracking
-    if (/\b(track|where is my order|order status|track order)\b/i.test(q)) {
-      setToolExecution("track_order")
-      const orderMatch = query.match(/\b(RAZ-[A-Z0-9]+|ORD-[A-Z0-9]+)\b/i)
-      if (orderMatch) {
-        const orderId = orderMatch[1].toUpperCase()
-        try {
-          const res = await trackOrder({ orderId, mobile: "", email: "" })
-          setToolExecution(null)
-          if (res) {
-            return {
-              text: `📦 **Order ${res.id}** is currently **${res.shipping_status.toUpperCase()}**.\n• Status: ${res.status.toUpperCase()}\n• Total: ₹${res.total_paise / 100}\n• Items: ${res.items.map((i) => `${i.qty}× ${i.title}`).join(", ")}`,
-              products: [],
-            }
-          }
-        } catch {}
-      }
-      setToolExecution(null)
-      return {
-        text: "To track your order, please provide your **Order ID** (e.g. `RAZ-ABC123`), or check the Track Order page.",
-        products: [],
-      }
-    }
-
-    // 7. RAG & Vector Semantic Catalog Search
-    setToolExecution("vector_similarity_search")
-    await new Promise((r) => setTimeout(r, 220))
-
-    // Parse max price constraint from query (e.g. "under ₹500", "under 500")
-    let maxPricePaise: number | undefined
-    const priceMatch = q.match(/(?:under|below|less than|within)\s*(?:₹|rs\.?|inr)?\s*(\d+)/i)
-    if (priceMatch) {
-      maxPricePaise = parseInt(priceMatch[1], 10) * 100
-    }
-
-    // Perform semantic vector retrieval
-    const vectorResults = await semanticVectorEngine.search(query, {
-      maxPricePaise,
-      limit: 6,
-    })
-
-    const matchedProducts = vectorResults.map((r) => r.product)
-    setToolExecution(null)
-
-    if (matchedProducts.length > 0) {
-      setActiveRecProducts(matchedProducts)
-      const priceMention = maxPricePaise ? ` under ₹${maxPricePaise / 100}` : ""
-      return {
-        text: `Here are some ${q.replace(/(?:find|show me|search|need|want|get|i need)\s*/i, "").trim()}${priceMention}:`,
-        products: matchedProducts,
-      }
-    }
-
-    // Fallback: return general popular items
-    const fallbackProducts = catalog.slice(0, 4)
-    setActiveRecProducts(fallbackProducts)
-    return {
-      text: `We couldn't find exact matches for "${query}". Here are some popular essentials from our store:`,
-      products: fallbackProducts,
-    }
-  }
-
   // Send Message Handler
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || input).trim()
@@ -311,7 +149,7 @@ export const AIAssistantScreen: React.FC = () => {
       textareaRef.current.style.height = "auto"
     }
 
-    // Security check
+    // Security check for financial / private credentials
     const sanitization = sanitizeUserChatInput(query)
     if (sanitization.hasSensitiveData) {
       addMessage({
@@ -323,7 +161,7 @@ export const AIAssistantScreen: React.FC = () => {
       addMessage({
         id: `msg_warn_${Date.now()}`,
         role: "assistant",
-        text: `🛡️ ${sanitization.warningMessage}\n\n🔒 For your security, please never share card numbers, CVVs, or OTPs in chat. You will confirm your phone number with a secure OTP during the checkout step before payment.`,
+        text: `🛡️ ${sanitization.warningMessage}\n\n🔒 For your security, please never share card numbers, CVVs, or OTPs in chat. You will confirm your phone number with a secure OTP during checkout before payment.`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       })
       toast.warning("Sensitive financial data intercepted and protected.")
@@ -365,10 +203,23 @@ export const AIAssistantScreen: React.FC = () => {
     }).catch(() => {})
 
     try {
-      const result = await processAssistantQuery(query)
+      const conversationHistory = [...messages, userMsg].map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.text,
+      }))
 
-      // Token streaming typewriter simulation
-      const fullText = result.text
+      const result = await executeChatAgentTurn({
+        messages: conversationHistory,
+        catalog,
+        onToolCall: (tName) => setToolExecution(tName),
+      })
+
+      if (result.products && result.products.length > 0) {
+        setActiveRecProducts(result.products)
+      }
+
+      // Stream text response smoothly
+      const fullText = result.text || "I'm here to help you shop! What are you looking for?"
       let currentText = ""
       const chunkWords = fullText.split(" ")
 
@@ -376,22 +227,24 @@ export const AIAssistantScreen: React.FC = () => {
         currentText += (i === 0 ? "" : " ") + chunkWords[i]
         updateMessage(tempAsstId, {
           text: currentText,
-          products: result.products,
+          products: result.products.length > 0 ? result.products : undefined,
+          checkoutAction: result.checkoutAction,
           isStreaming: i < chunkWords.length - 1,
         })
         if (i < chunkWords.length - 1 && i % 3 === 0) {
-          await new Promise((r) => setTimeout(r, 20))
+          await new Promise((r) => setTimeout(r, 18))
         }
       }
 
       updateMessage(tempAsstId, {
         text: fullText,
-        products: result.products,
+        products: result.products.length > 0 ? result.products : undefined,
+        checkoutAction: result.checkoutAction,
         isStreaming: false,
       })
     } catch {
       updateMessage(tempAsstId, {
-        text: "I encountered an issue retrieving products. Please try again.",
+        text: "I encountered an issue processing your request. Please ask again.",
         isStreaming: false,
       })
     } finally {
@@ -534,6 +387,25 @@ export const AIAssistantScreen: React.FC = () => {
                           {prompt}
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Checkout Action CTA Bubble */}
+                  {msg.checkoutAction && (
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (msg.checkoutAction?.product) {
+                            prepareCheckout(msg.checkoutAction.product, 1)
+                          }
+                          navigate("/?view=checkout")
+                        }}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+                      >
+                        {msg.checkoutAction.title || "Go to Checkout →"}
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
                     </div>
                   )}
 

@@ -44,6 +44,7 @@ import {
 import { Bubble } from "@/components/ui/bubble"
 import { GenerativeProductCard } from "../AIAssistant/GenerativeProductCard"
 import { ProductDetailsModal } from "../AIAssistant/ProductDetailsModal"
+import { executeChatAgentTurn } from "@/lib/agent/chatAgent"
 
 const POPUP_SUGGESTIONS = [
   "Fresh fruits under ₹150",
@@ -142,109 +143,6 @@ export const StoreAIAssistantWidget: React.FC = () => {
     setIsProductModalOpen(true)
   }
 
-  // Natural language query handler
-  const processQuery = async (query: string) => {
-    const q = query.toLowerCase().trim()
-    setToolExecution("search_catalog")
-
-    // Domain check
-    const OFF_TOPIC = /\b(narendra|modi|bjp|congress|politics|election|prime minister|president|weather|homework|write code|who is|capital of)\b/i
-    if (OFF_TOPIC.test(q)) {
-      setToolExecution(null)
-      return {
-        text: `I am ${storeProfile.storeName}'s shopping assistant. What grocery products can I help you find today?`,
-        products: [],
-      }
-    }
-
-    // Cart commands
-    if (/\b(cart|my cart|show cart|what is in my cart)\b/i.test(q)) {
-      setToolExecution("retrieve_cart")
-      if (cartItems.length === 0) {
-        setToolExecution(null)
-        return {
-          text: "Your cart is empty. Would you like me to find some popular essentials?",
-          products: catalog.slice(0, 3),
-        }
-      }
-      const cartSummary = cartItems
-        .map((i) => `• ${i.qty}× **${i.product.title}** (₹${(i.product.price_paise * i.qty) / 100})`)
-        .join("\n")
-      const totalRupees = cartItems.reduce((acc, i) => acc + i.product.price_paise * i.qty, 0) / 100
-      setToolExecution(null)
-      return {
-        text: `You have ${cartItems.length} items in your cart (Total: **₹${totalRupees}**):\n\n${cartSummary}`,
-        products: cartItems.map((i) => i.product).slice(0, 4),
-      }
-    }
-
-    // Checkout intent
-    if (/\b(checkout|place order|buy now)\b/i.test(q)) {
-      setToolExecution(null)
-      if (cartItems.length === 0) {
-        return {
-          text: "Please add some items to your cart first.",
-          products: catalog.slice(0, 3),
-        }
-      }
-      setTimeout(() => {
-        setIsOpen(false)
-        navigate("/?view=checkout")
-      }, 400)
-      return {
-        text: "Taking you to checkout...",
-        products: [],
-      }
-    }
-
-    // Order tracking
-    if (/\b(track|where is my order|order status)\b/i.test(q)) {
-      setToolExecution("track_order")
-      const orderMatch = query.match(/\b(RAZ-[A-Z0-9]+|ORD-[A-Z0-9]+)\b/i)
-      if (orderMatch) {
-        const res = await trackOrder({ orderId: orderMatch[1].toUpperCase(), mobile: "", email: "" })
-        setToolExecution(null)
-        if (res) {
-          return {
-            text: `📦 **Order ${res.id}** is **${res.shipping_status.toUpperCase()}**.\nStatus: ${res.status.toUpperCase()} • Total: ₹${res.total_paise / 100}`,
-            products: [],
-          }
-        }
-      }
-      setToolExecution(null)
-      return {
-        text: "Please provide your Order ID (e.g. `RAZ-XXXX`) to track status.",
-        products: [],
-      }
-    }
-
-    // Dynamic catalog search
-    setToolExecution("search_catalog")
-    await new Promise((r) => setTimeout(r, 200))
-    const words = q.split(/\s+/).filter((w) => w.length > 2)
-    const matches = catalog.filter((p) => {
-      const title = p.title.toLowerCase()
-      const desc = (p.description || "").toLowerCase()
-      const cat = p.category.toLowerCase()
-      if (title.includes(q) || desc.includes(q) || cat.includes(q)) return true
-      return words.some((w) => title.includes(w) || cat.includes(w))
-    })
-
-    setToolExecution(null)
-
-    if (matches.length === 0) {
-      return {
-        text: `No exact matches for "${query}". Here are some popular products:`,
-        products: catalog.slice(0, 4),
-      }
-    }
-
-    return {
-      text: `Found ${matches.length} matching item${matches.length > 1 ? "s" : ""}:`,
-      products: matches.slice(0, 4),
-    }
-  }
-
   // Send message
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || input).trim()
@@ -289,8 +187,18 @@ export const StoreAIAssistantWidget: React.FC = () => {
     setIsLoading(true)
 
     try {
-      const result = await processQuery(query)
-      const fullText = result.text
+      const conversationHistory = [...messages, userMsg].map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.text,
+      }))
+
+      const result = await executeChatAgentTurn({
+        messages: conversationHistory,
+        catalog,
+        onToolCall: (tName) => setToolExecution(tName),
+      })
+
+      const fullText = result.text || "I'm here to help you shop! What are you looking for?"
       let currentText = ""
       const chunkWords = fullText.split(" ")
 
@@ -298,17 +206,19 @@ export const StoreAIAssistantWidget: React.FC = () => {
         currentText += (i === 0 ? "" : " ") + chunkWords[i]
         updateMessage(tempId, {
           text: currentText,
-          products: result.products,
+          products: result.products.length > 0 ? result.products : undefined,
+          checkoutAction: result.checkoutAction,
           isStreaming: i < chunkWords.length - 1,
         })
         if (i < chunkWords.length - 1 && i % 3 === 0) {
-          await new Promise((r) => setTimeout(r, 20))
+          await new Promise((r) => setTimeout(r, 18))
         }
       }
 
       updateMessage(tempId, {
         text: fullText,
-        products: result.products,
+        products: result.products.length > 0 ? result.products : undefined,
+        checkoutAction: result.checkoutAction,
         isStreaming: false,
       })
     } catch {
@@ -499,6 +409,26 @@ export const StoreAIAssistantWidget: React.FC = () => {
                             />
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Checkout Action CTA */}
+                    {msg.checkoutAction && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (msg.checkoutAction?.product) {
+                              prepareCheckout(msg.checkoutAction.product, 1)
+                            }
+                            setIsOpen(false)
+                            navigate("/?view=checkout")
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+                        >
+                          {msg.checkoutAction.title || "Go to Checkout →"}
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     )}
 

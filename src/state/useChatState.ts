@@ -6,6 +6,10 @@ export interface ChatMessage {
   role: "user" | "assistant"
   text: string
   products?: Product[]
+  checkoutAction?: {
+    title: string
+    product: Product
+  }
   orderPlaced?: {
     orderId: string
     totalRupees: string
