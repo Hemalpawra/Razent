@@ -34,22 +34,35 @@ function RouterApp() {
         <Routes>
           <Route path="/" element={<StoreHome />} />
           <Route path="/assistant" element={<AIAssistantScreen />} />
-          <Route path="/sign-in" element={<SignInScreen />} />
+          
+          {/* Canonical sign-in and legacy alias */}
+          <Route path="/signin" element={<SignInScreen />} />
+          <Route path="/sign-in" element={<Navigate to="/signin" replace />} />
 
-        {/* Admin console with AppShell layout — 2 flows: private (auth) or public (readOnly VIEW ONLY) */}
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="/admin/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardScreen />} />
-          <Route path="products" element={<ProductsScreen />} />
-          <Route path="orders" element={<OrdersScreen />} />
-          <Route path="analytics" element={<AnalyticsScreen />} />
-          <Route path="ai_agent" element={<AIAgentScreen />} />
-          <Route path="audit_trail" element={<AuditTrailScreen />} />
-          <Route path="settings" element={<SettingsScreen />} />
-        </Route>
+          {/* Canonical Merchant Console (/#/merchant/*) */}
+          <Route path="/merchant" element={<AdminLayout />}>
+            <Route index element={<Navigate to="/merchant/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardScreen />} />
+            <Route path="products" element={<ProductsScreen />} />
+            <Route path="orders" element={<OrdersScreen />} />
+            <Route path="analytics" element={<AnalyticsScreen />} />
+            <Route path="ai_agent" element={<AIAgentScreen />} />
+            <Route path="audit_trail" element={<AuditTrailScreen />} />
+            <Route path="settings" element={<SettingsScreen />} />
+          </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Legacy /admin/* redirects to /merchant/* */}
+          <Route path="/admin" element={<Navigate to="/merchant/dashboard" replace />} />
+          <Route path="/admin/dashboard" element={<Navigate to="/merchant/dashboard" replace />} />
+          <Route path="/admin/products" element={<Navigate to="/merchant/products" replace />} />
+          <Route path="/admin/orders" element={<Navigate to="/merchant/orders" replace />} />
+          <Route path="/admin/analytics" element={<Navigate to="/merchant/analytics" replace />} />
+          <Route path="/admin/ai_agent" element={<Navigate to="/merchant/ai_agent" replace />} />
+          <Route path="/admin/audit_trail" element={<Navigate to="/merchant/audit_trail" replace />} />
+          <Route path="/admin/settings" element={<Navigate to="/merchant/settings" replace />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </EnvErrorBoundary>
     </ThemeProvider>
   )

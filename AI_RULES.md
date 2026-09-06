@@ -1,166 +1,450 @@
 # AI Rules — Merchant AI Gateway
 
-> Read this **before** touching any source. These rules are enforced by every AI agent working in this repo (Figma Make, Claude Code, Codex, OpenCode, and Hermes).
+> Read this before touching any source. These rules are enforced by every AI agent working in this repo.
+
+---
 
 ## 1. What we are building
 
-**Merchant AI Gateway** — a Razorpay-powered merchant store where customers can shop two ways:
+Merchant AI Gateway is a Razorpay-powered merchant store where customers can shop in two ways:
 
 1. Browse the store normally.
-2. Talk to an AI assistant (in-store drawer, or from their own AI tool via an agent-to-agent API — ChatGPT, Gemini, Claude, Grok).
+2. Talk to an AI assistant, either inside the store or from their own AI tool through an agent-to-agent flow.
 
-The AI handles product discovery, comparison, cross/upsell, address collection, Razorpay order creation, and hands off to **Razorpay Checkout** for payment. After payment: success screen, invoice, and **dummy** shipping/tracking.
+The AI handles:
+- product discovery
+- product comparison
+- upsell and cross-sell
+- shipping details collection
+- Razorpay order creation
+- payment handoff to Razorpay Checkout
+- invoice display
+- dummy shipping and tracking
 
-There is **no customer login** and **no order history page**. Customers track orders with order ID + phone + email.
+There is no customer login and no customer order history page.
 
-### Merchant screens (dashboard)
+Customers track orders using:
+- order ID
+- mobile number
+- email address
 
-`Dashboard` · `Products` · `Product Import` · `AI Agent` · `Orders` · `Audit Trail` · `Analytics` · `Settings`
+---
 
-### Customer screens (store)
+## 2. App surfaces
 
-`Store home` · `Product listing` · `Product detail` · `AI chat drawer` · `Cart` · `Delivery address + shipping` · `Razorpay payment` · `Success (invoice + dummy tracking)` · `Track order (order ID + phone + email)`
+### Merchant screens
+- Dashboard
+- Products
+- Orders
+- AI Agent
+- Audit Trail
+- Analytics
+- Settings
 
-### What is dummy vs real
+### Customer screens
+- Store home
+- Product listing
+- Product detail
+- AI assistant panel
+- Cart
+- Delivery address and shipping
+- Razorpay payment handoff
+- Payment success
+- Payment failed
+- Track order
+
+---
+
+## 3. What is real vs simulated
 
 | Thing | Status |
 |---|---|
-| Razorpay order + payment | **Real** (test-mode keys) |
-| Invoice | **Real** (rendered in app) |
-| Shipping | **Simulated** |
-| Tracking | **Simulated** |
+| Products | Real, from DB or seeded DB data |
+| Merchant settings | Real, from DB |
+| Orders | Real, from DB |
+| Conversations | Real, from DB |
+| Audit trail | Real, from DB |
+| Analytics | Real, computed from DB |
+| Razorpay order creation | Real |
+| Razorpay payment handoff | Real |
+| Invoice | Real in app |
+| Shipping | Simulated |
+| Tracking | Simulated |
 
-## 2. Workflow rules
+Do not present simulated values as real operational data.
 
-- **Local working directory:** `C:\Users\hemal\Ragent\Razent` on Windows. Always work there.
-- **Figma Make owns the screens:** screens are designed in Figma Make and pushed to the `Hemalpawra/Razent` repo. **Always `git pull` before editing.**
-- **Local ↔ GitHub in sync:** commit + `git push origin main` at the end of every change.
-- **Never start the dev server manually.** A Vite server is already running on `$PORT` (default 8443) via Figma Make; preview is in the Figma Make preview panel.
-- **Never modify `.figma/make/`, `index.html` root structure, or `vite.config.ts` plugins.** These are Figma-managed.
-- **Run `vite build` before claiming "done."** Build must pass with no TypeScript errors.
-- **Format with `oxfmt`** (`pnpm format`). Do **not** introduce Prettier/ESlint config.
+---
 
-## 3. Component library — shadcn (Base UI, preset `base-mira`)
+## 4. Core architecture rules
 
-`components.json` pins style to `base-mira`. All UI must come from `@/components/ui/*`.
+### Single source of truth
+Every screen must read from one real source of truth.
 
-### Composition
+Do not let the UI depend on:
+- hardcoded values
+- random values
+- duplicated mock state
+- local-only state for business data
 
-Always import from the **aggregate namespace**, never from primitives:
+Use:
+- Supabase tables
+- shared API seam
+- derived values from real data
+- mock fallback only for offline local development
 
-```tsx
-import { Button } from "@/components/ui/button"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, CardAction } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption, TableFooter } from "@/components/ui/table"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverTrigger, PopoverContent, PopoverHeader, PopoverTitle, PopoverDescription } from "@/components/ui/popover"
-import { Message, MessageAvatar, MessageContent, MessageHeader, MessageFooter, MessageGroup } from "@/components/ui/message"
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty"
-import { Separator } from "@/components/ui/separator"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
-```
+### API seam rule
+All data access must go through the shared client layer.
 
-### Component patterns (Base UI, NOT Radix)
+Do not fetch directly from UI components if a shared API already exists.
 
-1. **Never use `asChild`.** Base UI uses the `render` prop instead:
-   ```tsx
-   <Button render={<a href="/orders" />}>View orders</Button>
-   ```
-2. **Dialog:** top-level `Dialog` accepts `open` + `onOpenChange`. Content goes in `DialogContent`; structure with `DialogHeader > DialogTitle + DialogDescription`, then body, then `DialogFooter`.
-3. **Popover:** `Popover > PopoverTrigger render={<Button variant="outline" />} > open <PopoverContent > PopoverHeader > PopoverTitle + PopoverDescription`.
-4. **Forms:** wrap fields in `FieldGroup` + `Field + FieldLabel + FieldDescription + FieldError`. Use the AI-chosen primitives — do not roll your own form layout.
-5. **Tooltips:** wrap the app in `<TooltipProvider>` once (in `App.tsx`).
-6. **AI chat surfaces:** use `Message / MessageGroup / Bubble` for the conversation. Don't reimplement message rows.
-7. **Empty states:** use `Empty` for "no orders yet", "no products", etc. Don't write blank divs.
+### Data integrity rule
+If a screen shows a field, that field must have:
+- a source
+- a storage path
+- an update path
+- a dependent screen path
 
-### Do not
+If any of those are missing, ask before building it.
 
-- Don't add `@radix-ui/*` packages — the project is on Base UI (`@base-ui/react`).
-- Don't pull in MUI, Chakra, Mantine, or Ant — conflict with `base-mira`.
-- Don't import directly from `@base-ui/react/*` in screens; go through the shadcn wrappers so the preset theming applies.
+---
 
-## 4. Design tokens
+## 5. Role rules
 
-`components.json`: style `base-mira`, base color `neutral`, CSS variables enabled, icons `lucide`, RTL off.
+There are two merchant roles.
 
-**Always use the CSS variables defined in `src/index.css`** (`--background`, `--foreground`, `--primary`, `--card`, `--muted`, etc.) via Tailwind utilities (`bg-background`, `text-foreground`, `bg-primary`, `text-muted-foreground`, `border-border`, `ring-ring`, `bg-card`, `text-card-foreground`).
+### View-only merchant
+Can:
+- view products
+- view orders
+- view AI agent list
+- view audit trail
+- view analytics
+- view settings
 
-**Never hardcode:**
+Cannot:
+- create
+- edit
+- delete
+- import
+- export
+- refund
+- change settings
 
-- ❌ `bg-white`, `bg-black`, `bg-gray-100`, `text-slate-500`, `border-zinc-200`
-- ❌ Inline `style={{ color: '#…' }}` or hex/rgb literals
-- ❌ `dark:` hardcoded dark colors — instead use the variables and the `.dark` class on `<html>` (defined in `src/index.css`)
-- ❌ Custom font families — fonts come from theme tokens (`--font-sans`, `--font-heading` already set to Public Sans Variable)
+If a view-only merchant clicks a restricted action, show a clear blocked message.
 
-**Color usage guide:**
+### Admin merchant
+Can:
+- do everything
+- add
+- edit
+- delete
+- import
+- export
+- refund
+- change settings
 
-| Use | Token |
-|---|---|
-| Page background | `bg-background` |
-| Body text | `text-foreground` |
-| Muted text (descriptions, captions) | `text-muted-foreground` |
-| Primary CTA | `bg-primary text-primary-foreground` |
-| Secondary surface (cards) | `bg-card text-card-foreground` |
-| Subtle surface (inputs, hover) | `bg-muted` or `bg-input` |
-| Destructive (delete order, error) | `bg-destructive text-destructive-foreground` |
-| Borders | `border-border` |
-| Focus rings | `ring-ring` |
+### Sign-in rules
+- The public sign-in page must show only the view-only merchant login card.
+- Do not show admin credentials publicly.
+- Admin login must stay protected.
+- The app must always know the active role.
+- Hide or disable actions the role cannot use.
 
-**Spacing & layout:**
+---
 
-- Section padding: `px-4 py-16` on `<section>`, `mx-auto max-w-5xl` on the wrapper.
-- Card grid: `grid gap-4 md:grid-cols-2 lg:grid-cols-3`.
-- Stat cards: `Card` with `CardHeader > CardTitle` + numeric value + `CardDescription`.
-- Radius: theme default (`--radius` ≈ 0.625rem). Don't set `rounded-xl` etc. on shadcn components.
+## 6. UI layout rules
 
-## 5. File structure
+### Desktop storefront
+On desktop, use a split layout:
+- left: about 80% store content
+- right: about 20% AI assistant panel
 
-This is a single-page Vite app — there are no routes.**
+The AI panel must:
+- stay visible
+- look like a modern AI assistant
+- use message-style components
+- keep the composer fixed at the bottom
+- keep chat history above it
 
-All app screens live as components under `src/components/<screen>/<Screen>.tsx` and are mounted from `src/App.tsx` behind a tab/nav switcher. Suggested folder shape:
+Do not use a small drawer for the desktop AI panel.
 
-```
-src/
-  components/
-    store/        StoreHome, ProductListing, ProductDetail, Cart, Checkout, OrderSuccess, TrackOrder
-    merchant/     Dashboard, Products, ProductImport, AIAgent, Orders, AuditTrail, Analytics, Settings
-    ai/           ChatDrawer, MessageList, Composer, Bubble
-    ui/           shadcn primitives (do not edit)
-  lib/
-    razorpay.ts   client wrapper
-    tracking.ts   dummy tracking simulator
-  App.tsx
-  main.tsx
-  index.css
-```
+### Mobile and tablet
+Use a different layout.
+Do not keep the desktop split layout on smaller screens.
 
-`src/App.tsx` is the router/nav — keep it light; delegate to components.
+### Drawer rules
+If a drawer is needed on desktop:
+- use a non-modal drawer
+- keep it on the side
+- keep it narrow enough to scan
+- do not block the main page
 
-## 6. What the AI should mention when building frontend
+Suggested drawer width:
+- about 25vw
+- with safe min/max bounds
 
-When the AI agent (Hermes, Claude Code, etc.) is implementing or reviewing frontend code in Merchant AI Gateway, it must surface **all** of the following where relevant:
+### One toolbar rule
+Each page should have one clean toolbar.
+Do not duplicate:
+- filters
+- export buttons
+- close buttons
+- refresh buttons
 
-1. **Razorpay integration:** every order must be created via `lib/razorpay.ts` (real API in test mode). Never fake order IDs client-side.
-2. **AI conversation → order linkage:** when the AI creates an order, link it back to the conversation id and surface it on the AI Agent page.
-3. **Merchant dashboard signal-to-noise:** prefer **fewer, business-meaningful cards** (AI status, active conversations, orders, revenue). Don't dump raw logs.
-4. **AI Agent page must include:** AI status, active conversations count, orders created, revenue, a few live conversation previews, conversation detail drilldown, business insights, and a clear path to Orders / Invoice / Tracking / Audit Trail.
-5. **Customer tracking:** must accept `order_id + phone + email`. No login. No history page.
-6. **Invoice is real; shipping + tracking are simulated** — make that visible in the UI ("simulated for demo").
-7. **No fake data shown as production data.** Anything dummy must be labeled.
-8. **Accessibility:** the AI chat drawer must be keyboard-navigable; icon-only buttons need `aria-label`; status updates use `role="status"`.
-9. **Responsive:** the store must work on mobile (the customer side); the merchant dashboard is desktop-first.
-10. **The Vite dev server is already running** — do not start another one; do not bind to a new port.
-11. **Never commit `node_modules`, `dist`, `.env*`, or `.vite` cache.** `.gitignore` already covers these; verify before `git status`.
-12. **Build verification:** run `vite build` before claiming "done." Fix all TS errors.
-13. **After every change:** commit + `git push origin main` so GitHub stays in sync with Figma Make.
+---
 
-## 7. Out of scope
+## 7. Screen-specific rules
 
-- Real shipping carrier API integration (use the dummy tracker).
-- Customer login / accounts / order history pages.
-- Production Razorpay keys — only test keys allowed in this build.
+### Store home
+Must show:
+- store identity
+- categories
+- featured products
+- AI helper
+- trust notes
+
+Must not show:
+- merchant admin controls
+- customer login
+- customer order history
+
+### Product listing
+Must show:
+- product cards
+- filters
+- sort
+- search
+- AI split layout on desktop
+
+Must not show:
+- footer in AI split mode
+- small AI drawer on desktop
+
+### Product detail
+Must show only the fields the product actually has:
+- product name
+- product image
+- subtitle
+- description
+- category
+- price
+- stock
+- features text
+- specifications text
+
+Must remove unless truly wired:
+- reviews
+- warranty
+- shipping
+- returns
+- prompt examples
+- AI performance cards
+- activity tab
+
+### Product drawer
+- Keep only one close icon.
+- Overview description must come from DB.
+- Inventory controls must work if shown.
+- Remove variants and fulfillment notes unless they are wired.
+- AI visibility and related product settings stay only if they save to DB and are used by AI.
+
+### Product import
+- Do not keep Product Import in the sidebar if it is already handled inside Products.
+- Access import from the Products area or a product action.
+- CSV, Excel, and manual add must save to the real product store.
+- Import must not stay local-only.
+
+### AI agent
+- Keep live conversations real.
+- Remove decorative cards that do not change behavior.
+- Keep one filter set only.
+- Use real statuses.
+- Closed conversations must not remain active.
+- Show order amount only when an order exists.
+
+### AI conversation details
+- View-only merchants cannot see restricted chat detail.
+- If blocked, show a clear permission message.
+
+### Orders
+- Orders must update from real DB data.
+- Show paid, pending, and failed states.
+- Keep one toolbar.
+- Duplicate filters and duplicate export controls must be removed.
+- New orders must appear live.
+
+### Audit trail
+- Group by session.
+- Drawer must use tabs.
+- All drawer data must come from DB.
+- Reset button should be removed if unused.
+- Refresh must work.
+- Linked item buttons must work:
+  - View Conversation
+  - View Order
+  - View Product
+  - View Invoice
+- Timeline must come from real audit data.
+
+### Analytics
+- Use live computed data.
+- Do not hardcode KPIs.
+- Do not hardcode AI metrics.
+- Do not use fake charts.
+
+### Settings
+Keep only:
+- Store Profile
+- AI Defaults
+- Business Rules
+- Dummy Shipping
+- Notifications
+
+Do not include:
+- team management
+- API access
+- system status
+- danger zone
+- account admin tools
+
+The settings must affect real app behavior.
+
+---
+
+## 8. Money action rules
+
+Every money action must be:
+
+### Explainable
+Show:
+- why the product was selected
+- why the total changed
+- why payment is being requested
+
+### Bounded
+Apply:
+- max order value
+- max discount
+- stock checks
+- shipping details
+- approval threshold
+
+### Gated
+Do not create or complete payment until:
+- the customer reviews the order
+- the customer explicitly approves it
+
+### Audit
+Log every step:
+- customer request
+- AI search
+- product recommendation
+- upsell or cross-sell
+- shipping details collected
+- order review shown
+- approval received
+- Razorpay order created
+- payment success or failure
+- invoice generated
+- tracking started
+
+### Failure handling
+If payment fails, show:
+- failed reason
+- order amount
+- retry payment
+- change payment method
+- back to cart
+- Ask AI for help
+
+---
+
+## 9. Protocol rules
+
+The app may support:
+- A2A
+- ACP
+- AP2
+- UCP
+- MCP
+
+These are protocol layers, not UI decoration.
+
+### Protocol rules
+- Protocol logic must live in backend or shared protocol modules.
+- The model may suggest actions.
+- The backend must enforce the rules.
+- Do not let the model approve money actions on its own.
+- Do not let the model bypass stock, limit, or mandate checks.
+
+### Auth rule for protocols
+Any protocol flow that touches money must be gated by:
+- authenticated user
+- mandate validation
+- approval threshold
+- audit logging
+
+### Protocol metadata
+If a conversation, order, or audit event uses a protocol, store:
+- protocol name
+- agent id
+- mandate id
+- delegated limit
+- approval status
+- receipt status
+
+---
+
+## 10. Security rules
+
+- Never store or show secrets in the UI.
+- Never pass CVV, OTP, full card number, or PIN into AI prompts.
+- Never let the model bypass limits.
+- Never complete payment without approval if approval is required.
+- Never trust the client alone for role checks.
+- Never leak admin credentials publicly.
+
+If something is unclear, stop and ask.
+
+---
+
+## 11. Testing rules
+
+Before calling a change done, test:
+- role access
+- real data path
+- UI state
+- drawer actions
+- filter actions
+- export / refresh actions
+- mobile vs desktop layout
+- success and failure states
+- payment gating
+- audit logging
+- protocol metadata if used
+
+If a button does nothing, it is not done.
+
+If a screen still shows fake business data where real data should exist, it is not done.
+
+---
+
+## 12. Change discipline
+
+Before editing:
+1. Read the README.
+2. Read the blueprint.
+3. Read the target files.
+4. Check whether the change belongs in UI, state, API, schema, or protocol code.
+5. Ask if a needed field or rule is missing.
+
+Do not guess missing business logic.
+Do not invent fields.
+Do not quietly add fake defaults.
+
+---
+
+## 13. Final rule
+
+If a request conflicts with these rules, stop and ask.
+If a request needs data that does not exist yet, ask before building.

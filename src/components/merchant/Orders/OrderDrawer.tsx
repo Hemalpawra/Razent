@@ -66,7 +66,8 @@ export default function OrderDrawer({
       return
     }
     onClose()
-    window.location.hash = "/admin/ai_agent"
+    useUI.getState().setActiveScreen("ai_agent")
+    window.location.hash = "#/merchant/ai_agent"
   }
 
   const handleViewTracking = () => {

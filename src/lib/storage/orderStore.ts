@@ -18,30 +18,31 @@ export const orderStore = {
     return store.get(id) ?? null
   },
   /**
-   * Find an order for customer-facing Track Order lookup. Real backend
-   * would scope by tenant + RLS; for the in-memory store we match by
-   * any one of: full order ID, last 5 digits of phone, or exact email.
-   * Empty input fields are skipped (so a customer can look up with just
-   * order ID + one of the other two).
+   * Find an order for customer-facing Track Order lookup.
+   * Strictly requires exact match on BOTH phone AND email in addition to order ID.
+   * Never matches on phone OR email.
    */
   track(orderId: string, mobile: string, email: string): Order | null {
     const order = store.get(orderId.trim())
     if (!order) return null
-    const last5 = mobile.replace(/\D/g, "")
+    const cleanMobile = mobile.replace(/\D/g, "")
     const cleanEmail = email.trim().toLowerCase()
-    const phoneMatch =
-      last5.length >= 5 &&
-      order.shipping_address.phone.replace(/\D/g, "").endsWith(last5)
-    const emailMatch =
-      cleanEmail.length > 0 &&
-      order.shipping_address.email.toLowerCase() === cleanEmail
-    // Match if ID resolves AND at least one of the other identifiers matches.
-    if (phoneMatch || emailMatch) return order
+    if (cleanMobile.length < 10 || !cleanEmail.includes("@")) return null
+    const last10 = cleanMobile.slice(-10)
+    const storedPhone = (order.shipping_address?.phone || "").replace(/\D/g, "")
+    const storedEmail = (order.shipping_address?.email || "").trim().toLowerCase()
+    const phoneMatch = storedPhone.endsWith(last10)
+    const emailMatch = storedEmail === cleanEmail
+    // Strict 3-factor: must match BOTH phone AND email
+    if (phoneMatch && emailMatch) return order
     return null
   },
   upsert(input: Order): Order {
     store.set(input.id, input)
     return input
+  },
+  set(input: Order): Order {
+    return this.upsert(input)
   },
   remove(id: string): boolean {
     return store.delete(id)

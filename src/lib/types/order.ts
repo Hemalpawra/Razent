@@ -2,7 +2,7 @@ export type Currency = "INR"
 
 export type OrderStatus = "created" | "paid" | "failed" | "refunded"
 
-export type ShippingStatus = "pending" | "packed" | "shipped" | "delivered" | "returned"
+export type ShippingStatus = "pending" | "packed" | "shipped" | "out_for_delivery" | "delivered" | "returned"
 
 export type CommerceProtocol = "ncpi_uap" | "acp" | "ap2" | "x402" | "direct_web"
 

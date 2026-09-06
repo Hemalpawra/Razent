@@ -102,7 +102,8 @@ export default function AuditDrawer({
       return
     }
     onClose()
-    window.location.hash = "/admin/ai_agent"
+    setActiveScreen("ai_agent")
+    window.location.hash = "#/merchant/ai_agent"
   }
 
   const handleViewOrder = () => {
@@ -112,12 +113,14 @@ export default function AuditDrawer({
     }
     onClose()
     useUI.getState().openOrderDrawer(session.order_id)
-    window.location.hash = "/admin/orders"
+    setActiveScreen("orders")
+    window.location.hash = "#/merchant/orders"
   }
 
   const handleViewProduct = () => {
     onClose()
-    window.location.hash = "/admin/products"
+    setActiveScreen("products")
+    window.location.hash = "#/merchant/products"
     if (relatedProduct) {
       toast.info(`Filtering products for: ${relatedProduct}`)
     }
@@ -130,7 +133,8 @@ export default function AuditDrawer({
     }
     onClose()
     useUI.getState().openOrderDrawer(session.order_id)
-    window.location.hash = "/admin/orders"
+    setActiveScreen("orders")
+    window.location.hash = "#/merchant/orders"
   }
 
   return (

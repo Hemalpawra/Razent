@@ -81,21 +81,21 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
     if (drawerProductId) closeProductDrawer()
     setScreen(key)
     const routeMap: Record<string, string> = {
-      dashboard: "/admin/dashboard",
-      products: "/admin/products",
-      orders: "/admin/orders",
-      analytics: "/admin/analytics",
-      ai_agent: "/admin/ai_agent",
-      audit_trail: "/admin/audit_trail",
-      settings: "/admin/settings",
+      dashboard: "/merchant/dashboard",
+      products: "/merchant/products",
+      orders: "/merchant/orders",
+      analytics: "/merchant/analytics",
+      ai_agent: "/merchant/ai_agent",
+      audit_trail: "/merchant/audit_trail",
+      settings: "/merchant/settings",
     }
-    const path = routeMap[key] || "/admin/dashboard"
+    const path = routeMap[key] || "/merchant/dashboard"
     navigate(path)
   }
 
   const handleSignOut = async () => {
     await signOut()
-    navigate("/sign-in")
+    navigate("/signin")
   }
 
   // Store view — full width, no merchant sidebar chrome

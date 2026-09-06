@@ -7,6 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
+    "test:acceptance": "node scripts/run_acceptance_suite.mjs",
     "format": "oxfmt"
   },
   "dependencies": {

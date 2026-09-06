@@ -39,6 +39,8 @@ import {
   Shield,
 } from "lucide-react"
 import { useSettings } from "@/state/useSettings"
+import { useMerchant } from "@/state/useMerchant"
+import { toast } from "sonner"
 
 type Page = "hub" | "store" | "ai" | "business" | "shipping" | "notifications"
 
@@ -46,10 +48,14 @@ function PageHeader({
   title,
   subtitle,
   onBack,
+  onSave,
+  canSave = true,
 }: {
   title: string
   subtitle: string
   onBack?: () => void
+  onSave?: () => void
+  canSave?: boolean
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
@@ -81,7 +87,19 @@ function PageHeader({
           >
             Cancel
           </Button>
-          <Button size="sm" className="h-8 rounded-lg" onClick={onBack}>
+          <Button
+            size="sm"
+            className="h-8 rounded-lg"
+            onClick={() => {
+              if (!canSave) {
+                toast.error("View-only accounts cannot modify settings.")
+                return
+              }
+              if (onSave) onSave()
+              else onBack()
+            }}
+            disabled={!canSave}
+          >
             <Save className="size-3.5" /> Save
           </Button>
         </div>
@@ -126,20 +144,22 @@ function HubCard({
 export default function SettingsScreen() {
   const [page, setPage] = useState<Page>("hub")
   const s = useSettings()
+  const { role, hasPermission } = useMerchant()
+  const canEdit = hasPermission("edit_settings")
 
   if (page !== "hub") {
     return (
       <div className="space-y-4 bg-muted/30 -m-6 p-6">
-        {page === "store" && <StoreProfilePage onBack={() => setPage("hub")} />}
-        {page === "ai" && <AIDefaultsPage onBack={() => setPage("hub")} />}
+        {page === "store" && <StoreProfilePage onBack={() => setPage("hub")} canEdit={canEdit} />}
+        {page === "ai" && <AIDefaultsPage onBack={() => setPage("hub")} canEdit={canEdit} />}
         {page === "business" && (
-          <BusinessRulesPage onBack={() => setPage("hub")} />
+          <BusinessRulesPage onBack={() => setPage("hub")} canEdit={canEdit} />
         )}
         {page === "shipping" && (
-          <DummyShippingPage onBack={() => setPage("hub")} />
+          <DummyShippingPage onBack={() => setPage("hub")} canEdit={canEdit} />
         )}
         {page === "notifications" && (
-          <NotificationsPage onBack={() => setPage("hub")} />
+          <NotificationsPage onBack={() => setPage("hub")} canEdit={canEdit} />
         )}
       </div>
     )
@@ -155,6 +175,13 @@ export default function SettingsScreen() {
           Manage store, AI behavior, business rules, shipping and alerts.
         </p>
       </div>
+
+      {role === "view_only" && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+          <Shield className="size-4 shrink-0 text-amber-600" />
+          <span>View-Only Account: You have read-only access. Store settings, pricing, and AI defaults cannot be modified.</span>
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <HubCard
@@ -198,7 +225,14 @@ export default function SettingsScreen() {
             variant="ghost"
             size="sm"
             className="h-7 text-xs"
-            onClick={() => s.resetAll()}
+            onClick={() => {
+              if (!canEdit) {
+                toast.error("View-only accounts cannot reset settings.")
+                return
+              }
+              s.resetAll()
+              toast.success("Settings reset to defaults.")
+            }}
           >
             <RotateCcw className="size-3.5" /> Reset defaults
           </Button>
@@ -209,10 +243,20 @@ export default function SettingsScreen() {
 }
 
 // ─── STORE PROFILE ───────────────────────────────────────────────────────────
-function StoreProfilePage({ onBack }: { onBack: () => void }) {
+function StoreProfilePage({
+  onBack,
+  canEdit = true,
+}: {
+  onBack: () => void
+  canEdit?: boolean
+}) {
   const { storeProfile, setStoreProfile } = useSettings()
   const [local, setLocal] = useState(storeProfile)
   const save = () => {
+    if (!canEdit) {
+      toast.error("View-only accounts cannot modify settings.")
+      return
+    }
     setStoreProfile(local)
     onBack()
   }
@@ -383,10 +427,20 @@ function StoreProfilePage({ onBack }: { onBack: () => void }) {
 }
 
 // ─── AI DEFAULTS ─────────────────────────────────────────────────────────────
-function AIDefaultsPage({ onBack }: { onBack: () => void }) {
+function AIDefaultsPage({
+  onBack,
+  canEdit = true,
+}: {
+  onBack: () => void
+  canEdit?: boolean
+}) {
   const { aiDefaults, setAiDefaults } = useSettings()
   const [local, setLocal] = useState(aiDefaults)
   const save = () => {
+    if (!canEdit) {
+      toast.error("View-only accounts cannot modify settings.")
+      return
+    }
     setAiDefaults(local)
     onBack()
   }
@@ -601,10 +655,20 @@ function AIDefaultsPage({ onBack }: { onBack: () => void }) {
 }
 
 // ─── BUSINESS RULES ──────────────────────────────────────────────────────────
-function BusinessRulesPage({ onBack }: { onBack: () => void }) {
+function BusinessRulesPage({
+  onBack,
+  canEdit = true,
+}: {
+  onBack: () => void
+  canEdit?: boolean
+}) {
   const { businessRules, setBusinessRules } = useSettings()
   const [local, setLocal] = useState(businessRules)
   const save = () => {
+    if (!canEdit) {
+      toast.error("View-only accounts cannot modify settings.")
+      return
+    }
     setBusinessRules(local)
     onBack()
   }
@@ -793,11 +857,21 @@ function BusinessRulesPage({ onBack }: { onBack: () => void }) {
 }
 
 // ─── DUMMY SHIPPING ──────────────────────────────────────────────────────────
-function DummyShippingPage({ onBack }: { onBack: () => void }) {
+function DummyShippingPage({
+  onBack,
+  canEdit = true,
+}: {
+  onBack: () => void
+  canEdit?: boolean
+}) {
   const { dummyShipping, setDummyShipping } = useSettings()
   const [local, setLocal] = useState(dummyShipping)
   const [stageInput, setStageInput] = useState("")
   const save = () => {
+    if (!canEdit) {
+      toast.error("View-only accounts cannot modify settings.")
+      return
+    }
     setDummyShipping(local)
     onBack()
   }
@@ -999,10 +1073,20 @@ function DummyShippingPage({ onBack }: { onBack: () => void }) {
 }
 
 // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
-function NotificationsPage({ onBack }: { onBack: () => void }) {
+function NotificationsPage({
+  onBack,
+  canEdit = true,
+}: {
+  onBack: () => void
+  canEdit?: boolean
+}) {
   const { notifications, setNotifications } = useSettings()
   const [local, setLocal] = useState(notifications)
   const save = () => {
+    if (!canEdit) {
+      toast.error("View-only accounts cannot modify settings.")
+      return
+    }
     setNotifications(local)
     onBack()
   }

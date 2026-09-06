@@ -51,6 +51,7 @@ import { useSettings } from "@/state/useSettings"
 import {
   trackOrder,
   executeAgentCheckout,
+  executeStorefrontPayment,
   createStorefrontOrder,
   upsertConversation,
   updateConversationStatus,
@@ -2173,17 +2174,25 @@ export default function StoreHome() {
               onClose={() => setView("home")}
               onBackToCart={() => setView("cart")}
               onOpenProduct={openProduct}
-              onPaymentSuccess={(pid, inv) => {
+              onPaymentSuccess={(oid, pid, inv, shippingAddr) => {
+                setLastOrderId(oid)
                 setLastPaymentId(pid)
                 setLastInvoiceNo(inv)
                 setLastOrderSnapshot([...cart])
+                if (shippingAddr) {
+                  setTrackPrefill({
+                    orderId: oid,
+                    mobile: shippingAddr.phone,
+                    email: shippingAddr.email,
+                  })
+                }
                 setCart([])
                 setView("payment-success")
               }}
-              onPaymentFailed={(oid) => {
+              onPaymentFailed={(oid, amt, rsn) => {
                 setFailedOrderId(oid)
-                setFailedOrderAmountPaise(cartTotal)
-                setFailedOrderReason("Payment declined by gateway — authorization timeout or card limit reached.")
+                setFailedOrderAmountPaise(amt || cartTotal)
+                setFailedOrderReason(rsn || "Payment declined by gateway — authorization timeout or card limit reached.")
                 setView("payment-failed")
               }}
             />
@@ -3207,121 +3216,8 @@ function productFeatures(p: typeof mockProducts[number]) {
   )
 }
 
-function productShipping(p: typeof mockProducts[number]) {
-  return [
-    {
-      title: "Standard Delivery",
-      desc: "3–5 business days",
-      price: "Free over ₹1,499",
-    },
-
-    { title: "Express Delivery", desc: "1–2 business days", price: "₹199" },
-
-    {
-      title: "Same Day (select cities)",
-      desc: "Order before 12 PM",
-      price: "₹399",
-    },
-
-    {
-      title: "Installation Available",
-      desc: "For appliances & furniture",
-      price: "From ₹499",
-    },
-  ]
-}
-
-function productReturns() {
-  return [
-    "7-day easy returns — no questions asked",
-
-    "Free return pickup for eligible items",
-
-    "Refund to original payment method within 5–7 days",
-
-    "Items must be unused with original packaging",
-
-    "Extended 30-day returns for members",
-  ]
-}
-
-function productWarranty(p: typeof mockProducts[number]) {
-  const base: Record<string, string> = {
-    "Home Security":
-      "2-year manufacturer warranty + 1-year extended on registration",
-
-    Computing:
-      "1-year international warranty + accidental damage protection optional",
-
-    Audio: "1-year warranty + 6-month cable replacement",
-
-    Networking: "3-year warranty with 24/7 technical support",
-
-    Lighting: "2-year warranty on electronics, 1-year on bulbs",
-
-    Furniture: "10-year structural warranty, 5-year mechanisms, 1-year fabric",
-
-    Wearables: "1-year international warranty",
-
-    Fitness: "2-year warranty + 1-year battery guarantee",
-  }
-
-  return base[p.category] || "1-year standard manufacturer warranty"
-}
-
-function productReviews(p: typeof mockProducts[number]) {
-  const r = productRating(p)
-
-  const count = Math.floor(p.id.length * 13) + 24
-
-  const reviews = [
-    {
-      name: "Rahul S.",
-      rating: Math.min(5, Math.ceil(r)),
-      date: "2 days ago",
-      text: "Exactly what I needed. Setup was breeze and performance is solid.",
-      verified: true,
-    },
-
-    {
-      name: "Priya M.",
-      rating: Math.min(5, Math.ceil(r + 0.3)),
-      date: "1 week ago",
-      text: "Great value for money. The AI features actually work well.",
-      verified: true,
-    },
-
-    {
-      name: "Amit K.",
-      rating: Math.max(3, Math.floor(r - 0.5)),
-      date: "2 weeks ago",
-      text: "Good product but delivery took a day longer than promised.",
-      verified: true,
-    },
-
-    {
-      name: "Sneha R.",
-      rating: 5,
-      date: "3 weeks ago",
-      text: "Love it! The build quality feels premium. Highly recommend.",
-      verified: true,
-    },
-
-    {
-      name: "Vikram T.",
-      rating: Math.min(5, Math.ceil(r - 0.2)),
-      date: "1 month ago",
-      text: "Works as advertised. Customer support was helpful when I had a query.",
-      verified: false,
-    },
-  ]
-
-  return { rating: r, count, reviews }
-}
-
 function relatedProducts(p: typeof mockProducts[number]) {
   // Same category, different products
-
   const sameCat = mockProducts
     .filter(
       (x) =>
@@ -3332,7 +3228,6 @@ function relatedProducts(p: typeof mockProducts[number]) {
   if (sameCat.length >= 4) return sameCat
 
   // Fallback: other categories
-
   return mockProducts
     .filter((x) => x.status === "active" && x.id !== p.id)
     .slice(0, 8)
@@ -3422,14 +3317,6 @@ function ProductDetail({
   const desc = productDescription(product)
 
   const feats = productFeatures(product)
-
-  const shipping = productShipping(product)
-
-  const returns = productReturns()
-
-  const warranty = productWarranty(product)
-
-  const { rating, count, reviews } = productReviews(product)
 
   const related = relatedProducts(product)
 
@@ -3568,14 +3455,10 @@ function ProductDetail({
                   onValueChange={setActiveTab}
                   className="w-full"
                 >
-                  <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="description">Description</TabsTrigger>
                     <TabsTrigger value="features">Features</TabsTrigger>
                     <TabsTrigger value="specs">Specifications</TabsTrigger>
-                    <TabsTrigger value="shipping">Shipping</TabsTrigger>
-                    <TabsTrigger value="returns">Returns</TabsTrigger>
-                    <TabsTrigger value="warranty">Warranty</TabsTrigger>
-                    <TabsTrigger value="reviews">Reviews ({count})</TabsTrigger>
                   </TabsList>
 
                   <TabsContent
@@ -3615,115 +3498,6 @@ function ProductDetail({
                         ))}
                       </tbody>
                     </table>
-                  </TabsContent>
-
-                  <TabsContent value="shipping" className="mt-4 space-y-3">
-                    {shipping.map((s, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between p-3 rounded-md bg-muted/50"
-                      >
-                        <div>
-                          <div className="font-medium">{s.title}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {s.desc}
-                          </div>
-                        </div>
-                        <span className="font-medium text-primary">
-                          {s.price}
-                        </span>
-                      </div>
-                    ))}
-                  </TabsContent>
-
-                  <TabsContent value="returns" className="mt-4 space-y-2">
-                    {returns.map((r, i) => (
-                      <div key={i} className="flex gap-2 text-sm">
-                        <RotateCcw className="size-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <span>{r}</span>
-                      </div>
-                    ))}
-                  </TabsContent>
-
-                  <TabsContent
-                    value="warranty"
-                    className="mt-4 text-sm text-muted-foreground"
-                  >
-                    <p>{warranty}</p>
-                    <p className="mt-2">
-                      Warranty covers manufacturing defects. Register your
-                      product within 30 days to activate extended coverage.
-                    </p>
-                  </TabsContent>
-
-                  <TabsContent value="reviews" className="mt-4 space-y-4">
-                    <div className="flex items-center gap-4">
-                      <div className="text-4xl font-bold">
-                        {rating.toFixed(1)}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <div className="flex">
-                            {[...Array(5)].map((_, i) => (
-                              <Star
-                                key={i}
-                                className={`size-4 ${
-                                  i < Math.round(rating)
-                                    ? "fill-amber-400 text-amber-400"
-                                    : "text-muted-foreground"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          <span className="text-sm text-muted-foreground">
-                            {count} reviews
-                          </span>
-                        </div>
-                        <div className="mt-2 h-2 w-full bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-emerald-500"
-                            style={{ width: `${(rating / 5) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <Separator />
-                    {reviews.map((rev, i) => (
-                      <Card key={i} className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="font-medium">{rev.name}</div>
-                            {rev.verified && (
-                              <Badge
-                                variant="secondary"
-                                className="text-[10px]"
-                              >
-                                Verified
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <span>{rev.date}</span>
-                            <div className="flex">
-                              {[...Array(5)].map((_, j) => (
-                                <Star
-                                  key={j}
-                                  className={`size-3 ${
-                                    j < rev.rating
-                                      ? "fill-amber-400 text-amber-400"
-                                      : "text-muted-foreground"
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <p className="mt-2 text-sm">{rev.text}</p>
-                      </Card>
-                    ))}
-                    <Button variant="outline" className="w-full">
-                      View all reviews
-                    </Button>
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -3802,10 +3576,6 @@ function ProductDetail({
                   </Button>
                 </div>
 
-                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Star className="size-3.5 fill-amber-400 text-amber-400" />{" "}
-                  {rating.toFixed(1)} · {count} reviews
-                </div>
 
                 <div className="flex items-baseline gap-3">
                   <span className="text-2xl font-semibold">
@@ -4022,45 +3792,6 @@ interface OrderData {
   paymentReason?: string
 }
 
-function generateMockOrder(
-  orderId: string,
-  mobile: string,
-  email: string,
-): any | null {
-  // Section 4: Real tracking backed by the API seam.
-  // The async path uses trackOrder (from client.ts); this sync wrapper
-  // is kept for compatibility with the existing component contract.
-  try {
-    const order = orderStore.get(orderId)
-    if (!order) return null
-    const cleanMobile = mobile.replace(/\D/g, "")
-    const cleanEmail = email.trim().toLowerCase()
-    if (cleanMobile.length < 10 || !cleanEmail.includes("@")) return null
-    // Derive display fields from real order data
-    const primaryItem = order.items?.[0]
-    const trackingStage = order.tracking?.events?.[0]?.status ?? "pending"
-    const paymentStatus = order.status === "paid" ? "paid" : (order.status === "failed" ? "failed" : "pending")
-    const invoiceNo = `INV-${order.id.slice(-6)}`
-    const invoiceDate = new Date(order.created_at ?? Date.now()).toLocaleDateString("en-IN")
-    return {
-      orderId: order.id,
-      customerName: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-      productName: primaryItem?.title ?? "Unknown product",
-      amount: order.total_paise,
-      paymentMethod: order.via_ai ? "UPI" : (primaryItem ? "Card" : "UPI"),
-      orderStatus: order.shipping_status ?? "confirmed",
-      paymentStatus,
-      invoiceNumber: invoiceNo,
-      invoiceDate,
-      trackingStage: trackingStage.toLowerCase().replace(/\s+/g, "-"),
-      attemptTime: new Date().toLocaleString("en-IN"),
-      paymentReason: paymentStatus === "failed" ? "Transaction declined by bank" : undefined,
-    }
-  } catch {
-    return null
-  }
-}
-
 function TrackOrderSkeleton() {
   return (
     <div className="space-y-4 px-4">
@@ -4084,7 +3815,7 @@ function TrackOrderError({
   onRetry: () => void
 }) {
   return (
-    <Card className="border-destructive/50">
+    <Card className="border-destructive/50 max-w-[600px] mx-auto">
       <CardContent className="p-8 text-center">
         <AlertCircle className="mx-auto size-12 text-destructive" />
         <h3 className="mt-3 font-semibold">Unable to track order</h3>
@@ -4099,12 +3830,11 @@ function TrackOrderError({
 
 function TrackOrderEmpty({ onRetry }: { onRetry: () => void }) {
   return (
-    <Card className="p-8 text-center">
-      <PackageCheck className="mx-auto size-12 text-muted-foreground" />
-      <h3 className="mt-3 font-semibold">No order found</h3>
-      <p className="mt-1 max-w-md mx-auto text-sm text-muted-foreground">
-        We couldn't find an order matching those details. Please check your
-        Order ID, mobile number, or email address.
+    <Card className="border-muted p-8 text-center max-w-[600px] mx-auto">
+      <PackageCheck className="mx-auto size-12 text-muted-foreground/60" />
+      <h3 className="mt-3 font-semibold text-base">Order Not Found</h3>
+      <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
+        No order was found matching the provided Order ID, mobile number, and email address. Please check your order confirmation details and try again.
       </p>
       <Button className="mt-4" onClick={onRetry}>
         <RefreshCw className="size-4 mr-2" /> Try again
@@ -4206,45 +3936,46 @@ function OrderTimeline({ currentStage }: { currentStage: TrackStageKey }) {
 function TrackOrder({ onClose, onOpenAI, initialValues, onViewInvoice, onDownloadInvoice }: TrackOrderProps) {
   const { storeProfile } = useSettings()
 
-  const [query, setQuery] = useState(
-    initialValues?.orderId || initialValues?.mobile || initialValues?.email || "",
-  )
   const [orderId, setOrderId] = useState(initialValues?.orderId ?? "")
   const [mobile, setMobile] = useState(initialValues?.mobile ?? "")
   const [email, setEmail] = useState(initialValues?.email ?? "")
-  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const [submitted, setSubmitted] = useState(false)
-
   const [loading, setLoading] = useState(false)
-
   const [error, setError] = useState<string | null>(null)
-
   const [orderData, setOrderData] = useState<OrderData | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const doTrack = async (targetOrderId: string, targetMobile: string, targetEmail: string) => {
+    const cleanOid = targetOrderId.trim().toUpperCase()
+    const cleanMob = targetMobile.replace(/\D/g, "")
+    const cleanEm = targetEmail.trim().toLowerCase()
+
+    if (!cleanOid || cleanMob.length < 10 || !cleanEm.includes("@")) {
+      setError("Please provide a valid Order ID, 10-digit mobile number, and email address.")
+      setSubmitted(true)
+      setOrderData(null)
+      return
+    }
+
     setError(null)
     setSubmitted(true)
     setLoading(true)
 
     try {
-      // Section 4: Real order lookup through the API seam with single-field or multi-field query.
-      const result = showAdvanced
-        ? await trackOrder({
-            orderId: orderId.trim(),
-            mobile: mobile.trim(),
-            email: email.trim(),
-          })
-        : await trackOrder(query.trim())
+      // Strict 3-factor verification: order_id + mobile + email
+      const result = await trackOrder({
+        orderId: cleanOid,
+        mobile: cleanMob,
+        email: cleanEm,
+      })
       if (result) {
         const primaryItem = result.items?.[0]
         const data: OrderData = {
           orderId: result.id,
           customerName: result.shipping_address?.full_name ?? (result.shipping_address?.email || "Customer").split("@")[0],
-          productName: primaryItem?.title ?? "Unknown product",
+          productName: primaryItem?.title ?? "Order Item",
           amount: result.total_paise,
-          paymentMethod: result.via_ai ? "UPI" : (primaryItem ? "Card" : "UPI"),
+          paymentMethod: result.via_ai ? "UPI (Agentic NCPI UAP)" : (result.commerce_protocol === "ap2" ? "AP2 Protocol" : "Card / Gateway"),
           orderStatus: result.shipping_status === "delivered"
             ? "delivered"
             : result.shipping_status === "shipped"
@@ -4253,28 +3984,42 @@ function TrackOrder({ onClose, onOpenAI, initialValues, onViewInvoice, onDownloa
                 ? "cancelled"
                 : "processing",
           paymentStatus: result.status === "paid" ? "paid" : (result.status === "failed" ? "failed" : "pending"),
-          invoiceNumber: `INV-${result.id.slice(-6)}`,
+          invoiceNumber: result.notes?.includes("INV-") ? (result.notes.match(/INV-\d{4}-\d+/)?.[0] ?? `INV-${result.id.slice(-6)}`) : `INV-${result.id.slice(-6)}`,
           invoiceDate: new Date(result.created_at ?? Date.now()).toLocaleDateString("en-IN"),
           trackingStage: result.shipping_status === "delivered"
             ? "delivered"
-            : result.shipping_status === "shipped"
-              ? "shipped"
-              : result.shipping_status === "packed"
-                ? "packed"
-                : "preparing",
+            : result.shipping_status === "out_for_delivery"
+              ? "out-for-delivery"
+              : result.shipping_status === "shipped"
+                ? "shipped"
+                : result.shipping_status === "packed"
+                  ? "packed"
+                  : "preparing",
           attemptTime: new Date(result.created_at ?? Date.now()).toLocaleString("en-IN"),
-          paymentReason: result.status === "failed" ? "Transaction declined by bank" : undefined,
+          paymentReason: result.status === "failed" ? (result.notes || "Transaction declined by bank or gateway") : undefined,
         }
         setOrderData(data)
       } else {
         setOrderData(null)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong")
+      setError(err instanceof Error ? err.message : "Verification failed")
       setOrderData(null)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Auto-verify if all 3 factors are passed via props (e.g. from checkout success or chat card)
+  useEffect(() => {
+    if (initialValues?.orderId && initialValues?.mobile && initialValues?.email) {
+      doTrack(initialValues.orderId, initialValues.mobile, initialValues.email)
+    }
+  }, [initialValues?.orderId, initialValues?.mobile, initialValues?.email])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    doTrack(orderId, mobile, email)
   }
 
   if (submitted) {
@@ -4310,91 +4055,75 @@ function TrackOrder({ onClose, onOpenAI, initialValues, onViewInvoice, onDownloa
           <div className="text-center">
             <h1 className="font-heading text-2xl font-semibold">Track Order</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Enter your order details to view payment, invoice, and delivery
-              status.
+              Strict 3-factor verification: Enter your Order ID, registered mobile number, and email address to securely access order tracking and invoices.
             </p>
           </div>
 
           <Card>
             <CardContent className="p-6 space-y-4">
               <form onSubmit={handleSubmit} className="space-y-4">
-                {!showAdvanced ? (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="searchQuery">Order ID, Phone Number, or Email</Label>
-                    <Input
-                      id="searchQuery"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="e.g. ORD-2026-123456, 9876543210, or customer@example.com"
-                      required
-                      className="h-10"
-                    />
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvanced(true)}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Use multi-field search
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="orderId">Order ID (Optional)</Label>
-                      <Input
-                        id="orderId"
-                        value={orderId}
-                        onChange={(e) => setOrderId(e.target.value)}
-                        placeholder="ORD-123456"
-                        className="h-10"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="mobile">Mobile Number (Optional)</Label>
-                      <Input
-                        id="mobile"
-                        type="tel"
-                        value={mobile}
-                        onChange={(e) => setMobile(e.target.value)}
-                        placeholder="+91 98765 43210"
-                        className="h-10"
-                        inputMode="tel"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="email">Email Address (Optional)</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
-                        className="h-10"
-                      />
-                    </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvanced(false)}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Back to single-field search
-                      </button>
-                    </div>
-                  </>
-                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="orderId" className="flex items-center justify-between">
+                    <span>Order ID</span>
+                    <span className="text-[11px] text-muted-foreground">Required</span>
+                  </Label>
+                  <Input
+                    id="orderId"
+                    value={orderId}
+                    onChange={(e) => setOrderId(e.target.value)}
+                    placeholder="e.g. ORD-2026-123456"
+                    required
+                    className="h-10 font-mono text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="mobile" className="flex items-center justify-between">
+                    <span>Mobile Number</span>
+                    <span className="text-[11px] text-muted-foreground">Required (10 digits)</span>
+                  </Label>
+                  <Input
+                    id="mobile"
+                    type="tel"
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value)}
+                    placeholder="e.g. 9876543210"
+                    required
+                    className="h-10 text-sm"
+                    inputMode="tel"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="flex items-center justify-between">
+                    <span>Email Address</span>
+                    <span className="text-[11px] text-muted-foreground">Required</span>
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. customer@example.com"
+                    required
+                    className="h-10 text-sm"
+                  />
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  Security note: For customer data privacy, guest order lookups require exact matching of all 3 factors.
+                </p>
+
                 <Button
                   type="submit"
                   className="w-full"
                   size="lg"
-                  disabled={loading}
+                  disabled={loading || !orderId.trim() || !mobile.trim() || !email.trim()}
                 >
                   {loading ? (
                     <Loader2 className="size-4 mr-2 animate-spin" />
                   ) : (
-                    "Track Order"
+                    "Verify & Track Order"
                   )}
                 </Button>
               </form>
@@ -5028,9 +4757,10 @@ interface CheckoutViewProps {
     orderId: string,
     paymentId: string,
     invoiceNo: string,
+    shippingAddress?: import("@/lib/types/order").Address,
   ) => void
 
-  onPaymentFailed: (orderId: string) => void
+  onPaymentFailed: (orderId: string, amountPaise?: number, reason?: string) => void
 
   onOpenProduct: (id: string) => void
 }
@@ -5225,83 +4955,72 @@ function CheckoutView({
       created_at: new Date().toISOString(),
     }
 
-    // 1. UPI Payment Simulation (Success & Failure flows)
+    // 1. UPI Payment Flow (deterministic test clearance via executeStorefrontPayment)
     if (paymentType === "upi") {
-      const trimmedUpi = upiId.trim().toLowerCase()
-      if (trimmedUpi === "failure@razorpay") {
-        setPaying(true)
-        setTimeout(() => {
-          setPaying(false)
-          onPaymentFailed(order.id)
-        }, 600)
-        return
-      }
-
-      if (trimmedUpi === "success@razorpay") {
-        setPaying(true)
-        setTimeout(async () => {
-          const paidOrder: import("@/lib/types/order").Order = {
-            ...order,
-            status: "paid",
-            paid_at: new Date().toISOString(),
-            razorpay_payment_id: `pay_upi_${Date.now()}`,
-            conversation_id: conversationId,
-            notes: "Paid via UPI (success@razorpay test clearance)",
-          }
-          await createStorefrontOrder(paidOrder)
-          if (conversationId) {
-            upsertConversation({
-              external_id: conversationId,
-              status: "paid",
-              order_id: paidOrder.id,
-              amount_paise: paidOrder.total_paise,
-            }).catch(() => {})
-          }
-          setPaying(false)
-          onPaymentSuccess(
-            order.id,
-            paidOrder.razorpay_payment_id!,
-            `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
-          )
-        }, 600)
-        return
-      }
-    }
-
-    // 2. Saved Test Card Simulation (RBI Network Tokenized)
-    if (paymentType === "card") {
-      const chosenCard = testCards.find((c) => c.id === selectedCardId) || testCards[0]
       setPaying(true)
-      setTimeout(async () => {
-        const paidOrder: import("@/lib/types/order").Order = {
-          ...order,
-          status: "paid",
-          paid_at: new Date().toISOString(),
-          razorpay_payment_id: `pay_tok_${Date.now()}`,
-          conversation_id: conversationId,
-          notes: `Paid via tokenized ${chosenCard.network} ${chosenCard.cardType} (${chosenCard.maskedNumber})`,
+      try {
+        const res = await executeStorefrontPayment({
+          order,
+          paymentType: "upi",
+          upiId: upiId.trim(),
+          conversationId,
+        })
+        if (res.success) {
+          onPaymentSuccess(
+            res.order.id,
+            res.paymentId || `pay_upi_${Date.now()}`,
+            res.invoiceNo || `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
+            shippingAddress,
+          )
+        } else {
+          onPaymentFailed(
+            res.order.id,
+            res.order.total_paise,
+            res.errorReason || "UPI payment was declined or timed out.",
+          )
         }
-        await createStorefrontOrder(paidOrder)
-        if (conversationId) {
-          upsertConversation({
-            external_id: conversationId,
-            status: "paid",
-            order_id: paidOrder.id,
-            amount_paise: paidOrder.total_paise,
-          }).catch(() => {})
-        }
+      } catch (err: any) {
+        onPaymentFailed(order.id, total, err?.message || "UPI payment failed.")
+      } finally {
         setPaying(false)
-        onPaymentSuccess(
-          order.id,
-          paidOrder.razorpay_payment_id!,
-          `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
-        )
-      }, 700)
+      }
       return
     }
 
-    setPaying(true)
+    // 2. Saved Test Card Flow (RBI Tokenized test card via executeStorefrontPayment)
+    if (paymentType === "card") {
+      setPaying(true)
+      try {
+        const res = await executeStorefrontPayment({
+          order,
+          paymentType: "card",
+          cardId: selectedCardId,
+          conversationId,
+        })
+        if (res.success) {
+          onPaymentSuccess(
+            res.order.id,
+            res.paymentId || `pay_tok_${Date.now()}`,
+            res.invoiceNo || `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
+            shippingAddress,
+          )
+        } else {
+          onPaymentFailed(
+            res.order.id,
+            res.order.total_paise,
+            res.errorReason || "Card payment was declined.",
+          )
+        }
+      } catch (err: any) {
+        onPaymentFailed(order.id, total, err?.message || "Card payment failed.")
+      } finally {
+        setPaying(false)
+      }
+      return
+    }
 
+    // 3. Razorpay Gateway Modal Flow
+    setPaying(true)
     const razorpayKey =
       (import.meta as any).env?.VITE_RAZORPAY_KEY_ID || "rzp_test_TXeysTR9U8Fyws"
 
@@ -5322,28 +5041,22 @@ function CheckoutView({
     try {
       const isLoaded = await loadRazorpay()
       if (!isLoaded || !(window as any).Razorpay) {
-        console.warn("Razorpay SDK not available, creating order directly")
-        const paidOrder: import("@/lib/types/order").Order = {
-          ...order,
-          status: "paid",
-          paid_at: new Date().toISOString(),
-          razorpay_payment_id: `pay_${Date.now()}`,
-          conversation_id: conversationId,
+        console.warn("Razorpay SDK not available, executing fallback payment via API seam")
+        const res = await executeStorefrontPayment({
+          order,
+          paymentType: "razorpay",
+          conversationId,
+        })
+        if (res.success) {
+          onPaymentSuccess(
+            res.order.id,
+            res.paymentId || `pay_${Date.now()}`,
+            res.invoiceNo || `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
+            shippingAddress,
+          )
+        } else {
+          onPaymentFailed(order.id, total, res.errorReason)
         }
-        await createStorefrontOrder(paidOrder)
-        if (conversationId) {
-          upsertConversation({
-            external_id: conversationId,
-            status: "paid",
-            order_id: paidOrder.id,
-            amount_paise: paidOrder.total_paise,
-          }).catch(() => {})
-        }
-        onPaymentSuccess(
-          order.id,
-          paidOrder.razorpay_payment_id!,
-          `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
-        )
         return
       }
 
@@ -5369,35 +5082,28 @@ function CheckoutView({
         },
         handler: async (response: any) => {
           try {
-            const paidOrder: import("@/lib/types/order").Order = {
-              ...order,
-              status: "paid",
-              paid_at: new Date().toISOString(),
-              razorpay_payment_id: response.razorpay_payment_id || `pay_${Date.now()}`,
-              razorpay_signature: response.razorpay_signature,
-              conversation_id: conversationId,
+            const res = await executeStorefrontPayment({
+              order,
+              paymentType: "razorpay",
+              conversationId,
+              razorpayResponse: {
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+            })
+            if (res.success) {
+              onPaymentSuccess(
+                res.order.id,
+                res.paymentId || response.razorpay_payment_id,
+                res.invoiceNo || `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
+                shippingAddress,
+              )
+            } else {
+              onPaymentFailed(res.order.id, res.order.total_paise, res.errorReason)
             }
-            await createStorefrontOrder(paidOrder)
-            if (conversationId) {
-              upsertConversation({
-                external_id: conversationId,
-                status: "paid",
-                order_id: paidOrder.id,
-                amount_paise: paidOrder.total_paise,
-              }).catch(() => {})
-            }
-            onPaymentSuccess(
-              order.id,
-              response.razorpay_payment_id || `pay_${Date.now()}`,
-              `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
-            )
-          } catch (dbErr) {
-            console.error("Failed to save order to Supabase:", dbErr)
-            onPaymentSuccess(
-              order.id,
-              response.razorpay_payment_id || `pay_${Date.now()}`,
-              `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
-            )
+          } catch (dbErr: any) {
+            console.error("Failed to execute storefront payment:", dbErr)
+            onPaymentFailed(order.id, total, dbErr?.message || "Payment execution error.")
           } finally {
             setPaying(false)
           }
@@ -5405,16 +5111,26 @@ function CheckoutView({
       }
 
       const rzp = new (window as any).Razorpay(options)
-      rzp.on("payment.failed", (failResp: any) => {
+      rzp.on("payment.failed", async (failResp: any) => {
         console.error("Razorpay payment failed:", failResp?.error)
         setPaying(false)
-        onPaymentFailed(order.id)
+        const failedReason = failResp?.error?.description || "Payment declined by issuing bank"
+        try {
+          await createStorefrontOrder({
+            ...order,
+            status: "failed",
+            notes: `Payment failed: ${failedReason}`,
+          })
+        } catch {
+          // ignore
+        }
+        onPaymentFailed(order.id, total, failedReason)
       })
       rzp.open()
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error opening Razorpay:", err)
       setPaying(false)
-      onPaymentFailed(order.id)
+      onPaymentFailed(order.id, total, err?.message || "Gateway launch failed.")
     }
   }
 
