@@ -1,4 +1,7 @@
 import { useMemo, useState, useEffect } from "react"
+import { useSearchParams } from "react-router-dom"
+import { useCart } from "@/state/useCart"
+import { StoreAIAssistantWidget } from "./StoreAIAssistantWidget"
 
 import { Button } from "@/components/ui/button"
 
@@ -207,8 +210,29 @@ const ALL_CATEGORIES = [
 
 export default function StoreHome() {
   const { storeProfile } = useSettings()
+  const [searchParams] = useSearchParams()
 
   const [view, setView] = useState<StoreView>("home")
+
+  // URL Query Sync (e.g. ?view=checkout from AI Assistant Buy Now)
+  const viewParam = searchParams.get("view")
+  const productParam = searchParams.get("product")
+
+  useEffect(() => {
+    if (viewParam === "checkout") {
+      setView("checkout")
+    } else if (viewParam === "cart") {
+      setView("cart")
+    } else if (viewParam === "track-order") {
+      setView("track-order")
+    } else if (viewParam === "listing") {
+      setView("listing")
+    }
+    if (productParam) {
+      setSelectedId(productParam)
+      setView("detail")
+    }
+  }, [viewParam, productParam])
 
   const [activeCat, setActiveCat] = useState<string | null>(null)
 
@@ -236,7 +260,21 @@ export default function StoreHome() {
     },
   ])
 
-  const [cart, setCart] = useState<CartItem[]>([])
+  const sharedCartItems = useCart((s) => s.items)
+  const directCheckout = useCart((s) => s.directCheckoutItem)
+
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (directCheckout) return [{ id: directCheckout.id, qty: directCheckout.qty }]
+    return sharedCartItems.map((i) => ({ id: i.id, qty: i.qty }))
+  })
+
+  useEffect(() => {
+    if (directCheckout) {
+      setCart([{ id: directCheckout.id, qty: directCheckout.qty }])
+    } else if (sharedCartItems.length > 0) {
+      setCart(sharedCartItems.map((i) => ({ id: i.id, qty: i.qty })))
+    }
+  }, [sharedCartItems, directCheckout])
 
   const [cartOpen, setCartOpen] = useState(false)
 
@@ -2322,31 +2360,10 @@ export default function StoreHome() {
         </div>
       </div>
     </main>
-
-    {/* Right: Persistent Desktop AI Assistant Workspace */}
-    <aside className="hidden lg:flex w-[400px] xl:w-[440px] shrink-0 border-l border-border bg-card flex-col h-[calc(100vh-105px)] sticky top-[105px]">
-      {renderAiAssistantWorkspace(false)}
-    </aside>
   </div>
 
-  {/* Mobile / Tablet Dedicated Fullscreen AI Assistant Screen */}
-  {mobileAiOpen && (
-    <div className="lg:hidden fixed inset-0 z-50 flex flex-col bg-card">
-      {renderAiAssistantWorkspace(true)}
-    </div>
-  )}
-
-  {/* Floating AI Assistant Button on Mobile/Tablet when closed */}
-  {!mobileAiOpen && (
-    <button
-      onClick={() => setMobileAiOpen(true)}
-      className="lg:hidden fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-xl ring-1 ring-primary/20 hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
-      aria-label="AI Shopping Assistant"
-    >
-      <Sparkles className="size-4 animate-pulse" />
-      <span>AI Assistant</span>
-    </button>
-  )}
+  {/* Floating Pop-Up AI Shopping Assistant Widget (Vercel AI SDK Elements) */}
+  <StoreAIAssistantWidget />
 
       {/* Cart Sheet */}
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
