@@ -4833,6 +4833,8 @@ type Address = {
   state: string
 
   pincode: string
+
+  country?: string
 }
 
 const SAVED_ADDRESSES: Address[] = [

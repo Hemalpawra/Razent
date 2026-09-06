@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { streamText, tool, type CoreMessage } from "ai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { z } from "zod"

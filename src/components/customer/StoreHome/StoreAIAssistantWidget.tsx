@@ -311,17 +311,7 @@ export const StoreAIAssistantWidget: React.FC = () => {
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
 
-              {/* Expand / Minimize Toggle */}
-              <button
-                type="button"
-                onClick={() => setIsExpanded((prev) => !prev)}
-                className="p-1.5 rounded-lg border border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer hidden sm:flex"
-                title={isExpanded ? "Collapse" : "Expand to Full Screen"}
-              >
-                {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              </button>
-
-              {/* Full Page Route Trigger */}
+              {/* Expand to Full Screen Dedicated Assistant */}
               <button
                 type="button"
                 onClick={() => {
@@ -329,9 +319,9 @@ export const StoreAIAssistantWidget: React.FC = () => {
                   navigate("/assistant")
                 }}
                 className="p-1.5 rounded-lg border border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                title="Open Dedicated Full Page"
+                title="Expand to Full Screen Assistant"
               >
-                <ArrowRight className="w-3.5 h-3.5" />
+                <Maximize2 className="w-3.5 h-3.5" />
               </button>
 
               {/* Close Button */}
