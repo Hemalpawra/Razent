@@ -15,6 +15,7 @@ export type Product = {
   category: string
   tags: string[]
   unit?: string
+  sku?: string
   mrp_paise?: number
   external_id?: string
   images?: string[]

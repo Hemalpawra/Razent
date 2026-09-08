@@ -102,6 +102,9 @@ function mapDbProduct(row: any): Product {
     brand,
     features,
     specifications,
+    unit: row.unit || metadata.unit || undefined,
+    sku: row.sku || metadata.sku || undefined,
+    mrp_paise: row.mrp_paise ? Number(row.mrp_paise) : undefined,
     stock_threshold: Number(row.stock_threshold ?? metadata.stock_threshold ?? 10) || 10,
   }
 }
@@ -308,6 +311,7 @@ export async function upsertProduct(
     gst_pct: (input as any).gst_pct ?? null,
     status: input.status,
     stock: input.stock,
+    sku: (input as any).sku ?? null,
     dimensions_cm: {
       brand: input.brand || "",
       features: input.features || [],
