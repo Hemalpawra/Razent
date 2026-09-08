@@ -157,6 +157,134 @@ export default function ProductsScreen() {
     let success = 0
     let errors = 0
     const { upsertProduct, listProducts } = await import("@/lib/api/client")
+
+    // Multi-feature extractor (handles semicolons, pipes, newlines, bullets, and multi-columns: feature_1, feature_2)
+    const extractFeatures = (r: Record<string, string>): string[] | undefined => {
+      const items: string[] = []
+      if (r.features) {
+        const parts = r.features
+          .split(/[\r\n;|]+/)
+          .map((s) => s.replace(/^[•*\-\s]+/, "").trim())
+          .filter(Boolean)
+        items.push(...parts)
+      }
+      Object.keys(r).forEach((k) => {
+        if (/^(feature|highlight)[_\s-]?\d+$/i.test(k.trim())) {
+          const val = r[k]?.replace(/^[•*\-\s]+/, "").trim()
+          if (val && !items.includes(val)) items.push(val)
+        }
+      })
+      return items.length > 0 ? Array.from(new Set(items)) : undefined
+    }
+
+    // Multi-tag extractor (handles commas, semicolons, pipes, hashtags #tag, and multi-columns: tag_1, tag_2)
+    const extractTags = (r: Record<string, string>, category: string, brand?: string): string[] => {
+      const set = new Set<string>()
+      set.add("imported")
+      if (category) set.add(category.toLowerCase())
+      if (brand) set.add(`brand:${brand.toLowerCase()}`)
+
+      if (r.tags) {
+        const raw = r.tags.trim()
+        let tokens: string[] = []
+        if (/[,;|]/.test(raw) || /\r?\n/.test(raw)) {
+          tokens = raw.split(/[\r\n;,|]+/)
+        } else if (raw.includes("#")) {
+          tokens = raw.match(/#[a-zA-Z0-9_\-]+/g) || [raw]
+        } else {
+          tokens = raw.split(/\s+/)
+        }
+        tokens.forEach((t) => {
+          const clean = t.replace(/^[#[\]\s]+|[#[\]\s]+$/g, "").trim().toLowerCase()
+          if (clean && clean.length >= 2) set.add(clean)
+        })
+      }
+
+      Object.keys(r).forEach((k) => {
+        if (/^(tag|keyword)[_\s-]?\d+$/i.test(k.trim())) {
+          const clean = r[k]?.replace(/^[#[\]\s]+|[#[\]\s]+$/g, "").trim().toLowerCase()
+          if (clean && clean.length >= 2) set.add(clean)
+        }
+      })
+
+      return Array.from(set)
+    }
+
+    // Specifications extractor (handles key:value strings, JSON, spec_* columns, and unmapped attributes)
+    const extractSpecifications = (r: Record<string, string>): Record<string, string> | undefined => {
+      const specs: Record<string, string> = {}
+
+      // 1. Dedicated specifications column (string or JSON)
+      if (r.specifications) {
+        const raw = r.specifications.trim()
+        if (raw.startsWith("{") && raw.endsWith("}")) {
+          try {
+            const parsed = JSON.parse(raw)
+            if (typeof parsed === "object" && parsed !== null) {
+              Object.entries(parsed).forEach(([k, v]) => {
+                if (k && v !== undefined && v !== null) {
+                  specs[k.trim()] = String(v).trim()
+                }
+              })
+            }
+          } catch {}
+        } else {
+          const entries = raw.split(/[\r\n;|]+/)
+          for (const entry of entries) {
+            const trimmed = entry.trim()
+            if (!trimmed) continue
+            const colonIdx = trimmed.indexOf(":")
+            const equalsIdx = trimmed.indexOf("=")
+            const splitIdx = colonIdx !== -1 ? colonIdx : equalsIdx
+            if (splitIdx > 0) {
+              const k = trimmed.slice(0, splitIdx).trim()
+              const v = trimmed.slice(splitIdx + 1).trim()
+              if (k && v) specs[k] = v
+            } else {
+              specs["Detail"] = trimmed
+            }
+          }
+        }
+      }
+
+      // 2. Specific spec columns (e.g. spec_weight, spec_shelf_life, attribute_material)
+      Object.keys(r).forEach((k) => {
+        const match = k.trim().match(/^(?:spec|attribute)[_:\s-](.+)$/i)
+        if (match) {
+          const label = match[1]
+            .trim()
+            .replace(/[_-]/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase())
+          const val = r[k]?.trim()
+          if (label && val && !specs[label]) specs[label] = val
+        }
+      })
+
+      // 3. Custom unmapped attributes from the spreadsheet
+      const standardKeys = new Set([
+        "id", "sku", "title", "product_name", "name", "item", "description",
+        "desc", "price", "mrp", "cost", "stock", "quantity", "qty", "category",
+        "brand", "unit", "image_url", "image", "tags", "tag", "features",
+        "feature", "highlights", "specifications", "specs", "stock_threshold",
+        "threshold", "status"
+      ])
+      Object.keys(r).forEach((k) => {
+        const clean = k.toLowerCase().trim()
+        if (!standardKeys.has(clean) && !/^(__|spec|feature|tag|keyword)/i.test(clean)) {
+          const val = r[k]?.trim()
+          if (val && val.length < 200 && k.length < 50) {
+            const label = k
+              .trim()
+              .replace(/[_-]/g, " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase())
+            if (!specs[label]) specs[label] = val
+          }
+        }
+      })
+
+      return Object.keys(specs).length > 0 ? specs : undefined
+    }
+
     for (const r of rows) {
       try {
         const title =
@@ -172,15 +300,9 @@ export default function ProductsScreen() {
         const stock = parseInt(rawStock || "50", 10)
         const category = (r.category || r.department || "Grocery").trim()
         const brand = (r.brand || r.brand_name || r.make || "").trim()
-        const tags = [
-          "imported",
-          category.toLowerCase(),
-          ...(brand ? [`brand:${brand.toLowerCase()}`] : []),
-          ...(r.tags ? r.tags.split(";").map((t) => t.trim().toLowerCase()) : []),
-        ].filter(Boolean)
-        const features = r.features
-          ? r.features.split(";").map((f) => f.trim()).filter(Boolean)
-          : undefined
+        const tags = extractTags(r, category, brand)
+        const features = extractFeatures(r)
+        const specifications = extractSpecifications(r)
         const rawThreshold = r.stock_threshold ? String(r.stock_threshold).replace(/[^0-9]/g, "") : ""
         const stock_threshold = rawThreshold ? parseInt(rawThreshold, 10) : undefined
 
@@ -197,6 +319,7 @@ export default function ProductsScreen() {
           status: (r.status === "inactive" ? "inactive" : "active") as any,
           tags,
           features,
+          specifications,
           image_url:
             r.image_url ||
             r.image ||
@@ -790,9 +913,8 @@ export default function ProductsScreen() {
       <ImportModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        title="Import Products"
-        description="Upload a CSV with product catalog items (columns: title, category, brand, price, stock, sku, tags)."
-        sampleCsv={`title,category,brand,price,stock,sku,tags\nOrganic Brown Eggs (6pcs),Dairy & Bakery,Country Delight,65,40,SKU-EGG6,fresh;protein\nFresh Blueberries (125g),Fruits,Nature's Basket,180,25,SKU-BERRY,organic;superfood\nTata Tea Gold (500g),Beverages,Tata,280,60,SKU-TEA500,tea;chai`}
+        description="Upload a CSV/Excel file with catalog items. Supports multiple features, tags, and key-value specifications."
+        sampleCsv={`title,category,brand,price,stock,stock_threshold,unit,features,tags,specifications\n"Organic Rolled Oats (1kg)",Health & Nutrition,True Elements,249,50,10,1kg,100% Whole Grain;No Added Sugar;High Fiber,"organic,breakfast,healthy","Weight: 1kg; Shelf Life: 12 Months; Dietary: Vegetarian"\n"Almond Milk Unsweetened (1L)",Dairy & Bakery,So Good,180,35,12,1L,Plant-Based Dairy Alternative;Fortified with B12,"vegan,dairy-free,keto","Volume: 1L; Storage: Refrigerate after opening; Shelf Life: 9 Months"\n"Country Farm Fresh Brown Eggs",Dairy & Bakery,Country Delight,85,45,12,Pack of 6,Farm Fresh Daily;High Protein;UV Sanitized,"fresh,poultry,protein","Package: 6pcs; Storage: Refrigerate; Type: Brown Eggs"`}
         onImport={handleImportProducts}
       />
     </div>
