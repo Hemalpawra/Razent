@@ -181,6 +181,8 @@ export default function ProductsScreen() {
         const features = r.features
           ? r.features.split(";").map((f) => f.trim()).filter(Boolean)
           : undefined
+        const rawThreshold = r.stock_threshold ? String(r.stock_threshold).replace(/[^0-9]/g, "") : ""
+        const stock_threshold = rawThreshold ? parseInt(rawThreshold, 10) : undefined
 
         await upsertProduct({
           id,
@@ -190,6 +192,8 @@ export default function ProductsScreen() {
           price_paise: price,
           category,
           stock,
+          stock_threshold,
+          unit: r.unit?.trim() || undefined,
           status: (r.status === "inactive" ? "inactive" : "active") as any,
           tags,
           features,
