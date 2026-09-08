@@ -586,7 +586,7 @@ export default function ProductsScreen() {
             {canImport && (
               <Button
                 variant="outline"
-                className="h-9 rounded-md gap-1.5"
+                className="h-9 rounded-md gap-1.5 hidden md:inline-flex"
                 onClick={() => setImportOpen(true)}
               >
                 <Upload className="size-4" />
@@ -916,6 +916,7 @@ export default function ProductsScreen() {
         description="Upload a CSV/Excel file with catalog items. Supports multiple features, tags, and key-value specifications."
         sampleCsv={`title,category,brand,price,stock,stock_threshold,unit,features,tags,specifications\n"Organic Rolled Oats (1kg)",Health & Nutrition,True Elements,249,50,10,1kg,100% Whole Grain;No Added Sugar;High Fiber,"organic,breakfast,healthy","Weight: 1kg; Shelf Life: 12 Months; Dietary: Vegetarian"\n"Almond Milk Unsweetened (1L)",Dairy & Bakery,So Good,180,35,12,1L,Plant-Based Dairy Alternative;Fortified with B12,"vegan,dairy-free,keto","Volume: 1L; Storage: Refrigerate after opening; Shelf Life: 9 Months"\n"Country Farm Fresh Brown Eggs",Dairy & Bakery,Country Delight,85,45,12,Pack of 6,Farm Fresh Daily;High Protein;UV Sanitized,"fresh,poultry,protein","Package: 6pcs; Storage: Refrigerate; Type: Brown Eggs"`}
         onImport={handleImportProducts}
+        onAddProductManually={() => setIsAddOpen(true)}
       />
     </div>
   )
