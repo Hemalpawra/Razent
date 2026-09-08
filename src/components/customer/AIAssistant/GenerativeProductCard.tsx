@@ -50,11 +50,23 @@ export const GenerativeProductCard: React.FC<GenerativeProductCardProps> = ({
 
       {/* Middle: Title & Price */}
       <div className="flex-1 min-w-0 pr-1">
-        <h4 className="text-xs font-semibold text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+        {product.brand && (
+          <span className="text-[10px] uppercase font-bold text-primary/80 tracking-wider block truncate leading-none mb-0.5">
+            {product.brand}
+          </span>
+        )}
+        <h4 className="text-xs font-semibold text-foreground line-clamp-1 leading-snug group-hover:text-primary transition-colors">
           {product.title}
         </h4>
-        <div className="mt-1 text-sm font-bold text-foreground">
-          {formatPrice(product.price_paise, product.currency)}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-xs font-bold text-foreground">
+            {formatPrice(product.price_paise, product.currency)}
+          </span>
+          {product.tags && product.tags.length > 0 && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono truncate max-w-[70px]">
+              #{product.tags[0].replace(/^brand:/, "")}
+            </span>
+          )}
         </div>
       </div>
 

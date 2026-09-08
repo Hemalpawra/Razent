@@ -67,6 +67,21 @@ function filterMockProducts(items: Product[], args: ListProductsArgs): Product[]
 // ─────────────────────────────────────────────────────────────────
 
 function mapDbProduct(row: any): Product {
+  const metadata = row.dimensions_cm && typeof row.dimensions_cm === "object" ? row.dimensions_cm : {}
+  const brandFromTag = (row.tags || []).find((t: string) => t.startsWith("brand:"))?.replace(/^brand:/, "")
+  const brand = row.brand || metadata.brand || brandFromTag || ""
+  const features = Array.isArray(row.features)
+    ? row.features
+    : Array.isArray(metadata.features)
+    ? metadata.features
+    : []
+  const specifications =
+    row.specifications && typeof row.specifications === "object"
+      ? row.specifications
+      : metadata.specifications && typeof metadata.specifications === "object"
+      ? metadata.specifications
+      : {}
+
   return {
     id: row.external_id || String(row.id),
     title: row.title,
@@ -76,7 +91,7 @@ function mapDbProduct(row: any): Product {
     status: row.status as ProductStatus,
     image_url: row.image_url || row.images?.[0] || "",
     images: row.images || (row.image_url ? [row.image_url] : []),
-    tags: row.tags || [],
+    tags: (row.tags || []).filter((t: string) => !t.startsWith("brand:") && !t.startsWith("spec:")),
     stock: row.stock ?? 0,
     rating: row.rating ? Number(row.rating) : 4.8,
     review_count: row.review_count ? Number(row.review_count) : 0,
@@ -84,6 +99,10 @@ function mapDbProduct(row: any): Product {
     merchant_id: row.merchant_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    brand,
+    features,
+    specifications,
+    stock_threshold: Number(row.stock_threshold ?? metadata.stock_threshold ?? 10) || 10,
   }
 }
 
@@ -267,6 +286,12 @@ export async function upsertProduct(
   const merchantId = await requireMerchantId()
   const externalId = input.id
   const now = new Date().toISOString()
+  const brandTag = input.brand ? `brand:${input.brand.trim()}` : null
+  const combinedTags = [...(input.tags ?? [])]
+  if (brandTag && !combinedTags.includes(brandTag)) {
+    combinedTags.push(brandTag)
+  }
+
   // Upsert by external_id so the same product gets re-upserted cleanly.
   const row: any = {
     external_id: externalId,
@@ -274,7 +299,7 @@ export async function upsertProduct(
     title: input.title,
     description: input.description,
     category: input.category,
-    tags: input.tags ?? [],
+    tags: combinedTags,
     images: input.images ?? (input.image_url ? [input.image_url] : []),
     image_url: input.image_url,
     price_paise: input.price_paise,
@@ -283,6 +308,12 @@ export async function upsertProduct(
     gst_pct: (input as any).gst_pct ?? null,
     status: input.status,
     stock: input.stock,
+    dimensions_cm: {
+      brand: input.brand || "",
+      features: input.features || [],
+      specifications: input.specifications || {},
+      stock_threshold: input.stock_threshold ?? 10,
+    },
     updated_at: now,
   }
   let q = supabase.from("products").upsert(row, { onConflict: "external_id" })

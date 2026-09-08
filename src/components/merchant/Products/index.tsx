@@ -46,11 +46,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { listProducts, deleteProduct } from "@/lib/api/client"
-import { formatPrice } from "@/lib/types/product"
+import { formatPrice, getProductStockStatus } from "@/lib/types/product"
 import type { Product, ProductStatus } from "@/lib/types/product"
 import ProductDrawer from "./ProductDrawer"
 import { useUI } from "@/state/useUI"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { toast } from "sonner"
 
 import { useMerchant } from "@/state/useMerchant"
 
@@ -80,6 +81,8 @@ export default function ProductsScreen() {
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [q, setQ] = useState("")
   const [statusFilter, setStatusFilter] = useState<ProductStatus | "all">("all")
+  const [categoryFilter, setCategoryFilter] = useState<string>("all")
+  const [inventoryFilter, setInventoryFilter] = useState<"all" | "in_stock" | "low_stock" | "out_of_stock">("all")
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -92,6 +95,17 @@ export default function ProductsScreen() {
     try {
       const data = await listProducts()
       setProducts(data)
+      if (isManual) {
+        toast.success("Products refreshed successfully", {
+          description: `${data.length} items loaded from database.`,
+        })
+      }
+    } catch (err: any) {
+      if (isManual) {
+        toast.error("Failed to refresh products", {
+          description: err?.message || "Please check your network connection.",
+        })
+      }
     } finally {
       if (isManual) setTimeout(() => setIsRefreshing(false), 500)
     }
@@ -142,22 +156,47 @@ export default function ProductsScreen() {
   const handleImportProducts = async (rows: Record<string, string>[]) => {
     let success = 0
     let errors = 0
-    const { upsertProduct } = await import("@/lib/api/client")
+    const { upsertProduct, listProducts } = await import("@/lib/api/client")
     for (const r of rows) {
       try {
-        const title = r.title || r.Title || r.product_name || "Imported Product"
-        const price = Math.round(parseFloat(r.price || r.Price || "100") * 100)
-        const id = r.id || `prod_${Date.now()}_${Math.floor(Math.random() * 1000)}`
+        const title =
+          r.title ||
+          r.product_name ||
+          r.name ||
+          r.item ||
+          "Imported Product"
+        const rawPrice = String(r.price || r.mrp || r.price_inr || r.unit_price || "100").replace(/[^0-9.]/g, "")
+        const price = Math.round((parseFloat(rawPrice) || 100) * 100)
+        const id = r.id || (r.sku ? `prod_${r.sku.toLowerCase().replace(/[^a-z0-9]/g, "_")}` : `prod_${Date.now()}_${Math.floor(Math.random() * 10000)}`)
+        const rawStock = String(r.stock || r.quantity || r.qty || "50").replace(/[^0-9]/g, "")
+        const stock = parseInt(rawStock || "50", 10)
+        const category = (r.category || r.department || "Grocery").trim()
+        const brand = (r.brand || r.brand_name || r.make || "").trim()
+        const tags = [
+          "imported",
+          category.toLowerCase(),
+          ...(brand ? [`brand:${brand.toLowerCase()}`] : []),
+          ...(r.tags ? r.tags.split(";").map((t) => t.trim().toLowerCase()) : []),
+        ].filter(Boolean)
+        const features = r.features
+          ? r.features.split(";").map((f) => f.trim()).filter(Boolean)
+          : undefined
+
         await upsertProduct({
           id,
           title,
-          description: r.description || `${title} from catalog`,
+          brand: brand || undefined,
+          description: r.description || `${title} — quality product in ${category}`,
           price_paise: price,
-          category: r.category || "Grocery",
-          stock: parseInt(r.stock || "50", 10),
-          status: (r.status || "active") as any,
-          tags: ["imported", r.category || "grocery"].filter(Boolean),
-          image_url: r.image_url || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=240&q=70&auto=format&fit=crop",
+          category,
+          stock,
+          status: (r.status === "inactive" ? "inactive" : "active") as any,
+          tags,
+          features,
+          image_url:
+            r.image_url ||
+            r.image ||
+            "https://images.unsplash.com/photo-1542838132-92c53300491e?w=240&q=70&auto=format&fit=crop",
         })
         success++
       } catch {
@@ -165,6 +204,11 @@ export default function ProductsScreen() {
       }
     }
     await loadProducts()
+    try {
+      const { semanticVectorEngine } = await import("@/lib/agent/vectorSearch")
+      const fresh = await listProducts()
+      await semanticVectorEngine.indexCatalog(fresh.filter((p) => p.status === "active"))
+    } catch {}
     return { success, errors }
   }
 
@@ -172,23 +216,31 @@ export default function ProductsScreen() {
     () =>
       products.filter((p) => {
         if (statusFilter !== "all" && p.status !== statusFilter) return false
+        if (categoryFilter !== "all" && p.category !== categoryFilter) return false
+        const threshold = p.stock_threshold ?? 10
+        if (inventoryFilter === "in_stock" && p.stock <= threshold) return false
+        if (inventoryFilter === "low_stock" && (p.stock <= 0 || p.stock > threshold)) return false
+        if (inventoryFilter === "out_of_stock" && p.stock > 0) return false
+
         if (!q.trim()) return true
         const needle = q.toLowerCase()
         const sku = getSku(p).toLowerCase()
+        const brand = (p.brand || "").toLowerCase()
         return (
           p.title.toLowerCase().includes(needle) ||
           p.category.toLowerCase().includes(needle) ||
           p.tags.some((t) => t.toLowerCase().includes(needle)) ||
           p.description.toLowerCase().includes(needle) ||
+          brand.includes(needle) ||
           sku.includes(needle)
         )
       }),
-    [products, q, statusFilter],
+    [products, q, statusFilter, categoryFilter, inventoryFilter],
   )
 
   useEffect(() => {
     setPage(1)
-  }, [q, statusFilter, pageSize])
+  }, [q, statusFilter, categoryFilter, inventoryFilter, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const pageClamped = Math.min(page, totalPages)
@@ -200,7 +252,7 @@ export default function ProductsScreen() {
   const kpi = useMemo(() => {
     const total = products.length
     const active = products.filter((p) => p.status === "active").length
-    const low = products.filter((p) => p.stock > 0 && p.stock <= 10).length
+    const low = products.filter((p) => p.stock > 0 && p.stock <= (p.stock_threshold ?? 10)).length
     const out = products.filter((p) => p.stock === 0).length
     const draft = products.filter((p) => p.status === "draft").length
     return { total, active, low, out, draft }
@@ -254,37 +306,60 @@ export default function ProductsScreen() {
         </p>
       </div>
 
-      {/* KPI strip — 5 cards */}
+      {/* KPI strip — 5 interactive filter cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           icon={<IndianRupee className="size-4" />}
           label="Total Products"
           value={String(kpi.total)}
           sub="All Products in catalog"
+          active={statusFilter === "all" && inventoryFilter === "all"}
+          onClick={() => {
+            setStatusFilter("all")
+            setInventoryFilter("all")
+          }}
         />
         <KpiCard
           icon={<ShoppingCart className="size-4" />}
           label="Active Products"
           value={String(kpi.active)}
           sub="Visible to customers"
+          active={statusFilter === "active" && inventoryFilter === "all"}
+          onClick={() => {
+            setStatusFilter("active")
+            setInventoryFilter("all")
+          }}
         />
         <KpiCard
           icon={<TrendingUp className="size-4" />}
           label="Low stock"
           value={String(kpi.low)}
-          sub="Need attention"
+          sub="Below threshold"
+          active={inventoryFilter === "low_stock"}
+          onClick={() => {
+            setInventoryFilter("low_stock")
+          }}
         />
         <KpiCard
           icon={<Package className="size-4" />}
           label="Out of stock"
           value={String(kpi.out)}
-          sub="Currently unavailable"
+          sub="Zero inventory"
+          active={inventoryFilter === "out_of_stock"}
+          onClick={() => {
+            setInventoryFilter("out_of_stock")
+          }}
         />
         <KpiCard
           icon={<FileText className="size-4" />}
           label="Draft Products"
           value={String(kpi.draft)}
           sub="Not Published yet"
+          active={statusFilter === "draft"}
+          onClick={() => {
+            setStatusFilter("draft")
+            setInventoryFilter("all")
+          }}
         />
       </div>
 
@@ -293,40 +368,92 @@ export default function ProductsScreen() {
         {/* Toolbar — left: search + filters + refresh + more, right: Export + Add Product, flex-wrap gap-2 */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-card p-3">
           <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
-            <div className="relative w-full max-w-[285px] min-w-[180px] flex-1 sm:flex-none">
+            <div className="relative w-full max-w-[240px] min-w-[160px] flex-1 sm:flex-none">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search products, categories, tags..."
+                placeholder="Search name, category, tags..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="h-9 rounded-lg bg-card pl-9 text-sm"
+                className="h-9 rounded-lg bg-card pl-9 text-xs"
               />
             </div>
-            <Button
-              variant="outline"
-              className="h-9 rounded-lg bg-card hidden sm:inline-flex"
-            >
-              <SlidersHorizontal className="size-3.5" />
-              More Filters
-            </Button>
+
+            {/* Category Filter Dropdown */}
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-9 text-xs w-[140px] bg-card">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {Array.from(new Set(products.map((p) => p.category).filter(Boolean))).map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Stock Status Filter Dropdown */}
+            <Select value={inventoryFilter} onValueChange={(val: any) => setInventoryFilter(val)}>
+              <SelectTrigger className="h-9 text-xs w-[135px] bg-card">
+                <SelectValue placeholder="All Stock" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Inventory</SelectItem>
+                <SelectItem value="in_stock" className="text-emerald-600 font-medium">
+                  In Stock (Green)
+                </SelectItem>
+                <SelectItem value="low_stock" className="text-amber-600 font-medium">
+                  Low Stock (Orange)
+                </SelectItem>
+                <SelectItem value="out_of_stock" className="text-red-600 font-medium">
+                  Out of Stock (Red)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Status Filter */}
+            <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
+              <SelectTrigger className="h-9 text-xs w-[110px] bg-card">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Refresh Button with Toast Feedback */}
             <Button
               variant="outline"
               size="icon"
-              className="size-9 rounded-md shrink-0"
+              className="size-9 rounded-md shrink-0 cursor-pointer"
               aria-label="Refresh"
               disabled={isRefreshing}
               onClick={() => loadProducts(true)}
+              title="Refresh products data"
             >
               <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-9 rounded-md shrink-0"
-              aria-label="More options"
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
+
+            {/* Reset Filter Button */}
+            {(q || statusFilter !== "all" || categoryFilter !== "all" || inventoryFilter !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 text-xs text-muted-foreground hover:text-foreground px-2 cursor-pointer"
+                onClick={() => {
+                  setQ("")
+                  setStatusFilter("all")
+                  setCategoryFilter("all")
+                  setInventoryFilter("all")
+                }}
+              >
+                Reset
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {canImport && (
@@ -464,12 +591,26 @@ export default function ProductsScreen() {
                           loading="lazy"
                         />
                         <div className="min-w-0 max-w-[240px]">
+                          {p.brand && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-primary block leading-none mb-0.5">
+                              {p.brand}
+                            </span>
+                          )}
                           <div className="truncate text-sm font-medium text-foreground">
                             {p.title}
                           </div>
                           <div className="truncate text-xs text-muted-foreground">
                             {p.description.slice(0, 48)}…
                           </div>
+                          {p.tags && p.tags.length > 0 && (
+                            <div className="flex gap-1 mt-0.5 overflow-hidden">
+                              {p.tags.slice(0, 2).map((t) => (
+                                <span key={t} className="text-[9px] text-muted-foreground bg-muted/80 px-1 rounded font-mono">
+                                  #{t.replace(/^brand:/, "")}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </TableCell>
@@ -485,34 +626,20 @@ export default function ProductsScreen() {
                       {formatPrice(p.price_paise)}
                     </TableCell>
                     <TableCell className="px-2.5 py-2 text-center">
-                      <span
-                        className={
-                          "text-sm font-semibold tabular-nums " +
-                          (p.stock === 0
-                            ? "text-destructive"
-                            : p.stock <= 10
-                              ? "text-amber-600 dark:text-amber-400"
-                              : "text-emerald-600 dark:text-emerald-400")
-                        }
-                      >
-                        {p.stock}
-                      </span>
-                      <span
-                        className={
-                          "ml-1 text-xs " +
-                          (p.stock === 0
-                            ? "text-destructive"
-                            : p.stock <= 10
-                              ? "text-amber-600/80"
-                              : "text-muted-foreground")
-                        }
-                      >
-                        {p.stock === 0
-                          ? "out"
-                          : p.stock <= 10
-                            ? "low"
-                            : "in stock"}
-                      </span>
+                      {(() => {
+                        const stockInfo = getProductStockStatus(p.stock, p.stock_threshold)
+                        return (
+                          <div className="inline-flex flex-col items-center gap-0.5">
+                            <span className="text-sm font-semibold tabular-nums text-foreground">
+                              {p.stock}
+                            </span>
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${stockInfo.badgeClass}`}>
+                              <span className={`size-1.5 rounded-full ${stockInfo.dotClass}`} />
+                              {stockInfo.label}
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell className="px-2.5 py-2">
                       <Badge
@@ -652,6 +779,7 @@ export default function ProductsScreen() {
           setIsAddOpen(false)
         }}
         product={isAddOpen ? null : (products.find((p) => p.id === drawerProductId) ?? null)}
+        categories={Array.from(new Set(products.map((p) => p.category).filter(Boolean)))}
         onProductUpdated={() => loadProducts(true)}
       />
 
@@ -659,8 +787,8 @@ export default function ProductsScreen() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         title="Import Products"
-        description="Upload a CSV with product catalog items (columns: title, category, price, stock, sku)."
-        sampleCsv={`title,category,price,stock,sku\nOrganic Brown Eggs (6pcs),Dairy & Bakery,65,40,SKU-EGG6\nFresh Blueberries (125g),Fruits,180,25,SKU-BERRY\nTata Tea Gold (500g),Beverages,280,60,SKU-TEA500`}
+        description="Upload a CSV with product catalog items (columns: title, category, brand, price, stock, sku, tags)."
+        sampleCsv={`title,category,brand,price,stock,sku,tags\nOrganic Brown Eggs (6pcs),Dairy & Bakery,Country Delight,65,40,SKU-EGG6,fresh;protein\nFresh Blueberries (125g),Fruits,Nature's Basket,180,25,SKU-BERRY,organic;superfood\nTata Tea Gold (500g),Beverages,Tata,280,60,SKU-TEA500,tea;chai`}
         onImport={handleImportProducts}
       />
     </div>
@@ -672,14 +800,25 @@ function KpiCard({
   label,
   value,
   sub,
+  active,
+  onClick,
 }: {
   icon: React.ReactNode
   label: string
   value: string
   sub: string
+  active?: boolean
+  onClick?: () => void
 }) {
   return (
-    <Card className="rounded-xl bg-card p-5 shadow-sm">
+    <Card
+      onClick={onClick}
+      className={cn(
+        "rounded-xl bg-card p-5 shadow-sm transition-all text-left",
+        onClick && "cursor-pointer hover:border-primary/50 hover:bg-muted/20",
+        active && "border-primary ring-1 ring-primary/40 bg-primary/5"
+      )}
+    >
       <div className="flex gap-3">
         <div className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary sm:flex">
           {icon}

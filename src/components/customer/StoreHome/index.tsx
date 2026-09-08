@@ -385,9 +385,8 @@ export default function StoreHome() {
 
     if (brandFilters.length > 0) {
       list = list.filter((p) => {
-        const tag = p.tags.find((t) => t.startsWith("brand:"))
-
-        return tag ? brandFilters.includes(tag.replace("brand:", "")) : false
+        const brand = (p as any).brand || p.tags.find((t) => t.startsWith("brand:"))?.replace("brand:", "")
+        return brand ? brandFilters.includes(brand) : false
       })
     }
 
@@ -2754,12 +2753,18 @@ function ProductCard({
         />
         <div className="absolute left-2 top-2 flex flex-col gap-1">
           {p.stock === 0 ? (
-            <Badge variant="destructive">Out of stock</Badge>
-          ) : p.stock < 10 ? (
-            <Badge className="bg-amber-500 text-white hover:bg-amber-500">
-              Low stock
+            <Badge className="bg-red-600 text-white hover:bg-red-600 border-none font-semibold text-[11px] shadow-sm">
+              Out of stock
             </Badge>
-          ) : null}
+          ) : p.stock <= ((p as any).stock_threshold ?? 10) ? (
+            <Badge className="bg-amber-500 text-white hover:bg-amber-500 border-none font-semibold text-[11px] shadow-sm">
+              Low stock · {p.stock} left
+            </Badge>
+          ) : (
+            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 border-none font-semibold text-[11px] shadow-sm">
+              In stock
+            </Badge>
+          )}
           {isBest && (
             <Badge className="bg-emerald-500 text-white hover:bg-emerald-500">
               <Tag className="mr-1 size-3" />
@@ -2770,12 +2775,29 @@ function ProductCard({
         </div>
       </button>
       <CardContent className="flex flex-1 flex-col gap-2 p-3">
+        {(p as any).brand && (
+          <span className="text-[10px] uppercase font-bold text-primary tracking-wider block truncate leading-none">
+            {(p as any).brand}
+          </span>
+        )}
         <div className="line-clamp-1 text-sm font-medium leading-tight">
           {p.title}
         </div>
         <div className="text-xs text-muted-foreground line-clamp-1">
           {p.description}
         </div>
+        {p.tags && p.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {p.tags.slice(0, 3).map((tag: string) => (
+              <span
+                key={tag}
+                className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded font-mono"
+              >
+                #{tag.replace(/^brand:/, "")}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex items-center justify-between text-xs">
           <span className="inline-flex items-center gap-1 text-muted-foreground">
             <Star className="size-3 fill-amber-400 text-amber-400" />{" "}
@@ -2924,6 +2946,16 @@ interface ProductDetailProps {
 // Generate deterministic product-specific data
 
 function generateSpecs(p: typeof mockProducts[number]) {
+  if (
+    (p as any).specifications &&
+    typeof (p as any).specifications === "object" &&
+    Object.keys((p as any).specifications).length > 0
+  ) {
+    return Object.entries((p as any).specifications).map(([key, value]) => ({
+      key,
+      value: String(value),
+    }))
+  }
   const base = {
     "Home Security": [
       "Resolution",
@@ -3076,6 +3108,9 @@ function generateSpecs(p: typeof mockProducts[number]) {
 }
 
 function productDescription(p: typeof mockProducts[number]) {
+  if (p.description && p.description.trim()) {
+    return p.description
+  }
   const descs: Record<string, string> = {
     "Home Security":
       "Keep your home safe with intelligent monitoring. This smart camera combines AI-powered motion detection with crystal-clear video, so you never miss a moment — day or night.",
@@ -3109,6 +3144,13 @@ function productDescription(p: typeof mockProducts[number]) {
 }
 
 function productFeatures(p: typeof mockProducts[number]) {
+  if (
+    (p as any).features &&
+    Array.isArray((p as any).features) &&
+    (p as any).features.length > 0
+  ) {
+    return (p as any).features as string[]
+  }
   const feats: Record<string, string[]> = {
     "Home Security": [
       "AI person/vehicle/package detection reduces false alerts",
@@ -3578,18 +3620,36 @@ function ProductDetail({
           </div>
 
           {/* RIGHT: Summary Panel — sticky */}
-          <div className="hidden lg:block lg:sticky lg:top-24 lg:self-start space-y-4">
+          <div className="block lg:sticky lg:top-24 lg:self-start space-y-4">
             <Card>
               <CardContent className="p-5 space-y-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
+                    {(product as any).brand && (
+                      <span className="text-xs font-bold uppercase tracking-wider text-primary block mb-1">
+                        {(product as any).brand}
+                      </span>
+                    )}
                     <Badge variant="outline">{product.category}</Badge>
                     <h1 className="mt-2 font-heading text-lg font-semibold leading-tight">
                       {product.title}
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                      {product.description}
+                      {desc}
                     </p>
+                    {product.tags && product.tags.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {product.tags.map((t) => (
+                          <Badge
+                            key={t}
+                            variant="secondary"
+                            className="text-[10px] font-mono text-muted-foreground"
+                          >
+                            #{t.replace(/^brand:/, "")}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <Button variant="ghost" size="icon" className="shrink-0">
                     <Heart className="size-4" />
@@ -3606,14 +3666,28 @@ function ProductDetail({
                   </span>
                 </div>
 
-                <Badge
-                  variant={product.stock > 0 ? "secondary" : "destructive"}
-                  className="text-sm"
-                >
-                  {product.stock > 0
-                    ? `In stock · ${product.stock} available`
-                    : "Out of stock"}
-                </Badge>
+                {(() => {
+                  const threshold = (product as any).stock_threshold ?? 10
+                  if (product.stock === 0) {
+                    return (
+                      <Badge className="bg-red-600 text-white hover:bg-red-600 border-none text-xs font-semibold px-2.5 py-1">
+                        Out of stock · 0 available
+                      </Badge>
+                    )
+                  }
+                  if (product.stock <= threshold) {
+                    return (
+                      <Badge className="bg-amber-500 text-white hover:bg-amber-500 border-none text-xs font-semibold px-2.5 py-1">
+                        Low stock · Only {product.stock} left (Alert: ≤{threshold})
+                      </Badge>
+                    )
+                  }
+                  return (
+                    <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 border-none text-xs font-semibold px-2.5 py-1">
+                      In stock · {product.stock} available
+                    </Badge>
+                  )
+                })()}
 
                 <Separator />
 

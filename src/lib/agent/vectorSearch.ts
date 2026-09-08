@@ -46,9 +46,18 @@ class SemanticVectorEngine {
       })
     })
 
-    // Description terms
-    this.tokenize(p.description || "").forEach((t) => {
-      termWeights.set(t, (termWeights.get(t) || 0) + 1.5)
+    // Brand terms (high weight for brand search e.g. Amul, Tata)
+    if (p.brand) {
+      this.tokenize(p.brand).forEach((t) => {
+        termWeights.set(t, (termWeights.get(t) || 0) + 4.5)
+      })
+    }
+
+    // Features terms
+    (p.features || []).forEach((f) => {
+      this.tokenize(f).forEach((t) => {
+        termWeights.set(t, (termWeights.get(t) || 0) + 2.0)
+      })
     })
 
     // Semantic synonyms / attribute expansion for common quick-commerce queries

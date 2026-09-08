@@ -11,7 +11,7 @@ import {
   RotateCcw,
   Sparkles,
 } from "lucide-react"
-import { formatPrice, type Product } from "@/lib/types/product"
+import { formatPrice, getProductStockStatus, type Product } from "@/lib/types/product"
 
 interface ProductDetailsModalProps {
   product: Product | null
@@ -120,27 +120,30 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
                   {product.category || "General"}
                 </span>
 
-                <span
-                  className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
-                    product.stock > 10
-                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : product.stock > 0
-                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                      : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                  }`}
-                >
-                  {product.stock > 10
-                    ? "In Stock"
-                    : product.stock > 0
-                    ? `Only ${product.stock} left`
-                    : "Out of Stock"}
-                </span>
+                {(() => {
+                  const stockInfo = getProductStockStatus(product.stock, product.stock_threshold)
+                  return (
+                    <span
+                      className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${stockInfo.badgeClass}`}
+                    >
+                      <span className={`size-1.5 rounded-full ${stockInfo.dotClass}`} />
+                      {stockInfo.label}
+                    </span>
+                  )
+                })()}
               </div>
 
-              {/* Title */}
-              <h2 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">
-                {product.title}
-              </h2>
+              {/* Brand & Title */}
+              <div className="space-y-1">
+                {product.brand && (
+                  <div className="text-xs font-bold uppercase tracking-wider text-primary">
+                    {product.brand}
+                  </div>
+                )}
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">
+                  {product.title}
+                </h2>
+              </div>
 
               {/* Price Block */}
               <div className="flex items-baseline gap-3">
@@ -159,11 +162,56 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
                 )}
               </div>
 
+              {/* Tags */}
+              {product.tags && product.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {product.tags.map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[11px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {/* Description */}
               {product.description && (
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   {product.description}
                 </p>
+              )}
+
+              {/* Features List */}
+              {product.features && product.features.length > 0 && (
+                <div className="pt-2 border-t border-border/80 space-y-1.5">
+                  <div className="text-xs font-semibold text-foreground">Key Highlights</div>
+                  <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                    {product.features.map((feat, idx) => (
+                      <li key={idx}>{feat}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Specifications Grid */}
+              {product.specifications && Object.keys(product.specifications).length > 0 && (
+                <div className="pt-2 border-t border-border/80 space-y-1.5">
+                  <div className="text-xs font-semibold text-foreground">Specifications</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {Object.entries(product.specifications).map(([k, v]) => (
+                      <div key={k} className="p-2 rounded-xl bg-muted/40 border border-border/60">
+                        <span className="text-muted-foreground block text-[10px] uppercase font-medium truncate">
+                          {k}
+                        </span>
+                        <span className="font-semibold text-foreground truncate block">
+                          {v}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
 
               {/* Value props */}

@@ -75,8 +75,10 @@ CRITICAL BEHAVIOR & INTENT GUIDELINES:
    - End product recommendations with one short helpful suggestion (e.g. "Would you like me to add either to your cart?").`
 }
 
+import { isN8nAgentEnabled, executeN8nAgentTurn } from "./n8nAgent"
+
 /**
- * Execute real Agentic stream with Vercel AI SDK and tool calling.
+ * Execute real Agentic stream with Vercel AI SDK or n8n Workflow.
  */
 export async function executeChatAgentTurn({
   messages,
@@ -87,6 +89,11 @@ export async function executeChatAgentTurn({
   catalog: Product[]
   onToolCall?: (toolName: string) => void
 }): Promise<ChatAgentResult> {
+  // If n8n Webhook is configured, route turn through n8n Agent Workflow
+  if (isN8nAgentEnabled) {
+    return executeN8nAgentTurn({ messages, catalog, onToolCall })
+  }
+
   const toolCallsExecuted: string[] = []
   let returnedProducts: Product[] = []
   let checkoutAction: { title: string; product: Product } | undefined
