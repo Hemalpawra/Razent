@@ -129,6 +129,11 @@ import {
   Clock,
   CreditCard,
   AlertTriangle,
+  Briefcase,
+  Package,
+  Layers,
+  Folder,
+  BookOpen,
 } from "lucide-react"
 
 type StoreView = "home" | "listing" | "detail" | "track-order" | "cart" | "checkout" | "payment-failed" | "payment-success"
@@ -153,21 +158,18 @@ type AIMsg = {
   }
 }
 
-const CATEGORY_DEFS: { name: string; icon: any; match: string[] }[] = [
-  { name: "Fruits", icon: Apple, match: ["Fruits"] },
-  { name: "Vegetables", icon: Carrot, match: ["Vegetables"] },
-  { name: "Dairy & Bakery", icon: Milk, match: ["Dairy & Bakery", "Dairy"] },
-  { name: "Snacks & Munchies", icon: Cookie, match: ["Snacks & Munchies", "Snacks"] },
-  { name: "Beverages", icon: Coffee, match: ["Beverages"] },
-  { name: "Household", icon: ShoppingBag, match: ["Household"] },
-]
-
-function categoryCount(match: string[], products: Product[] = []) {
-  return products.filter(
-    (p) =>
-      p.status === "active" &&
-      match.some((m) => p.category.toLowerCase().includes(m.toLowerCase())),
-  ).length
+export function getCategoryIcon(catName: string) {
+  const c = catName.toLowerCase()
+  if (c.includes("fruit")) return Apple
+  if (c.includes("veg")) return Carrot
+  if (c.includes("dairy") || c.includes("milk") || c.includes("bakery")) return Milk
+  if (c.includes("snack") || c.includes("munch") || c.includes("cookie") || c.includes("biscuit")) return Cookie
+  if (c.includes("beverag") || c.includes("drink") || c.includes("coffee") || c.includes("tea") || c.includes("juice")) return Coffee
+  if (c.includes("office") || c.includes("station") || c.includes("paper") || c.includes("pen") || c.includes("file") || c.includes("notebook")) return Briefcase
+  if (c.includes("house") || c.includes("clean") || c.includes("home")) return ShoppingBag
+  if (c.includes("electr") || c.includes("tech") || c.includes("gadget")) return Laptop
+  if (c.includes("health") || c.includes("care") || c.includes("beauty")) return Sparkles
+  return Package
 }
 
 const SAMPLE_PROMPTS = [
@@ -178,35 +180,11 @@ const SAMPLE_PROMPTS = [
 ]
 
 // Deterministic pseudo-rating so cards display consistent stars without a real reviews field
-
 function productRating(p: { id: string }): number {
   let h = 0
-
   for (let i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) | 0
-
   return 3.6 + (Math.abs(h) % 14) / 10 // 3.6 – 5.0
 }
-
-const ALL_BRANDS = [
-  "Razent",
-  "PureSense",
-  "JBL",
-  "Anker",
-  "Boat",
-  "Sony",
-  "Apple",
-  "Xiaomi",
-  "LG",
-]
-
-const ALL_CATEGORIES = [
-  "Beverages",
-  "Dairy & Bakery",
-  "Fruits",
-  "Household",
-  "Snacks & Munchies",
-  "Vegetables",
-]
 
 export default function StoreHome() {
   const { storeProfile } = useSettings()
@@ -295,9 +273,6 @@ export default function StoreHome() {
   const [minRating, setMinRating] = useState<number>(0)
 
   const [stockOnly, setStockOnly] = useState(false)
-
-  const [offerFilter, setOfferFilter] = useState(false)
-
   const [fastDelivery, setFastDelivery] = useState(false)
 
   const [loading, setLoading] = useState(false)
@@ -362,21 +337,110 @@ export default function StoreHome() {
     [productsList],
   )
 
-  const featured = useMemo(() => activeProducts.slice(0, 8), [activeProducts])
+  // 100% dynamic categories derived directly from active products with smart icons
+  const dynamicCategories = useMemo(() => {
+    const counts = new Map<string, number>()
+    activeProducts.forEach((p) => {
+      const c = p.category?.trim()
+      if (c) {
+        counts.set(c, (counts.get(c) || 0) + 1)
+      }
+    })
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({
+        name,
+        count,
+        icon: getCategoryIcon(name),
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [activeProducts])
+
+  // 100% dynamic brands derived from product brand field or brand: tags
+  const dynamicBrands = useMemo(() => {
+    const brandCounts = new Map<string, number>()
+    activeProducts.forEach((p) => {
+      const b = ((p as any).brand || p.tags?.find((t) => t.startsWith("brand:"))?.replace(/^brand:/, ""))?.trim()
+      if (b) {
+        brandCounts.set(b, (brandCounts.get(b) || 0) + 1)
+      }
+    })
+    return Array.from(brandCounts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [activeProducts])
+
+  // Diverse hero selection: 1 product from each category (up to 6) rather than just recent imports
+  const heroProducts = useMemo(() => {
+    if (activeProducts.length === 0) return []
+    const byCat = new Map<string, Product[]>()
+    activeProducts.forEach((p) => {
+      const cat = p.category?.trim() || "Other"
+      if (!byCat.has(cat)) byCat.set(cat, [])
+      byCat.get(cat)!.push(p)
+    })
+    const picks: Product[] = []
+    const cats = Array.from(byCat.keys())
+    let round = 0
+    while (picks.length < 6 && picks.length < activeProducts.length) {
+      for (const cat of cats) {
+        const prods = byCat.get(cat)!
+        if (prods[round] && !picks.some((x) => x.id === prods[round].id)) {
+          picks.push(prods[round])
+          if (picks.length >= 6) break
+        }
+      }
+      round++
+      if (round > 50) break
+    }
+    return picks
+  }, [activeProducts])
+
+  // Diverse featured selection: 1 product from each category (up to 8)
+  const featuredProducts = useMemo(() => {
+    if (activeProducts.length === 0) return []
+    const byCat = new Map<string, Product[]>()
+    activeProducts.forEach((p) => {
+      const cat = p.category?.trim() || "Other"
+      if (!byCat.has(cat)) byCat.set(cat, [])
+      byCat.get(cat)!.push(p)
+    })
+    const picks: Product[] = []
+    const cats = Array.from(byCat.keys())
+    let round = 0
+    while (picks.length < 8 && picks.length < activeProducts.length) {
+      for (const cat of cats) {
+        const prods = byCat.get(cat)!
+        if (prods[round] && !picks.some((x) => x.id === prods[round].id)) {
+          picks.push(prods[round])
+          if (picks.length >= 8) break
+        }
+      }
+      round++
+      if (round > 50) break
+    }
+    return picks
+  }, [activeProducts])
+
+  // Real live dynamic counts for availability and rating filters
+  const filterCounts = useMemo(() => {
+    const inStock = activeProducts.filter((p) => p.stock > 0).length
+    const fast = activeProducts.filter((p) => p.stock > 5).length
+    const r4 = activeProducts.filter((p) => productRating(p) >= 4).length
+    const r3 = activeProducts.filter((p) => productRating(p) >= 3).length
+    const r2 = activeProducts.filter((p) => productRating(p) >= 2).length
+    const total = activeProducts.length
+    return { inStock, fast, r4, r3, r2, total }
+  }, [activeProducts])
 
   const filtered = useMemo(() => {
     let list = [...activeProducts]
 
     if (activeCat) {
-      const def = CATEGORY_DEFS.find((c) => c.name === activeCat)
-
-      if (def)
-        list = list.filter((p) =>
-          def.match.some((m) =>
-            p.category.toLowerCase().includes(m.toLowerCase()),
-          ),
-        )
-      else list = list.filter((p) => p.category === activeCat)
+      list = list.filter(
+        (p) =>
+          p.category.toLowerCase() === activeCat.toLowerCase() ||
+          p.category.toLowerCase().includes(activeCat.toLowerCase()),
+      )
     }
 
     if (categoryFilters.length > 0) {
@@ -385,36 +449,23 @@ export default function StoreHome() {
 
     if (brandFilters.length > 0) {
       list = list.filter((p) => {
-        const brand = (p as any).brand || p.tags.find((t) => t.startsWith("brand:"))?.replace("brand:", "")
+        const brand = ((p as any).brand || p.tags.find((t) => t.startsWith("brand:"))?.replace(/^brand:/, ""))?.trim()
         return brand ? brandFilters.includes(brand) : false
       })
     }
 
     const pmin = priceMin ? Number(priceMin) : null
-
     const pmax = priceMax ? Number(priceMax) : null
 
     if (pmin !== null) list = list.filter((p) => p.price_paise / 100 >= pmin)
-
     if (pmax !== null) list = list.filter((p) => p.price_paise / 100 <= pmax)
 
     if (minRating > 0) list = list.filter((p) => productRating(p) >= minRating)
-
     if (stockOnly) list = list.filter((p) => p.stock > 0)
-
-    if (offerFilter)
-      list = list.filter(
-        (p) =>
-          p.tags.includes("bestseller") ||
-          p.tags.includes("bundle") ||
-          p.tags.includes("new"),
-      )
-
     if (fastDelivery) list = list.filter((p) => p.stock > 5)
 
     if (search.trim()) {
       const q = search.toLowerCase()
-
       list = list.filter(
         (p) =>
           p.title.toLowerCase().includes(q) ||
@@ -425,9 +476,7 @@ export default function StoreHome() {
     }
 
     if (sort === "low") list.sort((a, b) => a.price_paise - b.price_paise)
-
     if (sort === "high") list.sort((a, b) => b.price_paise - a.price_paise)
-
     if (sort === "rating")
       list.sort((a, b) => productRating(b) - productRating(a))
 
@@ -443,7 +492,6 @@ export default function StoreHome() {
     priceMax,
     minRating,
     stockOnly,
-    offerFilter,
     fastDelivery,
   ])
 
@@ -485,8 +533,6 @@ export default function StoreHome() {
     setMinRating(0)
 
     setStockOnly(false)
-
-    setOfferFilter(false)
 
     setFastDelivery(false)
 
@@ -1564,22 +1610,27 @@ export default function StoreHome() {
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
-                      {featured.slice(0, 6).map((p) => (
+                      {heroProducts.map((p) => (
                         <button
                           key={p.id}
                           onClick={() => openProduct(p.id)}
-                          className="group overflow-hidden rounded-xl border bg-muted text-left"
+                          className="group overflow-hidden rounded-xl border bg-muted/40 p-1.5 text-left transition hover:border-primary/40 hover:shadow-xs"
                         >
-                          <img
-                            src={p.image_url}
-                            alt={p.title}
-                            className="aspect-square w-full object-cover transition group-hover:scale-[1.02]"
-                          />
-                          <div className="p-2">
-                            <div className="truncate text-xs font-medium leading-tight">
+                          <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded-lg bg-background/70 p-1">
+                            <img
+                              src={p.image_url}
+                              alt={p.title}
+                              className="max-h-full max-w-full object-contain transition group-hover:scale-105"
+                            />
+                          </div>
+                          <div className="p-1.5">
+                            <div className="truncate text-[10px] font-semibold text-primary uppercase">
+                              {p.category}
+                            </div>
+                            <div className="truncate text-xs font-medium leading-tight text-foreground">
                               {p.title}
                             </div>
-                            <div className="text-xs font-semibold">
+                            <div className="mt-0.5 text-xs font-bold font-mono text-foreground">
                               {formatPrice(p.price_paise)}
                             </div>
                           </div>
@@ -1604,34 +1655,30 @@ export default function StoreHome() {
                     View all
                   </Button>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
-                  {CATEGORY_DEFS.map(({ name, icon: Icon, match }) => {
-                    const n = categoryCount(match, activeProducts)
-
-                    return (
-                      <button
-                        key={name}
-                        onClick={() => openCategory(name)}
-                        className="text-left"
-                      >
-                        <Card className="group p-4 transition hover:shadow-sm hover:ring-1 hover:ring-primary/20">
-                          <CardContent className="flex items-center gap-3 p-0">
-                            <div className="grid size-10 place-items-center rounded-lg bg-muted group-hover:bg-primary/10">
-                              <Icon className="size-5 text-muted-foreground group-hover:text-primary" />
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                  {dynamicCategories.map(({ name, icon: Icon, count }) => (
+                    <button
+                      key={name}
+                      onClick={() => openCategory(name)}
+                      className="text-left"
+                    >
+                      <Card className="group p-3.5 transition-all hover:shadow-sm hover:border-primary/40 hover:ring-1 hover:ring-primary/20 rounded-xl">
+                        <CardContent className="flex items-center gap-3 p-0">
+                          <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted group-hover:bg-primary/10 transition-colors">
+                            <Icon className="size-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-xs sm:text-sm font-semibold text-foreground leading-tight">
+                              {name}
                             </div>
-                            <div>
-                              <div className="text-sm font-medium leading-none">
-                                {name}
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                {n} products
-                              </div>
+                            <div className="mt-0.5 text-[11px] text-muted-foreground">
+                              {count} {count === 1 ? "product" : "products"}
                             </div>
-                          </CardContent>
-                        </Card>
-                      </button>
-                    )
-                  })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </button>
+                  ))}
                 </div>
               </section>
 
@@ -1645,88 +1692,36 @@ export default function StoreHome() {
                     <span>Powered by {storeProfile.storeName}</span>
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {loading ? (
                     Array.from({ length: 4 }).map((_, i) => (
-                      <Card key={i} className="flex flex-col overflow-hidden">
-                        <Skeleton className="aspect-[4/3] w-full" />
-                        <div className="p-3 space-y-2">
+                      <Card key={i} className="flex flex-col overflow-hidden rounded-2xl p-2.5">
+                        <Skeleton className="h-36 sm:h-40 w-full rounded-xl" />
+                        <div className="p-2 space-y-2 mt-2">
+                          <Skeleton className="h-3 w-1/3" />
                           <Skeleton className="h-4 w-3/4" />
                           <Skeleton className="h-3 w-1/2" />
                           <div className="flex justify-between items-center pt-2">
                             <Skeleton className="h-5 w-16" />
-                            <Skeleton className="h-8 w-20" />
+                            <Skeleton className="h-8 w-24 rounded-lg" />
                           </div>
                         </div>
                       </Card>
                     ))
                   ) : (
-                    featured.map((p) => (
-                    <Card
-                      key={p.id}
-                      className="group flex flex-col overflow-hidden"
-                    >
-                      <button
-                        onClick={() => openProduct(p.id)}
-                        className="relative block overflow-hidden"
-                      >
-                        <img
-                          src={p.image_url}
-                          alt={p.title}
-                          className="aspect-[4/3] w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                        />
-                        {p.stock === 0 ? (
-                          <Badge
-                            variant="destructive"
-                            className="absolute left-2 top-2"
-                          >
-                            Out of stock
-                          </Badge>
-                        ) : p.stock < 10 ? (
-                          <Badge className="absolute left-2 top-2 bg-amber-500 text-white hover:bg-amber-500">
-                            Low stock
-                          </Badge>
-                        ) : null}
-                      </button>
-                      <CardContent className="flex flex-1 flex-col gap-2 p-3">
-                        <div className="line-clamp-1 text-sm font-medium leading-tight">
-                          {p.title}
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Star className="size-3 fill-amber-400 text-amber-400" />{" "}
-                          4.6{" "}
-                          <span className="text-muted-foreground/60">
-                            · 124 reviews
-                          </span>
-                        </div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-sm font-semibold">
-                            {formatPrice(p.price_paise)}
-                          </span>
-                          <Badge variant="outline" className="text-[11px]">
-                            {p.category}
-                          </Badge>
-                        </div>
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openProduct(p.id)}
-                          >
-                            View details
-                          </Button>
-                          <Button
-                            size="sm"
-                            disabled={p.stock === 0}
-                            onClick={() => addToCart(p.id)}
-                          >
-                            Add to cart
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
+                    featuredProducts.map((p) => (
+                      <ProductCard
+                        key={p.id}
+                        p={p}
+                        onOpen={() => openProduct(p.id)}
+                        onAdd={() => addToCart(p.id)}
+                        onBuy={() => {
+                          addToCart(p.id)
+                          setView("checkout")
+                        }}
+                      />
+                    ))
+                  )}
                 </div>
               </section>
 
@@ -1794,12 +1789,13 @@ export default function StoreHome() {
                   setMinRating={setMinRating}
                   stockOnly={stockOnly}
                   setStockOnly={setStockOnly}
-                  offerFilter={offerFilter}
-                  setOfferFilter={setOfferFilter}
                   fastDelivery={fastDelivery}
                   setFastDelivery={setFastDelivery}
                   onClear={clearAllFilters}
                   variant="desktop"
+                  dynamicCategories={dynamicCategories}
+                  dynamicBrands={dynamicBrands}
+                  filterCounts={filterCounts}
                 />
 
                 {/* Right column */}
@@ -1829,7 +1825,6 @@ export default function StoreHome() {
                               (priceMax ? 1 : 0) +
                               (minRating > 0 ? 1 : 0) +
                               (stockOnly ? 1 : 0) +
-                              (offerFilter ? 1 : 0) +
                               (fastDelivery ? 1 : 0) >
                               0 && (
                               <Badge
@@ -1842,7 +1837,6 @@ export default function StoreHome() {
                                   (priceMax ? 1 : 0) +
                                   (minRating > 0 ? 1 : 0) +
                                   (stockOnly ? 1 : 0) +
-                                  (offerFilter ? 1 : 0) +
                                   (fastDelivery ? 1 : 0)}
                               </Badge>
                             )}
@@ -1867,13 +1861,14 @@ export default function StoreHome() {
                             setMinRating={setMinRating}
                             stockOnly={stockOnly}
                             setStockOnly={setStockOnly}
-                            offerFilter={offerFilter}
-                            setOfferFilter={setOfferFilter}
                             fastDelivery={fastDelivery}
                             setFastDelivery={setFastDelivery}
                             onClear={clearAllFilters}
                             onClose={() => setMobileFiltersOpen(false)}
                             variant="mobile"
+                            dynamicCategories={dynamicCategories}
+                            dynamicBrands={dynamicBrands}
+                            filterCounts={filterCounts}
                           />
                         </SheetContent>
                       </Sheet>
@@ -1894,25 +1889,25 @@ export default function StoreHome() {
                           aria-label="Grid view"
                           onClick={() => setLayout("grid")}
                           className={
-                            "grid size-7 place-items-center rounded " +
+                            "rounded p-1.5 " +
                             (layout === "grid"
                               ? "bg-muted text-foreground"
                               : "text-muted-foreground")
                           }
                         >
-                          <LayoutGrid className="size-3.5" />
+                          <LayoutGrid className="size-4" />
                         </button>
                         <button
                           aria-label="List view"
                           onClick={() => setLayout("list")}
                           className={
-                            "grid size-7 place-items-center rounded " +
+                            "rounded p-1.5 " +
                             (layout === "list"
                               ? "bg-muted text-foreground"
                               : "text-muted-foreground")
                           }
                         >
-                          <Rows3 className="size-3.5" />
+                          <Rows3 className="size-4" />
                         </button>
                       </div>
 
@@ -1927,25 +1922,24 @@ export default function StoreHome() {
                     </div>
                   </div>
 
-                  {/* Active filter chips */}
-                  <div className="mt-3 flex flex-wrap gap-1.5">
+                  {/* Active filters bar */}
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
                     {activeCat && (
                       <Badge variant="secondary" className="gap-1">
-                        Category: {activeCat}{" "}
-                        <button
-                          onClick={() => setActiveCat(null)}
-                          aria-label="Remove"
-                        >
+                        Category: {activeCat}
+                        <button onClick={() => setActiveCat(null)}>
                           <X className="size-3" />
                         </button>
                       </Badge>
                     )}
                     {categoryFilters.map((c) => (
                       <Badge key={c} variant="secondary" className="gap-1">
-                        {c}{" "}
+                        {c}
                         <button
                           onClick={() =>
-                            setCategoryFilters((s) => s.filter((x) => x !== c))
+                            setCategoryFilters(
+                              categoryFilters.filter((x) => x !== c),
+                            )
                           }
                         >
                           <X className="size-3" />
@@ -1954,28 +1948,25 @@ export default function StoreHome() {
                     ))}
                     {brandFilters.map((b) => (
                       <Badge key={b} variant="secondary" className="gap-1">
-                        Brand: {b}{" "}
+                        {b}
                         <button
                           onClick={() =>
-                            setBrandFilters((s) => s.filter((x) => x !== b))
+                            setBrandFilters(brandFilters.filter((x) => x !== b))
                           }
                         >
                           <X className="size-3" />
                         </button>
                       </Badge>
                     ))}
-                    {priceMin && (
+                    {(priceMin || priceMax) && (
                       <Badge variant="secondary" className="gap-1">
-                        Min ₹{priceMin}{" "}
-                        <button onClick={() => setPriceMin("")}>
-                          <X className="size-3" />
-                        </button>
-                      </Badge>
-                    )}
-                    {priceMax && (
-                      <Badge variant="secondary" className="gap-1">
-                        Max ₹{priceMax}{" "}
-                        <button onClick={() => setPriceMax("")}>
+                        ₹{priceMin || "0"} – ₹{priceMax || "∞"}
+                        <button
+                          onClick={() => {
+                            setPriceMin("")
+                            setPriceMax("")
+                          }}
+                        >
                           <X className="size-3" />
                         </button>
                       </Badge>
@@ -1992,14 +1983,6 @@ export default function StoreHome() {
                       <Badge variant="secondary" className="gap-1">
                         In stock only{" "}
                         <button onClick={() => setStockOnly(false)}>
-                          <X className="size-3" />
-                        </button>
-                      </Badge>
-                    )}
-                    {offerFilter && (
-                      <Badge variant="secondary" className="gap-1">
-                        Offers{" "}
-                        <button onClick={() => setOfferFilter(false)}>
                           <X className="size-3" />
                         </button>
                       </Badge>
@@ -2029,35 +2012,25 @@ export default function StoreHome() {
                     <div
                       className={
                         layout === "grid"
-                          ? "grid grid-cols-2 gap-3 sm:grid-cols-3"
+                          ? "grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"
                           : "space-y-3"
                       }
                     >
-                      {Array.from({ length: 6 }).map((_, i) => (
+                      {Array.from({ length: 8 }).map((_, i) => (
                         <Card
                           key={i}
-                          className={
-                            layout === "grid"
-                              ? "overflow-hidden"
-                              : "overflow-hidden"
-                          }
+                          className="flex flex-col overflow-hidden rounded-2xl p-2.5"
                         >
-                          <Skeleton
-                            className={
-                              layout === "grid"
-                                ? "aspect-[4/3] w-full"
-                                : "h-32 w-full"
-                            }
-                          />
-                          <CardContent className="space-y-2 p-3">
+                          <Skeleton className="h-36 sm:h-40 w-full rounded-xl" />
+                          <div className="p-2 space-y-2 mt-2">
+                            <Skeleton className="h-3 w-1/3" />
                             <Skeleton className="h-4 w-3/4" />
                             <Skeleton className="h-3 w-1/2" />
-                            <Skeleton className="h-4 w-1/3" />
-                            <div className="mt-2 flex gap-2">
-                              <Skeleton className="h-8 flex-1" />
-                              <Skeleton className="h-8 flex-1" />
+                            <div className="flex justify-between items-center pt-2">
+                              <Skeleton className="h-5 w-16" />
+                              <Skeleton className="h-8 w-24 rounded-lg" />
                             </div>
-                          </CardContent>
+                          </div>
                         </Card>
                       ))}
                     </div>
@@ -2107,13 +2080,17 @@ export default function StoreHome() {
                       </div>
                     </Card>
                   ) : layout === "grid" ? (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-3">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                       {filtered.map((p) => (
                         <ProductCard
                           key={p.id}
                           p={p}
                           onOpen={() => openProduct(p.id)}
                           onAdd={() => addToCart(p.id)}
+                          onBuy={() => {
+                            addToCart(p.id)
+                            setView("checkout")
+                          }}
                         />
                       ))}
                     </div>
@@ -2127,8 +2104,7 @@ export default function StoreHome() {
                           onAdd={() => addToCart(p.id)}
                           onBuy={() => {
                             addToCart(p.id)
-
-                            setCartOpen(true)
+                            setView("checkout")
                           }}
                         />
                       ))}
@@ -2318,18 +2294,15 @@ export default function StoreHome() {
                       >
                         All products
                       </button>
-                      <button
-                        onClick={() => openCategory("Audio")}
-                        className="text-left hover:text-foreground"
-                      >
-                        Audio
-                      </button>
-                      <button
-                        onClick={() => openCategory("Electronics")}
-                        className="text-left hover:text-foreground"
-                      >
-                        Electronics
-                      </button>
+                      {dynamicCategories.slice(0, 4).map(({ name }) => (
+                        <button
+                          key={name}
+                          onClick={() => openCategory(name)}
+                          className="text-left hover:text-foreground"
+                        >
+                          {name}
+                        </button>
+                      ))}
                     </div>
                   </div>
                   <div>
@@ -2483,42 +2456,32 @@ export default function StoreHome() {
 
 type FilterProps = {
   categoryFilters: string[]
-
   setCategoryFilters: (v: string[]) => void
-
   brandFilters: string[]
-
   setBrandFilters: (v: string[]) => void
-
   priceMin: string
-
   setPriceMin: (v: string) => void
-
   priceMax: string
-
   setPriceMax: (v: string) => void
-
   minRating: number
-
   setMinRating: (v: number) => void
-
   stockOnly: boolean
-
   setStockOnly: (v: boolean) => void
-
-  offerFilter: boolean
-
-  setOfferFilter: (v: boolean) => void
-
   fastDelivery: boolean
-
   setFastDelivery: (v: boolean) => void
-
   onClear: () => void
-
   onClose?: () => void
-
   variant: "desktop" | "mobile"
+  dynamicCategories: { name: string; count: number }[]
+  dynamicBrands: { name: string; count: number }[]
+  filterCounts: {
+    inStock: number
+    fast: number
+    r4: number
+    r3: number
+    r2: number
+    total: number
+  }
 }
 
 function FilterSidebar(p: FilterProps) {
@@ -2529,16 +2492,14 @@ function FilterSidebar(p: FilterProps) {
   const body = (
     <div className="space-y-5 text-sm">
       <FilterGroup title="Category" defaultOpen>
-        <div className="space-y-1.5">
-          {ALL_CATEGORIES.map((c) => {
-            const n = mockProducts.filter(
-              (x) => x.status === "active" && x.category === c,
-            ).length
-
-            return (
+        <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+          {p.dynamicCategories.length === 0 ? (
+            <div className="text-xs text-muted-foreground py-1">No categories</div>
+          ) : (
+            p.dynamicCategories.map(({ name: c, count: n }) => (
               <label
                 key={c}
-                className="flex cursor-pointer items-center gap-2 text-xs text-foreground"
+                className="flex cursor-pointer items-center gap-2 text-xs text-foreground hover:text-primary transition"
               >
                 <Checkbox
                   checked={p.categoryFilters.includes(c)}
@@ -2549,27 +2510,32 @@ function FilterSidebar(p: FilterProps) {
                 <span className="flex-1 truncate">{c}</span>
                 <span className="text-[10px] text-muted-foreground">{n}</span>
               </label>
-            )
-          })}
+            ))
+          )}
         </div>
       </FilterGroup>
 
       <FilterGroup title="Brand" defaultOpen>
-        <div className="space-y-1.5">
-          {ALL_BRANDS.map((b) => (
-            <label
-              key={b}
-              className="flex cursor-pointer items-center gap-2 text-xs text-foreground"
-            >
-              <Checkbox
-                checked={p.brandFilters.includes(b)}
-                onCheckedChange={() =>
-                  toggle(p.brandFilters, b, p.setBrandFilters)
-                }
-              />
-              <span className="flex-1">{b}</span>
-            </label>
-          ))}
+        <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+          {p.dynamicBrands.length === 0 ? (
+            <div className="text-xs text-muted-foreground py-1">No brands listed</div>
+          ) : (
+            p.dynamicBrands.map(({ name: b, count: n }) => (
+              <label
+                key={b}
+                className="flex cursor-pointer items-center gap-2 text-xs text-foreground hover:text-primary transition"
+              >
+                <Checkbox
+                  checked={p.brandFilters.includes(b)}
+                  onCheckedChange={() =>
+                    toggle(p.brandFilters, b, p.setBrandFilters)
+                  }
+                />
+                <span className="flex-1 truncate">{b}</span>
+                <span className="text-[10px] text-muted-foreground">{n}</span>
+              </label>
+            ))
+          )}
         </div>
       </FilterGroup>
 
@@ -2597,16 +2563,13 @@ function FilterSidebar(p: FilterProps) {
         <div className="mt-2 flex flex-wrap gap-1.5">
           {[
             { label: "Under ₹5K", max: 5000 },
-
             { label: "₹5K–20K", min: 5000, max: 20000 },
-
             { label: "₹20K+", min: 20000 },
           ].map((r) => (
             <button
               key={r.label}
               onClick={() => {
                 p.setPriceMin(r.min ? String(r.min) : "")
-
                 p.setPriceMax(r.max ? String(r.max) : "")
               }}
               className="rounded-full border bg-card px-2.5 py-0.5 text-[11px] hover:bg-muted"
@@ -2619,10 +2582,15 @@ function FilterSidebar(p: FilterProps) {
 
       <FilterGroup title="Rating" defaultOpen>
         <div className="space-y-1.5">
-          {[4, 3, 2, 0].map((r) => (
+          {[
+            { r: 4, label: "4★ & up", count: p.filterCounts.r4 },
+            { r: 3, label: "3★ & up", count: p.filterCounts.r3 },
+            { r: 2, label: "2★ & up", count: p.filterCounts.r2 },
+            { r: 0, label: "All ratings", count: p.filterCounts.total },
+          ].map(({ r, label, count }) => (
             <label
               key={r}
-              className="flex cursor-pointer items-center gap-2 text-xs text-foreground"
+              className="flex cursor-pointer items-center gap-2 text-xs text-foreground hover:text-primary transition"
             >
               <input
                 type="radio"
@@ -2631,9 +2599,8 @@ function FilterSidebar(p: FilterProps) {
                 onChange={() => p.setMinRating(r)}
                 className="size-3.5 accent-primary"
               />
-              <span className="flex-1">
-                {r === 0 ? "All ratings" : `${r}★ & up`}
-              </span>
+              <span className="flex-1">{label}</span>
+              <span className="text-[10px] text-muted-foreground">{count}</span>
             </label>
           ))}
         </div>
@@ -2641,31 +2608,23 @@ function FilterSidebar(p: FilterProps) {
 
       <FilterGroup title="Availability">
         <div className="space-y-1.5">
-          <label className="flex cursor-pointer items-center gap-2 text-xs">
+          <label className="flex cursor-pointer items-center gap-2 text-xs hover:text-primary transition">
             <Checkbox
               checked={p.stockOnly}
               onCheckedChange={(v: boolean | "indeterminate") => p.setStockOnly(!!v)}
             />
             <span className="flex-1">In stock only</span>
+            <span className="text-[10px] text-muted-foreground">{p.filterCounts.inStock}</span>
           </label>
-          <label className="flex cursor-pointer items-center gap-2 text-xs">
+          <label className="flex cursor-pointer items-center gap-2 text-xs hover:text-primary transition">
             <Checkbox
               checked={p.fastDelivery}
               onCheckedChange={(v: boolean | "indeterminate") => p.setFastDelivery(!!v)}
             />
             <span className="flex-1">Fast delivery</span>
+            <span className="text-[10px] text-muted-foreground">{p.filterCounts.fast}</span>
           </label>
         </div>
-      </FilterGroup>
-
-      <FilterGroup title="Offers">
-        <label className="flex cursor-pointer items-center gap-2 text-xs">
-          <Checkbox
-            checked={p.offerFilter}
-            onCheckedChange={(v: boolean | "indeterminate") => p.setOfferFilter(!!v)}
-          />
-          <span className="flex-1">Best deals & bundles</span>
-        </label>
       </FilterGroup>
 
       <div className="flex gap-2 pt-1">
@@ -2732,101 +2691,122 @@ function ProductCard({
   p,
   onOpen,
   onAdd,
+  onBuy,
 }: {
   p: typeof mockProducts[number]
   onOpen: () => void
   onAdd: () => void
+  onBuy: () => void
 }) {
   const r = productRating(p)
-
-  const isNew = p.tags.includes("new")
-
-  const isBest = p.tags.includes("bestseller") || p.tags.includes("bundle")
+  const isOutOfStock = p.stock === 0
+  const isLowStock = !isOutOfStock && p.stock <= ((p as any).stock_threshold ?? 10)
+  const brand = (p as any).brand || p.tags?.find((t: string) => t.startsWith("brand:"))?.replace(/^brand:/, "")
 
   return (
-    <Card className="group flex flex-col overflow-hidden">
-      <button onClick={onOpen} className="relative block overflow-hidden">
-        <img
-          src={p.image_url}
-          alt={p.title}
-          className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]"
-        />
-        <div className="absolute left-2 top-2 flex flex-col gap-1">
-          {p.stock === 0 ? (
-            <Badge className="bg-red-600 text-white hover:bg-red-600 border-none font-semibold text-[11px] shadow-sm">
-              Out of stock
-            </Badge>
-          ) : p.stock <= ((p as any).stock_threshold ?? 10) ? (
-            <Badge className="bg-amber-500 text-white hover:bg-amber-500 border-none font-semibold text-[11px] shadow-sm">
-              Low stock · {p.stock} left
-            </Badge>
-          ) : (
-            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 border-none font-semibold text-[11px] shadow-sm">
-              In stock
-            </Badge>
-          )}
-          {isBest && (
-            <Badge className="bg-emerald-500 text-white hover:bg-emerald-500">
-              <Tag className="mr-1 size-3" />
-              Deal
-            </Badge>
-          )}
-          {isNew && <Badge variant="secondary">New</Badge>}
-        </div>
-      </button>
-      <CardContent className="flex flex-1 flex-col gap-2 p-3">
-        {(p as any).brand && (
-          <span className="text-[10px] uppercase font-bold text-primary tracking-wider block truncate leading-none">
-            {(p as any).brand}
-          </span>
-        )}
-        <div className="line-clamp-1 text-sm font-medium leading-tight">
-          {p.title}
-        </div>
-        <div className="text-xs text-muted-foreground line-clamp-1">
-          {p.description}
-        </div>
-        {p.tags && p.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {p.tags.slice(0, 3).map((tag: string) => (
-              <span
-                key={tag}
-                className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded font-mono"
-              >
-                #{tag.replace(/^brand:/, "")}
-              </span>
-            ))}
+    <Card
+      onClick={onOpen}
+      className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border/70 bg-card p-2.5 transition-all duration-200 hover:border-primary/40 hover:shadow-md cursor-pointer select-none"
+    >
+      <div>
+        {/* Compact Bounded Image Area (Blinkit/Zepto style) */}
+        <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-xl bg-muted/25 p-2 sm:h-40">
+          <img
+            src={p.image_url}
+            alt={p.title}
+            loading="lazy"
+            className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
+          />
+          {/* Subtle Stock Status Pill */}
+          <div className="absolute left-2 top-2 pointer-events-none">
+            {isOutOfStock ? (
+              <Badge className="border-none bg-red-600/90 text-white font-medium text-[10px] px-2 py-0.5 rounded-full shadow-xs">
+                Out of stock
+              </Badge>
+            ) : isLowStock ? (
+              <Badge className="border-none bg-amber-500/90 text-white font-medium text-[10px] px-2 py-0.5 rounded-full shadow-xs">
+                Low stock
+              </Badge>
+            ) : (
+              <Badge className="border-none bg-emerald-600/90 text-white font-medium text-[10px] px-2 py-0.5 rounded-full shadow-xs">
+                In stock
+              </Badge>
+            )}
           </div>
-        )}
-        <div className="flex items-center justify-between text-xs">
-          <span className="inline-flex items-center gap-1 text-muted-foreground">
-            <Star className="size-3 fill-amber-400 text-amber-400" />{" "}
-            {r.toFixed(1)}
-            <span className="text-muted-foreground/60">
-              · {Math.floor(p.id.length * 13) + 24} reviews
+        </div>
+
+        {/* Content Area */}
+        <div className="pt-2.5 space-y-1">
+          {/* Brand or Category Pill */}
+          <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-primary">
+            <span className="truncate">{brand || p.category}</span>
+          </div>
+
+          {/* Product Name (2-line clamp) */}
+          <h3 className="line-clamp-2 text-xs font-semibold leading-snug text-foreground group-hover:text-primary transition-colors sm:text-sm min-h-[2.25rem]">
+            {p.title}
+          </h3>
+
+          {/* Small Single-Line Description */}
+          {p.description && (
+            <p className="line-clamp-1 text-[11px] leading-tight text-muted-foreground">
+              {p.description}
+            </p>
+          )}
+
+          {/* Review Rating (Compact, no stock count clutter) */}
+          <div className="flex items-center gap-1.5 pt-0.5 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-0.5 font-medium text-foreground text-[11px]">
+              <Star className="size-3 fill-amber-400 text-amber-400" />
+              {r.toFixed(1)}
             </span>
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            {p.stock > 0 ? `${p.stock} in stock` : "Out"}
-          </span>
+            <span className="text-[11px] text-muted-foreground/75">
+              ({Math.floor(p.id.length * 13) + 24})
+            </span>
+            <span className="text-[10px] text-muted-foreground/50">·</span>
+            <span className="text-[10px] text-muted-foreground truncate">{p.category}</span>
+          </div>
         </div>
-        <div className="mt-1 flex items-center justify-between">
-          <span className="text-sm font-semibold">
+      </div>
+
+      {/* Bottom Area: Price + Dual CTAs */}
+      <div className="mt-2 pt-2 border-t border-border/40 space-y-2">
+        {/* Price Row (Bigger Font) */}
+        <div className="flex items-baseline justify-between">
+          <div className="text-base sm:text-lg font-bold font-mono tracking-tight text-foreground">
             {formatPrice(p.price_paise)}
-          </span>
-          <Badge variant="outline" className="text-[11px]">
-            {p.category}
-          </Badge>
+          </div>
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <Button variant="outline" size="sm" onClick={onOpen}>
-            <Eye className="size-3.5" /> View
-          </Button>
-          <Button size="sm" disabled={p.stock === 0} onClick={onAdd}>
+
+        {/* Dual CTAs: Buy Now (Primary) + Add to Cart (Secondary) */}
+        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isOutOfStock}
+            onClick={(e) => {
+              e.stopPropagation()
+              onAdd()
+            }}
+            className="h-8 rounded-lg text-xs font-medium border-border hover:bg-secondary active:scale-[0.97] transition-all px-2"
+          >
             Add to cart
           </Button>
+
+          <Button
+            size="sm"
+            variant="default"
+            disabled={isOutOfStock}
+            onClick={(e) => {
+              e.stopPropagation()
+              onBuy()
+            }}
+            className="h-8 rounded-lg text-xs font-semibold bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 active:scale-[0.97] transition-all px-2"
+          >
+            {isOutOfStock ? "Out of stock" : "Buy now"}
+          </Button>
         </div>
-      </CardContent>
+      </div>
     </Card>
   )
 }
@@ -2843,74 +2823,93 @@ function ListRow({
   onBuy: () => void
 }) {
   const r = productRating(p)
+  const isOutOfStock = p.stock === 0
+  const isLowStock = !isOutOfStock && p.stock <= ((p as any).stock_threshold ?? 10)
+  const brand = (p as any).brand || p.tags?.find((t: string) => t.startsWith("brand:"))?.replace(/^brand:/, "")
 
   return (
-    <Card className="overflow-hidden">
-      <div className="grid grid-cols-[120px_1fr_auto] gap-3 p-3 sm:grid-cols-[160px_1fr_auto]">
-        <button onClick={onOpen} className="block overflow-hidden rounded-md">
+    <Card
+      onClick={onOpen}
+      className="group overflow-hidden rounded-2xl border border-border/70 bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-md cursor-pointer select-none"
+    >
+      <div className="grid grid-cols-[110px_1fr_auto] sm:grid-cols-[140px_1fr_auto] gap-3 p-3">
+        <div className="relative flex h-28 w-full items-center justify-center overflow-hidden rounded-xl bg-muted/25 p-2 sm:h-32">
           <img
             src={p.image_url}
             alt={p.title}
-            className="aspect-square w-full object-cover"
+            className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
           />
-        </button>
-        <div className="min-w-0">
-          <div className="flex items-start gap-2">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium">{p.title}</div>
-              <div className="line-clamp-1 text-xs text-muted-foreground">
-                {p.description}
-              </div>
-            </div>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {p.stock === 0 ? (
-              <Badge variant="destructive">Out of stock</Badge>
-            ) : p.stock < 10 ? (
-              <Badge className="bg-amber-500 text-white hover:bg-amber-500">
+          <div className="absolute left-1.5 top-1.5 pointer-events-none">
+            {isOutOfStock ? (
+              <Badge className="border-none bg-red-600 text-white font-medium text-[9px] px-1.5 py-0.5 rounded-full">
+                Out of stock
+              </Badge>
+            ) : isLowStock ? (
+              <Badge className="border-none bg-amber-500 text-white font-medium text-[9px] px-1.5 py-0.5 rounded-full">
                 Low stock
               </Badge>
-            ) : (
-              <Badge variant="secondary">{p.stock} in stock</Badge>
-            )}
-            {p.tags.includes("bestseller") && (
-              <Badge className="bg-emerald-500 text-white hover:bg-emerald-500">
-                Bestseller
-              </Badge>
-            )}
-            {p.tags.includes("new") && <Badge variant="outline">New</Badge>}
-            <Badge variant="outline" className="text-[11px]">
+            ) : null}
+          </div>
+        </div>
+
+        <div className="min-w-0 flex flex-col justify-center">
+          <div className="text-[10px] uppercase font-bold tracking-wider text-primary truncate">
+            {brand || p.category}
+          </div>
+          <div className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+            {p.title}
+          </div>
+          {p.description && (
+            <div className="line-clamp-1 text-xs text-muted-foreground mt-0.5">
+              {p.description}
+            </div>
+          )}
+          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-0.5 font-medium text-foreground text-[11px]">
+              <Star className="size-3 fill-amber-400 text-amber-400" />
+              {r.toFixed(1)}
+            </span>
+            <span>· {Math.floor(p.id.length * 13) + 24} reviews</span>
+            <span>·</span>
+            <Badge variant="outline" className="text-[10px] py-0 px-1.5">
               {p.category}
             </Badge>
           </div>
-          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <Star className="size-3 fill-amber-400 text-amber-400" />{" "}
-            {r.toFixed(1)} · {Math.floor(p.id.length * 13) + 24} reviews
-          </div>
         </div>
+
         <div className="flex flex-col items-end justify-between gap-2 text-right">
           <div>
-            <div className="text-base font-semibold">
+            <div className="text-base sm:text-lg font-bold font-mono tracking-tight text-foreground">
               {formatPrice(p.price_paise)}
             </div>
-            <div className="text-[11px] text-muted-foreground">
+            <div className="text-[10px] text-muted-foreground">
               inclusive of all taxes
             </div>
           </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={onOpen}>
-              <Eye className="size-3.5" /> View
-            </Button>
+          <div className="flex flex-wrap justify-end gap-1.5">
             <Button
               variant="outline"
               size="sm"
-              disabled={p.stock === 0}
-              onClick={onAdd}
+              disabled={isOutOfStock}
+              onClick={(e) => {
+                e.stopPropagation()
+                onAdd()
+              }}
+              className="h-8 rounded-lg text-xs font-medium border-border hover:bg-secondary active:scale-[0.97] transition-all px-2.5"
             >
               Add to cart
             </Button>
-            <Button size="sm" disabled={p.stock === 0} onClick={onBuy}>
-              <Zap className="size-3.5" /> Buy now
+            <Button
+              size="sm"
+              variant="default"
+              disabled={isOutOfStock}
+              onClick={(e) => {
+                e.stopPropagation()
+                onBuy()
+              }}
+              className="h-8 rounded-lg text-xs font-semibold bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 active:scale-[0.97] transition-all px-3"
+            >
+              Buy now
             </Button>
           </div>
         </div>
