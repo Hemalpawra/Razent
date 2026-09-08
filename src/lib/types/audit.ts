@@ -1,8 +1,45 @@
 export type AuditResult = "Success" | "Warning" | "Failed" | "Critical"
-export type AuditActor = "customer" | "AI Assistant" | "ChatGPT Assistant" | "merchant" | "system"
+export type AuditActor =
+  | "customer"
+  | "Customer"
+  | "AI Assistant"
+  | "ChatGPT Assistant"
+  | "merchant"
+  | "Merchant"
+  | "system"
+  | "System"
+  | "Razorpay Gateway"
+  | "UPI Gateway"
+  | "Banking Network"
+  | "Card Network"
+  | "Logistics"
+  | (string & {})
+
 export type ProtocolEvent = "mandate" | "checkout_initiated" | "checkout_completed" | "refund_initiated"
 
-export type AuditSource = "store" | "AI Agent" | "AI Assistant" | "Razorpay" | "NPCI UAP" | "UAP Verifier" | "Edge Function" | "system" | "customer"
+export type AuditSource =
+  | "store"
+  | "AI Agent"
+  | "AI Assistant"
+  | "Razorpay"
+  | "NPCI UAP"
+  | "UAP Verifier"
+  | "Edge Function"
+  | "system"
+  | "customer"
+  | "storefront_checkout"
+  | "checkout_address"
+  | "checkout_engine"
+  | "trusted_surface"
+  | "payment_orchestrator"
+  | "npci_upi_switch"
+  | "catalog_browser"
+  | "address_form"
+  | "billing_service"
+  | "dispatch_engine"
+  | "rbi_token_service"
+  | "gateway_modal"
+  | (string & {})
 
 export type AuditEvent = {
   id: string

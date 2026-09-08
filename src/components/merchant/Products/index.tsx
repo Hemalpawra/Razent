@@ -506,7 +506,7 @@ export default function ProductsScreen() {
             </div>
 
             {/* Category Filter Dropdown */}
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <Select value={categoryFilter} onValueChange={(val) => setCategoryFilter(val || "all")}>
               <SelectTrigger className="h-9 text-xs w-[140px] bg-card">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>

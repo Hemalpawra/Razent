@@ -29,6 +29,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { formatPrice } from "@/lib/types/order"
 import type { Order } from "@/lib/types/order"
 import { useMerchant } from "@/state/useMerchant"
+import { useUI } from "@/state/useUI"
 import { toast } from "sonner"
 import { refundOrder } from "@/lib/api/client"
 

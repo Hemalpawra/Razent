@@ -863,7 +863,7 @@ export function ImportModal({
                             onValueChange={(val) => {
                               setColumnMapping((prev) => ({
                                 ...prev,
-                                [field.key]: val,
+                                [field.key]: val || "__skip__",
                               }))
                             }}
                           >

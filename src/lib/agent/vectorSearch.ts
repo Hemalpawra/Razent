@@ -37,10 +37,10 @@ class SemanticVectorEngine {
     // Category terms
     this.tokenize(p.category).forEach((t) => {
       termWeights.set(t, (termWeights.get(t) || 0) + 3.0)
-    })
+    });
 
     // Tags terms (protein, organic, fresh, bestseller)
-    (p.tags || []).forEach((tag) => {
+    ;(p.tags || []).forEach((tag: string) => {
       this.tokenize(tag).forEach((t) => {
         termWeights.set(t, (termWeights.get(t) || 0) + 3.5)
       })

@@ -486,7 +486,7 @@ export default function ProductDrawer({
                       if (val === "__new__") {
                         setIsCustomCategory(true)
                         setCustomCategoryInput("")
-                      } else {
+                      } else if (val) {
                         setCategory(val)
                       }
                     }}
