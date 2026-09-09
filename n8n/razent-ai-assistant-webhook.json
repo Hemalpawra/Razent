@@ -1,0 +1,331 @@
+{
+  "name": "Razent AI Shopping Assistant (Webhook + Auth)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "razent-chat",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        300
+      ],
+      "id": "webhook-trigger",
+      "name": "Razent Webhook Trigger",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Razent n8n shared secret (Header Auth: X-Razent-Token)",
+          "id": null
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract incoming message and session ID\nconst body = $json.body || $json;\nconst messages = body.messages || [];\nconst sessionId = body.session_id || 'default-session';\nconst lastMessage = messages.length > 0 ? messages[messages.length - 1].content : (body.message || '');\n\n// NPCI & RBI Guardrails — Never accept sensitive payment credentials\nconst npciRefusalRegex = /\\b(otp|cvv|pin|password|full card number|expiry date)\\b/i;\nconst promptInjectionRegex = /\\b(ignore (?:previous|above) instructions|system prompt|reveal your prompt|jailbreak)\\b/i;\n\nif (npciRefusalRegex.test(lastMessage)) {\n  return [{\n    json: {\n      blocked: true,\n      reply: \"For your security I can never see card numbers, CVV, PIN, or OTP. Please complete payment on the secure checkout screen.\",\n      sessionId,\n      products: []\n    }\n  }];\n}\n\nif (promptInjectionRegex.test(lastMessage)) {\n  return [{\n    json: {\n      blocked: true,\n      reply: \"I can't follow that instruction. Let's get back to your shopping — what groceries can I help you find?\",\n      sessionId,\n      products: []\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    blocked: false,\n    query: lastMessage,\n    sessionId,\n    messages\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        300
+      ],
+      "id": "guardrail-check",
+      "name": "NPCI Guardrails & Sanitizer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.blocked }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "id": "if-blocked",
+      "name": "Is Blocked?"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        },
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ text: $json.reply, products: [], toolCallsExecuted: ['guardrail_refusal'] }) }}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        140
+      ],
+      "id": "respond-blocked",
+      "name": "Respond Refusal"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.query }}",
+        "options": {
+          "systemMessage": "=You are Razent, the intelligent AI shopping assistant for our multi-category retail & quick-commerce store.\n\nOur 10 Active Store Departments:\n1. Grocery & Staples | 2. Beverages | 3. Electronics | 4. Beauty & Personal Care | 5. Home Care | 6. Home & Kitchen | 7. Decor | 8. Kids | 9. Kitchen Appliances | 10. Office & Stationery\n\nYour job is to understand what the customer wants across these departments, find real catalog products via search_catalog, suggest smart add-ons/upsells, and guide ordering and tracking.\n\n============================================================\nRULES & RANKING\n============================================================\n- GREETINGS: Reply warmly in text ONLY. Do NOT call search_catalog or track_order for casual greetings.\n- GROUNDING: Never invent products, stock, or prices. Only cite real items returned by search_catalog.\n- Argument format: search_catalog({\"query\": \"<term>\"}) | track_order({\"order_id\": \"<id>\"})\n- UPSELL: Suggest a higher-tier or larger-pack option when it helps the customer.\n- CROSS-SELL: Suggest complementary items naturally (e.g., cables with electronics, cleaners with appliances, pens with notebooks).\n\n============================================================\nOUTPUT FORMAT\n============================================================\n1. Best Match: [Product Name] — ₹[Price] (one-line reason)\n2. Alternative / Upsell: [Product Name] — ₹[Price] (one-line reason)\n3. Cross-sell: [Product Name] — ₹[Price] (why it pairs well)\n4. Next Step: Ask if they would like to add items to their cart.\n\n============================================================\nSAFETY\n============================================================\n- Never ask for or accept CVV, PINs, OTPs, or card numbers in chat."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        480,
+        420
+      ],
+      "id": "ai-agent",
+      "name": "Razent AI Shopping Agent"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        380,
+        640
+      ],
+      "id": "openai-model",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('guardrail-check').item.json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        520,
+        640
+      ],
+      "id": "window-memory",
+      "name": "Window Buffer Memory"
+    },
+    {
+      "parameters": {
+        "name": "search_catalog",
+        "description": "Searches the live store catalog for grocery items, snacks, dairy, fruits, vegetables, beverages, and personal care products by keyword.",
+        "parameters": {
+          "properties": [
+            {
+              "name": "query",
+              "type": "string",
+              "description": "Product search query, e.g. 'milk', 'bread', 'chips', 'apple'",
+              "required": true
+            }
+          ]
+        },
+        "url": "=https://YOUR_SUPABASE_PROJECT_ID.supabase.co/rest/v1/products?select=*&status=eq.active&title=ilike.*{{ $fromAI('query') }}*",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        640
+      ],
+      "id": "tool-search-catalog",
+      "name": "Tool: Search Catalog"
+    },
+    {
+      "parameters": {
+        "name": "track_order",
+        "description": "Tracks the live delivery status of an order using its order ID.",
+        "parameters": {
+          "properties": [
+            {
+              "name": "order_id",
+              "type": "string",
+              "description": "The unique Order ID, e.g. 'ORD-1001'",
+              "required": true
+            }
+          ]
+        },
+        "url": "=https://YOUR_SUPABASE_PROJECT_ID.supabase.co/rest/v1/orders?select=*&id=eq.{{ $fromAI('order_id') }}",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        640
+      ],
+      "id": "tool-track-order",
+      "name": "Tool: Track Order"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format response for Razent Frontend\nconst agentOutput = $json.output || $json.text || 'How else can I help with your shopping?';\n\nreturn [{\n  json: {\n    text: agentOutput,\n    products: [],\n    toolCallsExecuted: ['ai_agent_turn']\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        420
+      ],
+      "id": "response-formatter",
+      "name": "Format Razent Output"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        },
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        420
+      ],
+      "id": "respond-success",
+      "name": "Respond Success"
+    }
+  ],
+  "connections": {
+    "Razent Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "NPCI Guardrails & Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NPCI Guardrails & Sanitizer": {
+      "main": [
+        [
+          {
+            "node": "Is Blocked?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Blocked?": {
+      "main": [
+        [
+          {
+            "node": "Respond Refusal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Razent AI Shopping Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Razent AI Shopping Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Razent AI Shopping Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: Search Catalog": {
+      "ai_tool": [
+        [
+          {
+            "node": "Razent AI Shopping Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: Track Order": {
+      "ai_tool": [
+        [
+          {
+            "node": "Razent AI Shopping Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Razent AI Shopping Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Razent Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Razent Output": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
