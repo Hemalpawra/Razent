@@ -59,20 +59,16 @@
     },
     {
       "parameters": {
-        "options": {
-          "responseCode": 200
-        },
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ text: $json.reply, products: [], toolCallsExecuted: ['guardrail_refusal'] }) }}"
+        "jsCode": "return [{\n  json: {\n    text: .reply || 'How else can I help with your shopping?',\n    products: [],\n    toolCallsExecuted: ['guardrail_refusal']\n  }\n}];"
       },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         480,
         140
       ],
       "id": "respond-blocked",
-      "name": "Respond Refusal"
+      "name": "Format Refusal"
     },
     {
       "parameters": {
@@ -214,7 +210,7 @@
         420
       ],
       "id": "respond-success",
-      "name": "Respond Success"
+      "name": "Respond to App"
     }
   ],
   "connections": {
@@ -244,7 +240,7 @@
       "main": [
         [
           {
-            "node": "Respond Refusal",
+            "node": "Format Refusal",
             "type": "main",
             "index": 0
           }
@@ -317,11 +313,20 @@
       "main": [
         [
           {
-            "node": "Respond Success",
+            "node": "Respond to App",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "Format Refusal": {
+      "main": [
+        {
+          "type": "main",
+          "index": 0,
+          "node": "Respond to App"
+        }
       ]
     }
   },
