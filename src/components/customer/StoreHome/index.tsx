@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useCart } from "@/state/useCart"
-import { StoreAIAssistantWidget } from "./StoreAIAssistantWidget"
 
 import { Button } from "@/components/ui/button"
 
@@ -39,15 +38,6 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-import {
-  Message,
-  MessageAvatar,
-  MessageContent,
-  MessageHeader,
-} from "@/components/ui/message"
-
-import { Bubble } from "@/components/ui/bubble"
-
 import { Label } from "@/components/ui/label"
 
 import { useSettings } from "@/state/useSettings"
@@ -56,8 +46,6 @@ import {
   executeAgentCheckout,
   executeStorefrontPayment,
   createStorefrontOrder,
-  upsertConversation,
-  updateConversationStatus,
   subscribeToProducts,
   logAuditEvent,
   listProducts,
@@ -67,6 +55,9 @@ import { CheckoutOtpModal } from "./CheckoutOtpModal"
 import { orderStore } from "@/lib/storage/orderStore"
 import { toast } from "sonner"
 import { mockProducts } from "@/lib/mock/products"
+import { CustomerProfileMenu } from "@/components/customer/auth/CustomerProfileMenu"
+import { AIAssistantWidget } from "@/components/customer/AIAssistant"
+import { useCustomerAuth } from "@/state/useCustomerAuth"
 
 import { formatPrice, type Product } from "@/lib/types/product"
 import { getSavedTestCards } from "@/lib/protocol/regulatoryWrapper"
@@ -140,24 +131,6 @@ type StoreView = "home" | "listing" | "detail" | "track-order" | "cart" | "check
 
 type CartItem = { id: string; qty: number }
 
-type AIMsg = {
-  role: "user" | "assistant"
-  text: string
-  products?: Product[]
-  orderReview?: {
-    orderId: string
-    items: Array<{ id: string; title: string; qty: number; unitPricePaise: number; image_url?: string }>
-    totalPaise: number
-    reason: string
-  }
-  checkoutCard?: {
-    total_paise: number
-    itemsCount: number
-    orderId: string
-    status: string
-  }
-}
-
 export function getCategoryIcon(catName: string) {
   const c = catName.toLowerCase()
   if (c.includes("fruit")) return Apple
@@ -171,13 +144,6 @@ export function getCategoryIcon(catName: string) {
   if (c.includes("health") || c.includes("care") || c.includes("beauty")) return Sparkles
   return Package
 }
-
-const SAMPLE_PROMPTS = [
-  "Fresh fruits and milk for breakfast",
-  "Need 1 kg bananas and farm fresh eggs",
-  "Healthy snacks under ₹100",
-  "What vegetables are in stock?",
-]
 
 // Deterministic pseudo-rating so cards display consistent stars without a real reviews field
 function productRating(p: { id: string }): number {
@@ -217,26 +183,6 @@ export default function StoreHome() {
   const [search, setSearch] = useState("")
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
-
-  const [mobileAiOpen, setMobileAiOpen] = useState(false)
-  const aiOpen = mobileAiOpen
-  const setAiOpen = (open: boolean) => {
-    setMobileAiOpen(open)
-    if (open && typeof window !== "undefined" && window.innerWidth >= 1024) {
-      const input = document.getElementById("store-ai-input")
-      if (input) input.focus()
-    }
-  }
-
-  const [aiInput, setAiInput] = useState("")
-
-  const [aiMsgs, setAiMsgs] = useState<AIMsg[]>([
-    {
-      role: "assistant",
-
-      text: `Hi! I'm your shopping assistant from ${storeProfile.storeName}. Ask me to find, compare, or pick the right product for you.`,
-    },
-  ])
 
   const sharedCartItems = useCart((s) => s.items)
   const directCheckout = useCart((s) => s.directCheckoutItem)
@@ -293,7 +239,6 @@ export default function StoreHome() {
   const [lastInvoiceNo, setLastInvoiceNo] = useState<string | null>(null)
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false)
   const [invoiceModalData, setInvoiceModalData] = useState<InvoiceData | null>(null)
-  const [aiCheckingOut, setAiCheckingOut] = useState(false)
 
   const [lastOrderSnapshot, setLastOrderSnapshot] = useState<CartItem[] | null>(
     null,
@@ -609,201 +554,6 @@ export default function StoreHome() {
     })
   }
 
-  function generateGroceryFallback(query: string, catalog: Product[]): AIMsg {
-    const q = query.toLowerCase().trim()
-
-    // 1. Off-topic domain guard (politics, prime minister, narendra modi, weather, general trivia)
-    const OFF_TOPIC = /\b(narendra|modi|bjp|congress|politics|election|prime minister|president|weather|homework|write code|who is|capital of)\b/i
-    if (OFF_TOPIC.test(q)) {
-      return {
-        role: "assistant",
-        text: "I am Razent, your quick-commerce grocery shopping assistant. I can only help you find, compare, and order groceries from our store. What groceries would you like today?",
-        products: [],
-      }
-    }
-
-    // 2. Checkout / Payment intent
-    const CHECKOUT_INTENT = /\b(checkout|pay|buy|order now|place order|purchase)\b/i
-    if (CHECKOUT_INTENT.test(q)) {
-      return {
-        role: "assistant",
-        text: "Ready to order! You can review your items and complete your order instantly using our 1-click in-chat checkout below.",
-        products: [],
-      }
-    }
-
-    // 3. Search catalog dynamically against live products
-    const words = q.split(/\s+/).filter((w) => w.length > 2)
-    const recs = catalog.filter((p) => {
-      const title = p.title.toLowerCase()
-      const desc = p.description.toLowerCase()
-      const cat = p.category.toLowerCase()
-      if (title.includes(q) || desc.includes(q) || cat.includes(q)) return true
-      return words.some((w) => title.includes(w) || cat.includes(w))
-    }).slice(0, 3)
-
-    if (recs.length === 0) {
-      return {
-        role: "assistant",
-        text: `Sorry, we don't currently have "${query}" in stock. We stock fresh fruits, vegetables, dairy & bakery, snacks, beverages, and household essentials. Can I help you find something else?`,
-        products: [],
-      }
-    }
-
-    return {
-      role: "assistant",
-      text: `Found ${recs.length} matching item${recs.length > 1 ? "s" : ""} in our store. Delivered in 10–15 mins:`,
-      products: recs,
-    }
-  }
-
-  const handleInitiateOrderReview = () => {
-    if (cart.length === 0) {
-      toast.info("Your cart is empty. Add items from the store first!")
-      return
-    }
-
-    const lineItems = cart.map((c) => {
-      const p = activeProducts.find((x) => x.id === c.id) || productsList.find((x) => x.id === c.id) || {
-        id: c.id,
-        title: "Grocery Item",
-        price_paise: 9900,
-        stock: 10,
-        image_url: "",
-      }
-      return {
-        id: c.id,
-        title: p.title,
-        qty: c.qty,
-        unitPricePaise: p.price_paise,
-        stock: p.stock ?? 10,
-        image_url: p.image_url,
-      }
-    })
-
-    // Bounded checks: stock verification
-    const outOfStock = lineItems.find((it) => it.stock <= 0)
-    if (outOfStock) {
-      toast.error(`"${outOfStock.title}" is out of stock. Please remove it from cart.`)
-      return
-    }
-
-    // Bounded checks: max order value cap (₹50,000)
-    const subtotal = lineItems.reduce((acc, it) => acc + it.unitPricePaise * it.qty, 0)
-    if (subtotal > 5000000) {
-      toast.error("Order exceeds maximum permissible limit of ₹50,000.")
-      return
-    }
-
-    const orderId = `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
-    const reviewMsg: AIMsg = {
-      role: "assistant",
-      text: "Please review your order details and delivery address below. Under our gated payment policy, payment is only initiated once you review and click Approve & Pay.",
-      orderReview: {
-        orderId,
-        items: lineItems,
-        totalPaise: subtotal,
-        reason: "Selected items matched fresh in-stock grocery inventory with 10–15 min instant dispatch promise.",
-      },
-    }
-    setAiMsgs((prev) => [...prev, reviewMsg])
-  }
-
-  const handleConfirmOrderApproval = async (review: { orderId: string; items: any[]; totalPaise: number; reason: string }) => {
-    setAiCheckingOut(true)
-    try {
-      // 11-step audit trail logging directly to Supabase audit_sessions
-      const sessionEvents = [
-        { id: `ev_req_${Date.now()}_1`, timestamp: new Date().toISOString(), type: "customer_request", actor: "Customer", source: "storefront_chat", result: "Success", reason: "Customer requested grocery checkout" },
-        { id: `ev_search_${Date.now()}_2`, timestamp: new Date().toISOString(), type: "ai_search", actor: "AI Assistant", source: "catalog_search", result: "Success", reason: "AI verified real in-stock items from catalog" },
-        { id: `ev_rec_${Date.now()}_3`, timestamp: new Date().toISOString(), type: "product_recommendation", actor: "AI Assistant", source: "agentic_recommender", result: "Success", reason: "Optimized item recommendations for freshness & 10–15 min SLA" },
-        { id: `ev_upsell_${Date.now()}_4`, timestamp: new Date().toISOString(), type: "upsell_cross_sell", actor: "AI Assistant", source: "recommender", result: "Success", reason: "Complimentary breakfast & pantry essentials checked" },
-        { id: `ev_addr_${Date.now()}_5`, timestamp: new Date().toISOString(), type: "shipping_details_collected", actor: "Customer", source: "address_service", result: "Success", reason: "Verified delivery address: 123 MG Road, Bengaluru (560001)" },
-        { id: `ev_review_${Date.now()}_6`, timestamp: new Date().toISOString(), type: "order_review_shown", actor: "System", source: "order_gating", result: "Success", reason: "Itemized order review presented with bound checks" },
-        { id: `ev_approval_${Date.now()}_7`, timestamp: new Date().toISOString(), type: "approval_received", actor: "Customer", source: "user_consent", result: "Success", reason: "Customer clicked Approve & Pay" },
-        { id: `ev_rzp_${Date.now()}_8`, timestamp: new Date().toISOString(), type: "razorpay_order_created", actor: "Razorpay Gateway", source: "payment_orchestrator", result: "Success", reason: `Razorpay order created for ₹${(review.totalPaise / 100).toFixed(2)}` },
-        { id: `ev_pay_${Date.now()}_9`, timestamp: new Date().toISOString(), type: "payment_success", actor: "Banking Network", source: "ncpi_uap", result: "Success", reason: "Payment authorized via NCPI UAP Auto-Approve" },
-        { id: `ev_inv_${Date.now()}_10`, timestamp: new Date().toISOString(), type: "invoice_generated", actor: "System", source: "billing_engine", result: "Success", reason: `Generated tax invoice INV-${review.orderId.slice(-6)}` },
-        { id: `ev_track_${Date.now()}_11`, timestamp: new Date().toISOString(), type: "tracking_started", actor: "Dispatch Logistics", source: "fleet_manager", result: "Success", reason: "Hyperlocal delivery partner assigned. 10–15 mins SLA started." },
-      ]
-
-      await logAuditEvent({
-        order_id: review.orderId,
-        customer: "Customer (via AI Assistant)",
-        actor_label: "AI Storefront Checkout",
-        events: sessionEvents as any,
-      }).catch((err) => console.warn("Audit logging warning:", err))
-
-      const newOrder: any = {
-        id: review.orderId,
-        razorpay_order_id: `rzp_ai_${Date.now()}`,
-        razorpay_payment_id: `pay_uap_${Date.now().toString(36)}`,
-        status: "paid",
-        shipping_status: "pending",
-        currency: "INR",
-        total_paise: review.totalPaise,
-        shipping_paise: 0,
-        items: review.items.map((it) => ({
-          product_id: it.id,
-          title: it.title,
-          image_url: it.image_url || "",
-          qty: it.qty,
-          unit_price_paise: it.unitPricePaise,
-        })),
-        shipping_address: {
-          full_name: "Customer (via AI Assistant)",
-          phone: "9876543210",
-          email: "customer@razent.local",
-          line1: "123 MG Road",
-          city: "Bengaluru",
-          state: "Karnataka",
-          pincode: "560001",
-          country: "India",
-        },
-        via_ai: true,
-        commerce_protocol: "ncpi_uap",
-        created_at: new Date().toISOString(),
-        paid_at: new Date().toISOString(),
-      }
-
-      const created = await createStorefrontOrder(newOrder)
-      setLastOrderId(created.id)
-      setLastPaymentId(created.razorpay_payment_id || `pay_uap_${Date.now()}`)
-      setLastOrderSnapshot([...cart])
-      setCart([])
-
-      const successMsg: AIMsg = {
-        role: "assistant",
-        text: `🎉 Order placed successfully! Order ID: #${created.id}. Total paid: ₹${(review.totalPaise / 100).toFixed(2)} via NCPI UAP Auto-Approve. Delivery partner arriving in 10–15 mins!`,
-        checkoutCard: {
-          total_paise: review.totalPaise,
-          itemsCount: review.items.length,
-          orderId: created.id,
-          status: "paid",
-        },
-      }
-      setAiMsgs((prev) => [...prev, successMsg])
-      toast.success("Order approved and placed!")
-    } catch (err: any) {
-      console.error("Order payment failed:", err)
-      setFailedOrderId(review.orderId)
-      setFailedOrderAmountPaise(review.totalPaise)
-      setFailedOrderReason(err?.message || "Payment transaction timed out or declined by bank.")
-      setView("payment-failed")
-    } finally {
-      setAiCheckingOut(false)
-    }
-  }
-
-  const handleCancelOrderReview = (msgIndex: number) => {
-    setAiMsgs((prev) =>
-      prev.filter((_, idx) => idx !== msgIndex).concat({
-        role: "assistant",
-        text: "Order review cancelled. You can modify your cart or ask for more products anytime.",
-      })
-    )
-  }
-
   const handleOpenInvoiceModal = (customOrder?: any) => {
     const rawItems = (customOrder?.items || lastOrderSnapshot || cart || []).map((it: any) => {
       const p = activeProducts.find((x) => x.id === it.id || x.id === it.product_id) || mockProducts.find((x) => x.id === it.id)
@@ -844,549 +594,6 @@ export default function StoreHome() {
       window.print()
     }, 400)
   }
-
-  async function handleAskAI(prompt?: string) {
-    const text = (prompt ?? aiInput).trim()
-    if (!text) return
-
-    const userMsg: AIMsg = { role: "user", text }
-    const currentMsgs = [...aiMsgs, userMsg]
-    setAiMsgs(currentMsgs)
-    setAiInput("")
-    if (!mobileAiOpen) setAiOpen(true)
-
-    const assistantIndex = currentMsgs.length
-    setAiMsgs((m) => [...m, { role: "assistant", text: "" }])
-
-    // Parallel sync: save conversation initiate/message to Supabase
-    upsertConversation({
-      external_id: convExternalId,
-      customer_name: "Storefront Customer",
-      last_message: text,
-      status: "active",
-      messages: currentMsgs.map((m, idx) => ({
-        id: `m_${idx + 1}`,
-        role: m.role === "user" ? "customer" : "ai",
-        text: m.text,
-        at: new Date().toISOString(),
-      })),
-    }).catch(() => {})
-
-    const anonKey =
-      (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsc2poc25mdXJ4a3phd2RpbXlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NzU4NDEsImV4cCI6MjEwMzI1MTg0MX0.0WWRzsUkp-KF_9e2Oq4gcLjToxwzQE3ht05yxrBRx_g"
-    const chatUrl =
-      "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/ragent-chat?surface=store"
-
-    try {
-      const res = await fetch(chatUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${anonKey}`,
-        },
-        body: JSON.stringify({
-          messages: currentMsgs.map((m) => ({
-            role: m.role,
-            content: m.text,
-          })),
-          surface: "store",
-        }),
-      })
-
-      if (!res.ok || !res.body) {
-        throw new Error(`Chat API error: ${res.status}`)
-      }
-
-      const contentType = res.headers.get("content-type") || ""
-      if (contentType.includes("application/json")) {
-        const json = await res.json()
-        const replyText = json.text || json.reply || json.message || ""
-        setAiMsgs((prev) => {
-          const next = [...prev]
-          if (next[assistantIndex]) {
-            next[assistantIndex] = { ...next[assistantIndex], text: replyText }
-          }
-          return next
-        })
-        return
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let accumulated = ""
-      let recProducts: Product[] = []
-      let buffer = ""
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split("\n")
-        buffer = lines.pop() ?? ""
-
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed.startsWith("data:")) continue
-          const dataStr = trimmed.slice(5).trim()
-          if (dataStr === "[DONE]") break
-
-          try {
-            const data = JSON.parse(dataStr)
-            if (data.type === "text" && data.text) {
-              accumulated += data.text
-              setAiMsgs((prev) => {
-                const next = [...prev]
-                const target = next[assistantIndex]
-                if (target) {
-                  next[assistantIndex] = {
-                    ...target,
-                    text: accumulated,
-                    products:
-                      recProducts.length > 0 ? recProducts : target.products,
-                  }
-                }
-                return next
-              })
-            } else if (
-              data.type === "tool" &&
-              data.name === "add_to_cart" &&
-              data.args?.product_id
-            ) {
-              addToCart(data.args.product_id)
-            } else if (
-              data.type === "tool-result" &&
-              data.name === "search_catalog" &&
-              data.result
-            ) {
-              const items = Array.isArray(data.result)
-                ? data.result
-                : data.result.products || []
-              if (items.length > 0) {
-                const matched = items
-                  .map(
-                    (it: any) =>
-                      activeProducts.find(
-                        (p) => p.id === it.id || p.id === it.external_id,
-                      ) || it,
-                  )
-                  .slice(0, 3)
-                recProducts = matched
-                setAiMsgs((prev) => {
-                  const next = [...prev]
-                  const target = next[assistantIndex]
-                  if (target) {
-                    next[assistantIndex] = { ...target, products: matched }
-                  }
-                  return next
-                })
-              }
-            }
-          } catch {
-            // chunk boundary
-          }
-        }
-      }
-
-      if (!accumulated.trim()) {
-        const fallback = generateGroceryFallback(text, activeProducts)
-        setAiMsgs((prev) => {
-          const next = [...prev]
-          next[assistantIndex] = fallback
-          return next
-        })
-        upsertConversation({
-          external_id: convExternalId,
-          customer_name: "Storefront Customer",
-          last_message: fallback.text,
-          status: "active",
-          messages: [...currentMsgs, { role: "assistant", text: fallback.text }].map((m, idx) => ({
-            id: `m_${idx + 1}`,
-            role: m.role === "user" ? "customer" : "ai",
-            text: m.text,
-            at: new Date().toISOString(),
-          })),
-        }).catch(() => {})
-      } else {
-        upsertConversation({
-          external_id: convExternalId,
-          customer_name: "Storefront Customer",
-          last_message: accumulated,
-          status: "active",
-          messages: [...currentMsgs, { role: "assistant", text: accumulated }].map((m, idx) => ({
-            id: `m_${idx + 1}`,
-            role: m.role === "user" ? "customer" : "ai",
-            text: m.text,
-            at: new Date().toISOString(),
-          })),
-        }).catch(() => {})
-      }
-    } catch (err) {
-      console.warn("[handleAskAI] stream failed, using grocery fallback:", err)
-      const fallback = generateGroceryFallback(text, activeProducts)
-      setAiMsgs((prev) => {
-        const next = [...prev]
-        next[assistantIndex] = fallback
-        return next
-      })
-      upsertConversation({
-        external_id: convExternalId,
-        customer_name: "Storefront Customer",
-        last_message: fallback.text,
-        status: "active",
-        messages: [...currentMsgs, { role: "assistant", text: fallback.text }].map((m, idx) => ({
-          id: `m_${idx + 1}`,
-          role: m.role === "user" ? "customer" : "ai",
-          text: m.text,
-          at: new Date().toISOString(),
-        })),
-      }).catch(() => {})
-    }
-  }
-
-  const renderAiAssistantWorkspace = (isMobile: boolean) => (
-    <div className="flex flex-col h-full overflow-hidden bg-card">
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b bg-card px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <Avatar className="size-8 ring-1 ring-primary/20">
-              <AvatarFallback className="bg-primary text-primary-foreground">
-                <Sparkles className="size-3.5" />
-              </AvatarFallback>
-            </Avatar>
-            <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold leading-tight text-foreground flex items-center gap-1.5">
-              <span>Razent AI Assistant</span>
-              <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 font-normal">Live</Badge>
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              Autonomous Grocery Agent · 10–15m SLA
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              setAiMsgs([
-                {
-                  role: "assistant",
-                  text: `Hello! I'm Razent AI. How can I help you find and order fresh groceries today?`,
-                },
-              ])
-              updateConversationStatus(convExternalId, "closed").catch(() => {})
-            }}
-            title="Reset conversation"
-          >
-            Clear
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 rounded-full text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              window.location.hash = "#/assistant"
-            }}
-            title="Expand to full screen"
-          >
-            <Maximize2 className="size-3.5" />
-          </Button>
-          {isMobile && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 rounded-full hover:bg-muted"
-              onClick={() => setMobileAiOpen(false)}
-              aria-label="Close Assistant"
-            >
-              <X className="size-4" />
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Quick Prompt Chips */}
-      <div className="shrink-0 border-b bg-muted/20 px-3 py-2">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs">
-          <span className="text-[10px] font-medium text-muted-foreground shrink-0 uppercase tracking-wider">
-            Quick:
-          </span>
-          {SAMPLE_PROMPTS.map((prompt, i) => (
-            <button
-              key={i}
-              onClick={() => handleAskAI(prompt)}
-              className="shrink-0 rounded-full border bg-background px-2.5 py-1 text-[11px] text-muted-foreground transition hover:border-primary/50 hover:text-foreground active:scale-95"
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Chat Messages Body */}
-      <div className="flex-1 space-y-4 overflow-y-auto p-4 overscroll-contain">
-        {aiMsgs.map((m, i) => (
-          <div key={i}>
-            <Message align={m.role === "user" ? "end" : "start"}>
-              <MessageAvatar>
-                <Avatar className="size-7">
-                  <AvatarFallback
-                    className={
-                      m.role === "assistant"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-foreground"
-                    }
-                  >
-                    {m.role === "assistant" ? (
-                      <Sparkles className="size-3.5" />
-                    ) : (
-                      <User className="size-3.5" />
-                    )}
-                  </AvatarFallback>
-                </Avatar>
-              </MessageAvatar>
-              <MessageContent
-                className={m.role === "user" ? "items-end" : "items-start"}
-              >
-                <MessageHeader>
-                  {m.role === "assistant" ? "Razent AI" : "You"}
-                </MessageHeader>
-                <Bubble
-                  variant={m.role === "user" ? "default" : "muted"}
-                  align={m.role === "user" ? "end" : "start"}
-                >
-                  {m.text}
-                </Bubble>
-              </MessageContent>
-            </Message>
-
-            {/* Product recommendations */}
-            {m.products && m.products.length > 0 && (
-              <div className="mt-3 grid gap-2 pl-9">
-                {m.products.map((p) => (
-                  <Card key={p.id} className="overflow-hidden border bg-card/80">
-                    <CardContent className="flex gap-2.5 p-2.5">
-                      <img
-                        src={p.image_url}
-                        alt={p.title}
-                        className="size-12 rounded-md object-cover shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-medium leading-tight text-foreground">
-                          {p.title}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground line-clamp-1">
-                          {p.description}
-                        </div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-xs font-semibold text-foreground">
-                            {formatPrice(p.price_paise)}
-                          </span>
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 px-2 text-[11px] rounded-full"
-                              onClick={() => {
-                                openProduct(p.id)
-                                if (isMobile) setMobileAiOpen(false)
-                              }}
-                            >
-                              View
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="h-6 px-2 text-[11px] rounded-full"
-                              onClick={() => {
-                                addToCart(p.id)
-                                toast.success(`Added ${p.title} to cart`)
-                              }}
-                            >
-                              + Add
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            {/* Gated Order Review Card (Explainable, Bounded, Gated) */}
-            {m.orderReview && (
-              <Card className="mt-3 overflow-hidden border-primary/30 bg-primary/5 pl-2">
-                <CardContent className="p-3 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-primary flex items-center gap-1">
-                      <ShieldCheck className="size-3.5 text-primary" />
-                      Order Gated Review
-                    </span>
-                    <Badge variant="outline" className="text-[10px] bg-background">
-                      Explicit Consent
-                    </Badge>
-                  </div>
-
-                  {/* Explainable note */}
-                  <div className="rounded-md bg-background/80 p-2 text-[11px] text-muted-foreground">
-                    <p className="font-medium text-foreground">Why AI chose these items:</p>
-                    <p className="mt-0.5">{m.orderReview.reason}</p>
-                  </div>
-
-                  {/* Bounded Line items */}
-                  <div className="rounded-md border bg-background/60 p-2 space-y-1 text-[11px]">
-                    <div className="font-medium text-foreground pb-1 border-b flex justify-between">
-                      <span>Item</span>
-                      <span>Subtotal</span>
-                    </div>
-                    {m.orderReview.items.map((it) => (
-                      <div key={it.id} className="flex justify-between text-muted-foreground">
-                        <span className="truncate pr-2">{it.title} × {it.qty}</span>
-                        <span className="font-mono text-foreground">{formatPrice(it.unitPricePaise * it.qty)}</span>
-                      </div>
-                    ))}
-                    <div className="pt-1 border-t flex justify-between font-semibold text-foreground">
-                      <span>Total Amount:</span>
-                      <span className="text-primary">{formatPrice(m.orderReview.totalPaise)}</span>
-                    </div>
-                    <div className="pt-0.5 text-[10px] text-emerald-600 flex items-center gap-1">
-                      <Check className="size-3" /> Under ₹50,000 limit · Real in-stock verified · 123 MG Road
-                    </div>
-                  </div>
-
-                  {/* Gated approval buttons */}
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      className="flex-1 h-8 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full gap-1"
-                      disabled={aiCheckingOut}
-                      onClick={() => handleConfirmOrderApproval(m.orderReview!)}
-                    >
-                      {aiCheckingOut ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-                      Approve & Pay ({formatPrice(m.orderReview.totalPaise)})
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs rounded-full px-3"
-                      disabled={aiCheckingOut}
-                      onClick={() => handleCancelOrderReview(i)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Completed order card */}
-            {m.checkoutCard && (
-              <Card className="mt-3 overflow-hidden border-emerald-500/30 bg-emerald-500/5 pl-2">
-                <CardContent className="p-3 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                      Order Placed & Settled
-                    </span>
-                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px]">
-                      NCPI UAP
-                    </Badge>
-                  </div>
-                  <div className="rounded-md bg-background/80 p-2 space-y-1 text-[11px]">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Order ID:</span>
-                      <span className="font-mono font-medium">{m.checkoutCard.orderId}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total Paid:</span>
-                      <span className="font-bold text-foreground">{formatPrice(m.checkoutCard.total_paise)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Estimated Delivery:</span>
-                      <span className="text-emerald-600 font-medium">10–15 mins</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      className="flex-1 h-7 text-xs rounded-full"
-                      onClick={() => {
-                        setTrackPrefill({ orderId: m.checkoutCard!.orderId })
-                        setView("track-order")
-                        if (isMobile) setMobileAiOpen(false)
-                      }}
-                    >
-                      Track Order
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 h-7 text-xs rounded-full"
-                      onClick={() => handleOpenInvoiceModal({ orderId: m.checkoutCard!.orderId })}
-                    >
-                      View Invoice
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* In-chat Cart Action Banner when cart has items */}
-      {cart.length > 0 && (
-        <div className="mx-3 mb-2 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs shrink-0">
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="size-4 text-emerald-600" />
-            <div>
-              <span className="font-semibold text-foreground">{cart.reduce((s, c) => s + c.qty, 0)} items in cart</span>
-              <p className="text-[10px] text-muted-foreground">{formatPrice(cartTotal)} total</p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            className="h-7 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-full"
-            disabled={aiCheckingOut}
-            onClick={handleInitiateOrderReview}
-          >
-            <Sparkles className="size-3" />
-            Review & Order
-          </Button>
-        </div>
-      )}
-
-      {/* Bottom Fixed Composer Input */}
-      <div className="shrink-0 border-t bg-card p-3 pb-safe">
-        <div className="flex gap-2">
-          <Input
-            id="store-ai-input"
-            value={aiInput}
-            onChange={(e) => setAiInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAskAI()}
-            placeholder="Ask for groceries, compare, set budget…"
-            className="h-9 rounded-full bg-muted/40 px-4 text-xs"
-          />
-          <Button
-            size="icon"
-            className="size-9 shrink-0 rounded-full"
-            onClick={() => handleAskAI()}
-            disabled={!aiInput.trim()}
-            aria-label="Send message"
-          >
-            <Send className="size-3.5" />
-          </Button>
-        </div>
-        <div className="mt-1.5 text-center text-[10px] text-muted-foreground">
-          Gated & Bounded Commerce · Payments require your explicit confirmation.
-        </div>
-      </div>
-    </div>
-  )
 
   const initials = storeProfile.storeName
 
@@ -1486,15 +693,6 @@ export default function StoreHome() {
               <PackageCheck className="size-4 mr-1" /> Track Order
             </Button>
             <Button
-              size="sm"
-              onClick={() => {
-                window.location.hash = "#/assistant"
-              }}
-              className="hidden sm:inline-flex"
-            >
-              <Sparkles className="size-4 mr-1.5" /> AI Assistant
-            </Button>
-            <Button
               variant="ghost"
               size="icon"
               className="relative"
@@ -1508,9 +706,7 @@ export default function StoreHome() {
               )}
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="icon">
-              <User className="size-5" />
-            </Button>
+            <CustomerProfileMenu onOpenTrackOrder={() => setView("track-order")} />
           </nav>
         </div>
         {/* mobile search */}
@@ -1593,9 +789,16 @@ export default function StoreHome() {
                         <Button
                           variant="outline"
                           size="lg"
-                          onClick={() => setAiOpen(true)}
+                          onClick={() => {
+                            const catSection = document.getElementById("browse-categories-section")
+                            if (catSection) {
+                              catSection.scrollIntoView({ behavior: "smooth" })
+                            } else {
+                              setView("listing")
+                            }
+                          }}
                         >
-                          <Sparkles className="size-4" /> Ask AI Assistant
+                          <Layers className="size-4" /> Browse Categories
                         </Button>
                       </div>
                       <div className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
@@ -1642,7 +845,7 @@ export default function StoreHome() {
               </section>
 
               {/* Category section */}
-              <section className="px-4 py-2">
+              <section id="browse-categories-section" className="px-4 py-2">
                 <div className="flex items-center justify-between">
                   <h2 className="font-heading text-sm font-semibold tracking-tight">
                     Browse by category
@@ -2063,8 +1266,7 @@ export default function StoreHome() {
                         No products match your filters
                       </div>
                       <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                        Try removing filters or ask AI to find the right product
-                        for you.
+                        Try adjusting or clearing your filters to see available grocery items.
                       </p>
                       <div className="mt-3 flex justify-center gap-2">
                         <Button
@@ -2073,9 +1275,6 @@ export default function StoreHome() {
                           onClick={clearAllFilters}
                         >
                           Reset filters
-                        </Button>
-                        <Button size="sm" onClick={() => setAiOpen(true)}>
-                          <Sparkles className="size-4" /> Ask AI
                         </Button>
                       </div>
                     </Card>
@@ -2150,7 +1349,6 @@ export default function StoreHome() {
                 addToCart(id)
                 setCartOpen(true)
               }}
-              onOpenAI={() => setAiOpen(true)}
               onOpenRelated={openProduct}
               loading={false}
               error={null}
@@ -2160,7 +1358,6 @@ export default function StoreHome() {
           {view === "track-order" && (
             <TrackOrder
               onClose={() => setView("home")}
-              onOpenAI={() => setAiOpen(true)}
               initialValues={trackPrefill}
               onViewInvoice={(ord) => handleOpenInvoiceModal(ord)}
               onDownloadInvoice={(ord) => handleDownloadInvoice(ord)}
@@ -2222,10 +1419,6 @@ export default function StoreHome() {
               onRetry={() => setView("checkout")}
               onChangeMethod={() => setView("checkout")}
               onBackToCart={() => setView("cart")}
-              onOpenAI={() => {
-                setAiOpen(true)
-                handleAskAI("My payment failed. Can you help me retry or choose another payment option?")
-              }}
             />
           )}
 
@@ -2263,7 +1456,6 @@ export default function StoreHome() {
                 setCart([])
                 setView("listing")
               }}
-              onAskAI={() => setAiOpen(true)}
             />
           )}
 
@@ -2334,9 +1526,6 @@ export default function StoreHome() {
     </main>
   </div>
 
-  {/* Floating Pop-Up AI Shopping Assistant Widget (Vercel AI SDK Elements) */}
-  <StoreAIAssistantWidget />
-
       {/* Cart Sheet */}
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
         <SheetContent className="flex w-[380px] flex-col sm:w-[420px]">
@@ -2351,7 +1540,7 @@ export default function StoreHome() {
                   Your cart is empty
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Browse products or ask AI for recommendations.
+                  Browse our fresh products and add them to your cart.
                 </p>
                 <Button
                   size="sm"
@@ -2444,6 +1633,9 @@ export default function StoreHome() {
         onClose={() => setInvoiceModalOpen(false)}
         data={invoiceModalData}
       />
+
+      {/* AI Assistant floating widget */}
+      <AIAssistantWidget products={activeProducts} conversationId={convExternalId} />
     </div>
   )
 }
@@ -2933,8 +2125,6 @@ interface ProductDetailProps {
 
   onBuyNow: (id: string) => void
 
-  onOpenAI: () => void
-
   onOpenRelated: (id: string) => void
 
   loading?: boolean
@@ -3362,7 +2552,6 @@ function ProductDetail({
   onClose,
   onAddToCart,
   onBuyNow,
-  onOpenAI,
   onOpenRelated,
   loading = false,
   error = null,
@@ -3752,14 +2941,6 @@ function ProductDetail({
                   >
                     <Zap className="size-4 mr-2" /> Buy now
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="w-full"
-                    onClick={onOpenAI}
-                  >
-                    <Sparkles className="size-4 mr-2" /> Ask AI
-                  </Button>
                 </div>
 
                 <Separator />
@@ -3835,7 +3016,6 @@ function ProductDetail({
 
 interface TrackOrderProps {
   onClose: () => void
-  onOpenAI: () => void
   initialValues?: { orderId?: string; mobile?: string; email?: string } | null
   onViewInvoice?: (data: OrderData) => void
   onDownloadInvoice?: (data: OrderData) => void
@@ -4026,7 +3206,7 @@ function OrderTimeline({ currentStage }: { currentStage: TrackStageKey }) {
   )
 }
 
-function TrackOrder({ onClose, onOpenAI, initialValues, onViewInvoice, onDownloadInvoice }: TrackOrderProps) {
+function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }: TrackOrderProps) {
   const { storeProfile } = useSettings()
 
   const [orderId, setOrderId] = useState(initialValues?.orderId ?? "")
@@ -4229,18 +3409,7 @@ function TrackOrder({ onClose, onOpenAI, initialValues, onViewInvoice, onDownloa
                 <ShieldCheck className="size-3.5 text-emerald-600" /> Secure
                 payments powered by Razorpay
               </div>
-              <div>
-                Need help?{" "}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onOpenAI}
-                  className="p-0 h-auto"
-                >
-                  <Sparkles className="size-3.5 mr-1" /> Ask AI
-                </Button>
-              </div>
-              <div className="mt-2">support@razent.com · +91 80 1234 5678</div>
+              <div>support@razent.com · +91 80 1234 5678</div>
             </CardContent>
           </Card>
         </div>
@@ -4469,13 +3638,6 @@ function TrackOrder({ onClose, onOpenAI, initialValues, onViewInvoice, onDownloa
                 <Phone className="size-3.5" /> {storeProfile.supportPhone}
               </div>
             </div>
-            <Button
-              variant="outline"
-              onClick={onOpenAI}
-              className="w-full sm:w-auto"
-            >
-              <Sparkles className="size-3.5 mr-2" /> Ask AI Assistant
-            </Button>
           </CardContent>
         </Card>
 
@@ -4966,6 +4128,30 @@ function CheckoutView({
   const [selectedAddr, setSelectedAddr] = useState<string>(
     SAVED_ADDRESSES[0].id,
   )
+
+  const { user: customerUser, profile: customerProfile } = useCustomerAuth()
+
+  useEffect(() => {
+    if (customerUser) {
+      const name = customerProfile?.full_name || (customerUser.user_metadata?.full_name as string | undefined)
+      const email = customerUser.email
+      const phone = customerProfile?.phone
+      if (name || email || phone) {
+        setAddresses((prev) =>
+          prev.map((a, idx) =>
+            idx === 0
+              ? {
+                  ...a,
+                  name: name || a.name,
+                  email: email || a.email,
+                  phone: phone || a.phone,
+                }
+              : a,
+          ),
+        )
+      }
+    }
+  }, [customerUser, customerProfile])
 
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">(
     "standard",
@@ -5745,15 +4931,19 @@ function CheckoutView({
               <CardContent className="space-y-3">
                 <div className="space-y-2 max-h-40 overflow-auto pr-1">
                   {cart.map((c) => {
-                    const p = mockProducts.find((x) => x.id === c.id)!
+                    const p =
+                      (products || []).find((x) => x.id === c.id) ||
+                      mockProducts.find((x) => x.id === c.id)
+                    const itemTitle = p?.title || "Product"
+                    const itemPrice = p?.price_paise || 0
 
                     return (
                       <div key={c.id} className="flex justify-between text-xs">
                         <span className="truncate pr-2 text-muted-foreground">
-                          {p.title} × {c.qty}
+                          {itemTitle} × {c.qty}
                         </span>
                         <span className="font-medium">
-                          {formatPrice(p.price_paise * c.qty)}
+                          {formatPrice(itemPrice * c.qty)}
                         </span>
                       </div>
                     )
@@ -5883,8 +5073,6 @@ interface PaymentFailedViewProps {
   onChangeMethod: () => void
 
   onBackToCart: () => void
-
-  onOpenAI: () => void
 }
 
 function PaymentFailedView({
@@ -5894,7 +5082,6 @@ function PaymentFailedView({
   onRetry,
   onChangeMethod,
   onBackToCart,
-  onOpenAI,
 }: PaymentFailedViewProps) {
   const amount = formatPrice(amountPaise || 249900)
 
@@ -6016,14 +5203,6 @@ function PaymentFailedView({
                   <Phone className="size-4 text-muted-foreground" /> +91 80 1234
                   5678
                 </div>
-                <Separator />
-                <Button size="sm" className="w-full" onClick={onOpenAI}>
-                  <Sparkles className="size-4" /> Ask AI for help
-                </Button>
-                <p className="text-center text-[11px] text-muted-foreground">
-                  AI can check order, suggest alternate payment, or contact
-                  support.
-                </p>
               </CardContent>
             </Card>
 
@@ -6051,7 +5230,6 @@ function PaymentSuccessView({
   onViewInvoice,
   onDownloadInvoice,
   onContinueShopping,
-  onAskAI,
 }: {
   orderId: string
   paymentId: string
@@ -6063,7 +5241,6 @@ function PaymentSuccessView({
   onViewInvoice: () => void
   onDownloadInvoice: () => void
   onContinueShopping: () => void
-  onAskAI: () => void
 }) {
   const now = new Date().toLocaleString("en-IN", {
     dateStyle: "medium",
@@ -6357,9 +5534,6 @@ function PaymentSuccessView({
                   onClick={onContinueShopping}
                 >
                   <ArrowRight className="size-4" /> Continue Shopping
-                </Button>
-                <Button size="sm" variant="ghost" onClick={onAskAI}>
-                  <Sparkles className="size-4" /> Ask AI about this order
                 </Button>
               </CardContent>
             </Card>

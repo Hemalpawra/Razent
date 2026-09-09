@@ -4,11 +4,13 @@ import ThemeProvider from "@/app/ThemeProvider"
 import { Toaster } from "@/components/shared/Toaster"
 import { EnvErrorBoundary } from "@/components/shared/EnvErrorBoundary"
 import { initMerchantAuth, useMerchant } from "@/state/useMerchant"
+import { initCustomerAuth } from "@/state/useCustomerAuth"
 
 import { AppShell } from "@/components/shared/AppShell"
 import StoreHome from "@/components/customer/StoreHome"
-import AIAssistantScreen from "@/components/customer/AIAssistant/AIAssistantScreen"
+import { AIAssistantPage } from "@/components/customer/AIAssistant"
 import SignInScreen from "@/components/auth/SignInScreen"
+import CustomerAuthPage from "@/components/customer/auth/CustomerAuthPage"
 
 import DashboardScreen from "@/components/merchant/Dashboard"
 import ProductsScreen from "@/components/merchant/Products"
@@ -25,7 +27,10 @@ function AdminLayout() {
 }
 
 function RouterApp() {
-  useEffect(() => { initMerchantAuth() }, [])
+  useEffect(() => {
+    initMerchantAuth()
+    initCustomerAuth()
+  }, [])
 
   return (
     <ThemeProvider>
@@ -33,8 +38,15 @@ function RouterApp() {
       <EnvErrorBoundary>
         <Routes>
           <Route path="/" element={<StoreHome />} />
-          <Route path="/assistant" element={<AIAssistantScreen />} />
+          <Route path="/assistant" element={<AIAssistantPage />} />
           
+          {/* Customer Authentication */}
+          <Route path="/login" element={<CustomerAuthPage initialMode="login" />} />
+          <Route path="/signup" element={<CustomerAuthPage initialMode="signup" />} />
+          <Route path="/customer/login" element={<Navigate to="/login" replace />} />
+          <Route path="/customer/signup" element={<Navigate to="/signup" replace />} />
+          <Route path="/customer/auth" element={<CustomerAuthPage />} />
+
           {/* Canonical sign-in and legacy alias */}
           <Route path="/signin" element={<SignInScreen />} />
           <Route path="/sign-in" element={<Navigate to="/signin" replace />} />

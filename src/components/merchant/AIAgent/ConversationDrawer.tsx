@@ -116,8 +116,17 @@ export default function ConversationDrawer({
                   </p>
                 </div>
               ) : (
-                messages.map((msg, idx) => {
-                  const isCustomer = msg.role === "customer" || (msg as any).sender === "user"
+                messages.map((msg: any, idx) => {
+                  const role = (msg.role || msg.sender || "").toLowerCase()
+                  const isCustomer = role === "customer" || role === "user" || role === "human"
+                  const content = msg.text || msg.content || msg.message || (idx === messages.length - 1 ? conversation.last_message : "") || "..."
+                  const rawTime = msg.at || msg.timestamp || msg.created_at || conversation.updated_at || conversation.created_at
+                  const dateObj = rawTime ? new Date(rawTime) : null
+                  const isValidDate = dateObj && !isNaN(dateObj.getTime())
+                  const formattedTime = isValidDate
+                    ? dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    : "—"
+
                   return (
                     <Message key={msg.id ?? idx} align={isCustomer ? "end" : "start"}>
                       <MessageAvatar>
@@ -137,14 +146,14 @@ export default function ConversationDrawer({
                         <Bubble
                           variant={isCustomer ? "default" : "muted"}
                           align={isCustomer ? "end" : "start"}
-                          className="text-xs max-w-[85%]"
+                          className="text-xs max-w-[85%] leading-relaxed shadow-sm"
                         >
-                          <BubbleContent>{msg.text}</BubbleContent>
+                          <BubbleContent className="whitespace-pre-wrap break-words">
+                            {content}
+                          </BubbleContent>
                         </Bubble>
                         <span className="text-[10px] text-muted-foreground mt-0.5">
-                          {msg.at
-                            ? new Date(msg.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                            : "—"}
+                          {formattedTime}
                         </span>
                       </MessageContent>
                     </Message>

@@ -164,6 +164,7 @@ import { isN8nAgentEnabled, executeN8nAgentTurn } from "./n8nAgent"
 
 /**
  * Execute real Agentic stream with Vercel AI SDK or n8n Workflow.
+ * Fallback chain: n8n → OpenRouter/Gemini AI SDK → local keyword fallback
  */
 export async function executeChatAgentTurn({
   messages,
@@ -174,9 +175,15 @@ export async function executeChatAgentTurn({
   catalog: Product[]
   onToolCall?: (toolName: string) => void
 }): Promise<ChatAgentResult> {
-  // If n8n Webhook is configured, route turn through n8n Agent Workflow
+  // Tier 1: Try n8n Agent Workflow (if configured and reachable)
   if (isN8nAgentEnabled) {
-    return executeN8nAgentTurn({ messages, catalog, onToolCall })
+    try {
+      const n8nResult = await executeN8nAgentTurn({ messages, catalog, onToolCall })
+      return n8nResult
+    } catch (n8nErr: any) {
+      console.warn("[chatAgent] n8n unavailable, falling back to AI SDK:", n8nErr?.message)
+      // Fall through to Tier 2
+    }
   }
 
   const toolCallsExecuted: string[] = []
