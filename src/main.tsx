@@ -14,6 +14,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <EnvErrorBoundary>
       <ClerkProvider
         publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
+        proxyUrl={import.meta.env.VITE_CLERK_PROXY_URL}
         afterSignOutUrl="/"
       >
       <App />
