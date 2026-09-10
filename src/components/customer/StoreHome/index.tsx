@@ -43,6 +43,7 @@ import { Label } from "@/components/ui/label"
 import { useSettings } from "@/state/useSettings"
 import { useUser } from "@clerk/react"
 import { supabase } from "@/lib/api/supabase"
+import { useClerkCustomerProfile } from "@/state/useClerkCustomerProfile"
 import {
   trackOrder,
   executeAgentCheckout,
@@ -4086,11 +4087,7 @@ function CheckoutView({
   const [addresses, setAddresses] = useState<Address[]>([])
   const [selectedAddr, setSelectedAddr] = useState<string>("")
 
-  const {
-    user: customerUser,
-    profile: customerProfile,
-    updateProfile,
-  } = useCustomerAuth()
+  const { profile: customerProfile, updateProfile } = useClerkCustomerProfile()
   const { user: clerkUser, isSignedIn } = useUser()
 
   useEffect(() => {
@@ -4105,20 +4102,7 @@ function CheckoutView({
         }
         return
       }
-      if (clerkUser?.id) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("metadata")
-          .eq("user_id", clerkUser.id)
-          .maybeSingle()
-        const nextAddresses = Array.isArray(data?.metadata?.addresses)
-          ? (data.metadata.addresses as Address[])
-          : []
-        if (active) {
-          setAddresses(nextAddresses)
-          setSelectedAddr(nextAddresses[0]?.id || "")
-        }
-      } else if (active) {
+      if (active) {
         setAddresses([])
         setSelectedAddr("")
       }
@@ -4127,7 +4111,7 @@ function CheckoutView({
     return () => {
       active = false
     }
-  }, [customerProfile, clerkUser?.id])
+  }, [customerProfile])
 
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">(
     "standard",
@@ -4607,19 +4591,10 @@ function CheckoutView({
                             ...(customerProfile?.metadata || {}),
                             addresses: [createdAddr, ...addresses],
                           }
-                          if (customerUser) {
-                            await updateProfile({ metadata })
-                          } else {
-                            await supabase.from("profiles").upsert(
-                              {
-                                user_id: clerkUser.id,
-                                role: "customer",
-                                full_name: clerkUser.fullName || "Customer",
-                                email: clerkUser.primaryEmailAddress?.emailAddress || createdAddr.email,
-                                metadata,
-                              },
-                              { onConflict: "user_id" },
-                            )
+                          const saved = await updateProfile({ metadata })
+                          if (saved.error) {
+                            setAddrError(saved.error.message)
+                            return
                           }
                           setShowNewAddr(false)
                           setNewAddr({})

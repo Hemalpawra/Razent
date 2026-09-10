@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { useClerk, useUser } from "@clerk/react"
 import { User, LogOut, PackageCheck, Shield, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useCustomerAuth } from "@/state/useCustomerAuth"
 
 interface CustomerProfileMenuProps {
   onOpenTrackOrder?: () => void
@@ -12,7 +12,8 @@ interface CustomerProfileMenuProps {
 
 export function CustomerProfileMenu({ onOpenTrackOrder }: CustomerProfileMenuProps) {
   const navigate = useNavigate()
-  const { user, profile, signOut } = useCustomerAuth()
+  const { user, isSignedIn } = useUser()
+  const { signOut } = useClerk()
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -31,7 +32,7 @@ export function CustomerProfileMenu({ onOpenTrackOrder }: CustomerProfileMenuPro
     }
   }, [isOpen])
 
-  if (!user) {
+  if (!isSignedIn || !user) {
     return (
       <Button
         variant="ghost"
@@ -46,9 +47,8 @@ export function CustomerProfileMenu({ onOpenTrackOrder }: CustomerProfileMenuPro
   }
 
   const displayName =
-    profile?.full_name ||
-    user.user_metadata?.full_name ||
-    user.email?.split("@")[0] ||
+    user.fullName ||
+    user.primaryEmailAddress?.emailAddress?.split("@")[0] ||
     "Customer"
 
   const initials = displayName
@@ -61,7 +61,7 @@ export function CustomerProfileMenu({ onOpenTrackOrder }: CustomerProfileMenuPro
 
   const handleSignOut = async () => {
     setIsOpen(false)
-    await signOut()
+    await signOut({ redirectUrl: "/" })
     toast.success("Signed out", {
       description: "You have been signed out of your customer account.",
     })
@@ -106,7 +106,7 @@ export function CustomerProfileMenu({ onOpenTrackOrder }: CustomerProfileMenuPro
                   Customer
                 </Badge>
               </div>
-              <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
+          <p className="text-[11px] text-muted-foreground truncate">{user.primaryEmailAddress?.emailAddress}</p>
             </div>
           </div>
 

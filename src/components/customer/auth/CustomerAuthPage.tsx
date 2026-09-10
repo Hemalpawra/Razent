@@ -27,15 +27,15 @@ export default function CustomerAuthPage({ initialMode }: CustomerAuthPageProps)
         {mode === "signup" ? (
           <SignUp
             routing="hash"
-            signInUrl="#/login"
-            fallbackRedirectUrl="#/"
+            signInUrl="/login"
+            fallbackRedirectUrl="/"
             appearance={{ elements: { card: "shadow-lg" } }}
           />
         ) : (
           <SignIn
             routing="hash"
-            signUpUrl="#/signup"
-            fallbackRedirectUrl="#/"
+            signUpUrl="/signup"
+            fallbackRedirectUrl="/"
             appearance={{ elements: { card: "shadow-lg" } }}
           />
         )}

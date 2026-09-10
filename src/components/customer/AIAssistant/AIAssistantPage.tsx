@@ -23,7 +23,8 @@ import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
 import { useAIChat, CHAT_SUGGESTIONS } from "./useAIChat"
 import { AIMessageBubble } from "./AIMessageBubble"
-import { useCustomerAuth } from "@/state/useCustomerAuth"
+import { useUser } from "@clerk/react"
+import { useClerkCustomerProfile } from "@/state/useClerkCustomerProfile"
 import { useSettings } from "@/state/useSettings"
 import { subscribeToProducts } from "@/lib/api/client"
 import type { Product } from "@/lib/types/product"
@@ -45,7 +46,8 @@ import { DEFAULT_TEST_UPI_METHODS, getSavedTestCards } from "@/lib/protocol/regu
 
 export default function AIAssistantPage() {
   const navigate = useNavigate()
-  const { user, profile, updateProfile } = useCustomerAuth()
+  const { user } = useUser()
+  const { profile, updateProfile } = useClerkCustomerProfile()
   const { storeProfile } = useSettings()
   const [products, setProducts] = useState<Product[]>([])
   const [input, setInput] = useState("")
@@ -167,7 +169,7 @@ export default function AIAssistantPage() {
           </div>
           <p className="text-[11px] text-muted-foreground truncate">
             {user
-              ? `Signed in as ${profile?.full_name || user.email}`
+              ? `Signed in as ${profile?.full_name || user.primaryEmailAddress?.emailAddress || user.fullName || "Customer"}`
               : "Guest mode — sign in to save chats"}
           </p>
         </div>
