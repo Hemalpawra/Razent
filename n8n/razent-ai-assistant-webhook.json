@@ -26,7 +26,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract incoming message and session ID\nconst body = $json.body || $json;\nconst messages = body.messages || [];\nconst sessionId = body.session_id || 'default-session';\nconst lastMessage = messages.length > 0 ? messages[messages.length - 1].content : (body.message || '');\n\n// NPCI & RBI Guardrails — Never accept sensitive payment credentials\nconst npciRefusalRegex = /\\b(otp|cvv|pin|password|full card number|expiry date)\\b/i;\nconst promptInjectionRegex = /\\b(ignore (?:previous|above) instructions|system prompt|reveal your prompt|jailbreak)\\b/i;\n\nif (npciRefusalRegex.test(lastMessage)) {\n  return [{\n    json: {\n      blocked: true,\n      reply: \"For your security I can never see card numbers, CVV, PIN, or OTP. Please complete payment on the secure checkout screen.\",\n      sessionId,\n      products: []\n    }\n  }];\n}\n\nif (promptInjectionRegex.test(lastMessage)) {\n  return [{\n    json: {\n      blocked: true,\n      reply: \"I can't follow that instruction. Let's get back to your shopping — what groceries can I help you find?\",\n      sessionId,\n      products: []\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    blocked: false,\n    query: lastMessage,\n    sessionId,\n    messages\n  }\n}];"
+        "jsCode": "// Extract incoming message and session ID from Webhook proxy payload\nconst body = $json.body || $json;\nconst messages = body.messages || [];\nconst chatInput = body.chatInput || body.message || '';\nconst sessionId = body.sessionId || body.session_id || ('session_' + Date.now());\nconst lastMessage = chatInput || (messages.length > 0 ? (messages[messages.length - 1].content || '') : '');\n\n// NPCI & RBI Guardrails — Never accept sensitive payment credentials\nconst npciRefusalRegex = /\\b(otp|cvv|cvc|pin|password|full card number|expiry date|expiration)\\b/i;\nconst promptInjectionRegex = /\\b(ignore (?:previous|above) instructions|system prompt|reveal your prompt|jailbreak)\\b/i;\n\nif (npciRefusalRegex.test(lastMessage)) {\n  return [{\n    json: {\n      blocked: true,\n      reply: 'For your security I can never see card numbers, CVV, PIN, or OTP. Please complete payment on the secure checkout screen.',\n      sessionId,\n      products: []\n    }\n  }];\n}\n\nif (promptInjectionRegex.test(lastMessage)) {\n  return [{\n    json: {\n      blocked: true,\n      reply: \"I can't follow that instruction. Let's get back to your shopping — what can I find for you?\",\n      sessionId,\n      products: []\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    blocked: false,\n    chatInput: lastMessage,\n    query: lastMessage,\n    sessionId,\n    messages\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -59,7 +59,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{\n  json: {\n    text: .reply || 'How else can I help with your shopping?',\n    products: [],\n    toolCallsExecuted: ['guardrail_refusal']\n  }\n}];"
+        "jsCode": "return [{\n  json: {\n    text: $json.reply || 'For security reasons I cannot process that request. Please try again.',\n    products: [],\n    toolCallsExecuted: ['guardrail_refusal']\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -73,7 +73,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{ $json.query }}",
+        "text": "={{ $json.chatInput || $json.query || ($json.messages || []).slice(-1)[0]?.content || '' }}",
         "options": {
           "systemMessage": "=You are Razent, the intelligent AI shopping assistant for our multi-category retail & quick-commerce store.\n\nOur 10 Active Store Departments:\n1. Grocery & Staples | 2. Beverages | 3. Electronics | 4. Beauty & Personal Care | 5. Home Care | 6. Home & Kitchen | 7. Decor | 8. Kids | 9. Kitchen Appliances | 10. Office & Stationery\n\nYour job is to understand what the customer wants across these departments, find real catalog products via search_catalog, suggest smart add-ons/upsells, and guide ordering and tracking.\n\n============================================================\nRULES & RANKING\n============================================================\n- GREETINGS: Reply warmly in text ONLY. Do NOT call search_catalog or track_order for casual greetings.\n- GROUNDING: Never invent products, stock, or prices. Only cite real items returned by search_catalog.\n- Argument format: search_catalog({\"query\": \"<term>\"}) | track_order({\"order_id\": \"<id>\"})\n- UPSELL: Suggest a higher-tier or larger-pack option when it helps the customer.\n- CROSS-SELL: Suggest complementary items naturally (e.g., cables with electronics, cleaners with appliances, pens with notebooks).\n\n============================================================\nOUTPUT FORMAT\n============================================================\n1. Best Match: [Product Name] — ₹[Price] (one-line reason)\n2. Alternative / Upsell: [Product Name] — ₹[Price] (one-line reason)\n3. Cross-sell: [Product Name] — ₹[Price] (why it pairs well)\n4. Next Step: Ask if they would like to add items to their cart.\n\n============================================================\nSAFETY\n============================================================\n- Never ask for or accept CVV, PINs, OTPs, or card numbers in chat."
         }
@@ -89,13 +89,14 @@
     },
     {
       "parameters": {
-        "model": "gpt-4o-mini",
+        "model": "google/gemma-4-31b-it:free",
         "options": {
-          "temperature": 0.3
+          "maxTokens": 256,
+          "temperature": 0
         }
       },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.2,
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
       "position": [
         380,
         640
@@ -103,16 +104,16 @@
       "id": "openai-model",
       "name": "OpenAI Chat Model",
       "credentials": {
-        "openAiApi": {
-          "id": "openai-creds",
-          "name": "OpenAI API"
+        "openRouterApi": {
+          "id": "psXsVufHSNFJBhTW",
+          "name": "OpenRouter account"
         }
       }
     },
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ $('guardrail-check').item.json.sessionId }}",
+        "sessionKey": "={{ $('NPCI Guardrails & Sanitizer').item.json.sessionId || 'razent-session' }}",
         "contextWindowLength": 10
       },
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
@@ -138,7 +139,7 @@
             }
           ]
         },
-        "url": "=https://YOUR_SUPABASE_PROJECT_ID.supabase.co/rest/v1/products?select=*&status=eq.active&title=ilike.*{{ $fromAI('query') }}*",
+        "url": "=https://flsjhsnfurxkzawdimyi.supabase.co/rest/v1/products?select=id,title,price_paise,mrp_paise,category,stock,unit&title=ilike.*{{ $fromAI('query') }}*",
         "method": "GET",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
@@ -167,7 +168,7 @@
             }
           ]
         },
-        "url": "=https://YOUR_SUPABASE_PROJECT_ID.supabase.co/rest/v1/orders?select=*&id=eq.{{ $fromAI('order_id') }}",
+        "url": "=https://flsjhsnfurxkzawdimyi.supabase.co/rest/v1/orders?select=id,external_id,status,shipping_status,total_paise,created_at&external_id=eq.{{ $fromAI('order_id') }}",
         "method": "GET",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
