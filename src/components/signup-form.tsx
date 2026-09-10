@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, KeyRound, Mail } from "lucide-react"
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useCustomerAuth } from "@/state/useCustomerAuth"
-import { EmailOtpVerification } from "@/components/customer/auth/EmailOtpVerification"
 
 interface SignupFormProps extends React.ComponentProps<"div"> {
   onSuccess?: () => void
@@ -32,9 +31,8 @@ export function SignupForm({
   onSwitchToLogin,
   ...props
 }: SignupFormProps) {
-  const { signUp, sendEmailOtp, updateProfile, isLoading } = useCustomerAuth()
+  const { signUp, isLoading } = useCustomerAuth()
 
-  const [authMethod, setAuthMethod] = useState<"password" | "otp">("password")
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -43,9 +41,6 @@ export function SignupForm({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [signupSuccess, setSignupSuccess] = useState<string | null>(null)
-
-  // OTP state
-  const [otpSent, setOtpSent] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,28 +57,6 @@ export function SignupForm({
       return
     }
 
-    if (authMethod === "otp") {
-      setIsSubmitting(true)
-      try {
-        const { error } = await sendEmailOtp(email.trim())
-        if (error) {
-          setFormError(error.message || "Failed to send verification code.")
-          toast.error("Failed to send code", { description: error.message })
-        } else {
-          setOtpSent(true)
-          toast.success("Code sent!", {
-            description: `We've emailed a 6-digit passcode to ${email.trim()}.`,
-          })
-        }
-      } catch (err: any) {
-        setFormError(err?.message || "An unexpected error occurred.")
-      } finally {
-        setIsSubmitting(false)
-      }
-      return
-    }
-
-    // Password signup
     if (password.length < 6) {
       setFormError("Password must be at least 6 characters long.")
       return
@@ -129,24 +102,6 @@ export function SignupForm({
     }
   }
 
-  const handleOtpSuccess = async () => {
-    if (fullName.trim()) {
-      await updateProfile({ fullName: fullName.trim() })
-    }
-    onSuccess?.()
-  }
-
-  if (otpSent) {
-    return (
-      <EmailOtpVerification
-        email={email.trim()}
-        onSuccess={handleOtpSuccess}
-        onBackToEmail={() => setOtpSent(false)}
-        className={className}
-      />
-    )
-  }
-
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="border-border/60 shadow-lg">
@@ -156,44 +111,6 @@ export function SignupForm({
             Join Razent to enjoy express checkout, rewards, and order tracking
           </CardDescription>
 
-          {/* Auth Method Selector Toggle */}
-          <div className="flex rounded-lg bg-muted/60 p-1 mt-3 text-xs border border-border/40">
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMethod("password")
-                setFormError(null)
-              }}
-              className={cn(
-                "flex-1 py-1.5 rounded-md font-medium transition-all flex items-center justify-center gap-1.5",
-                authMethod === "password"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <KeyRound className="size-3.5" />
-              Password
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMethod("otp")
-                setFormError(null)
-              }}
-              className={cn(
-                "flex-1 py-1.5 rounded-md font-medium transition-all flex items-center justify-center gap-1.5",
-                authMethod === "otp"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Mail className="size-3.5" />
-              Email OTP
-              <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0 rounded-full font-bold">
-                Instant
-              </span>
-            </button>
-          </div>
         </CardHeader>
 
         <CardContent>
@@ -241,7 +158,6 @@ export function SignupForm({
                 />
               </Field>
 
-              {authMethod === "password" && (
                 <Field>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field>
@@ -287,7 +203,6 @@ export function SignupForm({
                     Must be at least 6 characters long.
                   </FieldDescription>
                 </Field>
-              )}
 
               <Field>
                 <Button
@@ -298,10 +213,8 @@ export function SignupForm({
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 size-4 animate-spin" />
-                      {authMethod === "otp" ? "Sending Passcode..." : "Creating Account..."}
+                      Creating Account...
                     </>
-                  ) : authMethod === "otp" ? (
-                    "Send One-Time Passcode"
                   ) : (
                     "Create Account"
                   )}

@@ -19,6 +19,7 @@ logs/
 # beside it.
 /.plugins/
 /.opencode-skills/
+/.agents/skills/
 
 # Supabase CLI temp files
 supabase/.temp/

@@ -43,6 +43,7 @@ type CustomerAuthState = {
   updateProfile: (updates: {
     fullName?: string
     phone?: string
+    metadata?: Record<string, any>
   }) => Promise<{ profile: CustomerProfile | null; error: Error | null }>
 }
 
@@ -247,6 +248,7 @@ export const useCustomerAuth = create<CustomerAuthState>((set, get) => ({
       const payload: any = { updated_at: new Date().toISOString() }
       if (updates.fullName !== undefined) payload.full_name = updates.fullName
       if (updates.phone !== undefined) payload.phone = updates.phone
+      if (updates.metadata !== undefined) payload.metadata = updates.metadata
 
       const { data, error } = await supabase
         .from("profiles")

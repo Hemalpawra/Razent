@@ -41,6 +41,8 @@ import {
 import { Label } from "@/components/ui/label"
 
 import { useSettings } from "@/state/useSettings"
+import { useUser } from "@clerk/react"
+import { supabase } from "@/lib/api/supabase"
 import {
   trackOrder,
   executeAgentCheckout,
@@ -51,7 +53,6 @@ import {
   listProducts,
 } from "@/lib/api/client"
 import { InvoiceModal, type InvoiceData } from "./InvoiceModal"
-import { CheckoutOtpModal } from "./CheckoutOtpModal"
 import { orderStore } from "@/lib/storage/orderStore"
 import { toast } from "sonner"
 import { mockProducts } from "@/lib/mock/products"
@@ -572,10 +573,10 @@ export default function StoreHome() {
       orderId: customOrder?.orderId || customOrder?.id || lastOrderId || "ORD-2026-DEMO",
       invoiceNo: customOrder?.invoiceNumber || lastInvoiceNo || `INV-${(customOrder?.orderId || lastOrderId || "202603").slice(-6)}`,
       date: customOrder?.invoiceDate || new Date().toLocaleString("en-IN"),
-      customerName: customOrder?.customerName || "Ananya Rao",
-      phone: customOrder?.phone || "+91 98765 43210",
-      email: customOrder?.email || "ananya.rao@example.com",
-      address: "123 MG Road, Indiranagar, Bengaluru, Karnataka — 560038",
+      customerName: customOrder?.customerName || "Customer",
+      phone: customOrder?.phone || "",
+      email: customOrder?.email || "",
+      address: customOrder?.address || "Address not provided",
       items: rawItems.length > 0 ? rawItems : [{ title: "Daily Groceries Basket", qty: 1, unitPricePaise: 25000 }],
       subtotalPaise: subtotal > 0 ? subtotal : 25000,
       deliveryPaise: delivery,
@@ -1445,8 +1446,8 @@ export default function StoreHome() {
                 // using the last known successful payment info from executeAgentCheckout.
                 setTrackPrefill({
                   orderId: lastOrderId ?? lastPaymentId ?? failedOrderId ?? `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
-                  mobile: SAVED_ADDRESSES[0]?.phone ?? "",
-                  email: SAVED_ADDRESSES[0]?.email ?? "",
+                    mobile: "",
+                    email: "",
                 })
                 setView("track-order")
               }}
@@ -4072,48 +4073,6 @@ type Address = {
   country?: string
 }
 
-const SAVED_ADDRESSES: Address[] = [
-  {
-    id: "addr1",
-
-    label: "Home",
-
-    name: "Ananya Rao",
-
-    phone: "98765 43210",
-
-    email: "ananya.rao@example.com",
-
-    line1: "12 4th Block, Koramangala",
-
-    city: "Bengaluru",
-
-    state: "KA",
-
-    pincode: "560034",
-  },
-
-  {
-    id: "addr2",
-
-    label: "Office",
-
-    name: "Ananya Rao",
-
-    phone: "98765 43210",
-
-    email: "ananya.rao@example.com",
-
-    line1: "B-204, Hiranandani Estate",
-
-    city: "Thane",
-
-    state: "MH",
-
-    pincode: "400607",
-  },
-]
-
 function CheckoutView({
   cart,
   cartTotal,
@@ -4124,34 +4083,51 @@ function CheckoutView({
   onPaymentSuccess,
   onPaymentFailed,
 }: CheckoutViewProps) {
-  const [addresses, setAddresses] = useState<Address[]>(SAVED_ADDRESSES)
-  const [selectedAddr, setSelectedAddr] = useState<string>(
-    SAVED_ADDRESSES[0].id,
-  )
+  const [addresses, setAddresses] = useState<Address[]>([])
+  const [selectedAddr, setSelectedAddr] = useState<string>("")
 
-  const { user: customerUser, profile: customerProfile } = useCustomerAuth()
+  const {
+    user: customerUser,
+    profile: customerProfile,
+    updateProfile,
+  } = useCustomerAuth()
+  const { user: clerkUser, isSignedIn } = useUser()
 
   useEffect(() => {
-    if (customerUser) {
-      const name = customerProfile?.full_name || (customerUser.user_metadata?.full_name as string | undefined)
-      const email = customerUser.email
-      const phone = customerProfile?.phone
-      if (name || email || phone) {
-        setAddresses((prev) =>
-          prev.map((a, idx) =>
-            idx === 0
-              ? {
-                  ...a,
-                  name: name || a.name,
-                  email: email || a.email,
-                  phone: phone || a.phone,
-                }
-              : a,
-          ),
-        )
+    let active = true
+    async function loadAddresses() {
+      const stored = customerProfile?.metadata?.addresses
+      if (Array.isArray(stored)) {
+        const nextAddresses = stored as Address[]
+        if (active) {
+          setAddresses(nextAddresses)
+          setSelectedAddr(nextAddresses[0]?.id || "")
+        }
+        return
+      }
+      if (clerkUser?.id) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("metadata")
+          .eq("user_id", clerkUser.id)
+          .maybeSingle()
+        const nextAddresses = Array.isArray(data?.metadata?.addresses)
+          ? (data.metadata.addresses as Address[])
+          : []
+        if (active) {
+          setAddresses(nextAddresses)
+          setSelectedAddr(nextAddresses[0]?.id || "")
+        }
+      } else if (active) {
+        setAddresses([])
+        setSelectedAddr("")
       }
     }
-  }, [customerUser, customerProfile])
+    void loadAddresses()
+    return () => {
+      active = false
+    }
+  }, [customerProfile, clerkUser?.id])
 
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">(
     "standard",
@@ -4168,14 +4144,7 @@ function CheckoutView({
 
   const [addrError, setAddrError] = useState<string | null>(null)
 
-  // Step-up phone verification state (Phone number → 6-digit OTP → Verify → Razorpay)
-  const [verifiedPhones, setVerifiedPhones] = useState<Set<string>>(new Set())
-  const [otpModalOpen, setOtpModalOpen] = useState(false)
-  const [pendingPay, setPendingPay] = useState(false)
-
   const activeAddress = addresses.find((a) => a.id === selectedAddr) || addresses[0]
-  const activePhoneClean = (activeAddress?.phone || "9876543210").replace(/[^\d]/g, "").slice(-10) || "9876543210"
-  const isPhoneVerified = verifiedPhones.has(activePhoneClean)
 
   const shippingCost =
     shippingMethod === "express" ? 9900 : cartTotal > 149900 ? 0 : 4900
@@ -4183,10 +4152,12 @@ function CheckoutView({
   const tax = Math.round((cartTotal + shippingCost) * 0.18)
   const total = cartTotal + shippingCost + tax
 
-  const executePayment = async (targetAddr?: Address, forceVerified = false) => {
+  const executePayment = async (targetAddr?: Address) => {
     const address = targetAddr || activeAddress
-    const currentClean = (address?.phone || "9876543210").replace(/[^\d]/g, "").slice(-10)
-    const verified = forceVerified || verifiedPhones.has(currentClean)
+    if (!address) {
+      setAddrError("Add a delivery address before continuing")
+      return
+    }
 
     const items = cart.map((c) => {
       const p = (products || []).find((x) => x.id === c.id) || mockProducts.find((x) => x.id === c.id)
@@ -4202,28 +4173,24 @@ function CheckoutView({
     const shippingAddress: import("@/lib/types/order").Address = rawAddr
       ? {
         full_name: rawAddr.full_name ?? (rawAddr as any).name ?? "Customer",
-        phone: rawAddr.phone ?? "9876543210",
-        email: rawAddr.email ?? "customer@example.com",
-        line1: rawAddr.line1 ?? "123 MG Road",
+        phone: rawAddr.phone,
+        email: rawAddr.email,
+        line1: rawAddr.line1,
         line2: rawAddr.line2,
-        city: rawAddr.city ?? "Bengaluru",
-        state: rawAddr.state ?? "Karnataka",
-        pincode: rawAddr.pincode ?? "560001",
+        city: rawAddr.city,
+        state: rawAddr.state,
+        pincode: rawAddr.pincode,
         country: rawAddr.country ?? "IN",
-        phone_verified: verified,
-        phone_verified_at: verified ? new Date().toISOString() : undefined,
       }
       : {
-        full_name: SAVED_ADDRESSES[0]?.name ?? "Customer",
-        phone: SAVED_ADDRESSES[0]?.phone ?? "9876543210",
-        email: SAVED_ADDRESSES[0]?.email ?? "customer@example.com",
-        line1: SAVED_ADDRESSES[0]?.line1 ?? "123 MG Road",
-        city: SAVED_ADDRESSES[0]?.city ?? "Bengaluru",
-        state: SAVED_ADDRESSES[0]?.state ?? "Karnataka",
-        pincode: SAVED_ADDRESSES[0]?.pincode ?? "560001",
+        full_name: "Customer",
+        phone: "",
+        email: "",
+        line1: "",
+        city: "",
+        state: "",
+        pincode: "",
         country: "IN",
-        phone_verified: verified,
-        phone_verified_at: verified ? new Date().toISOString() : undefined,
       }
     const orderId = `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
     const order: import("@/lib/types/order").Order = {
@@ -4238,8 +4205,6 @@ function CheckoutView({
       shipping_address: shippingAddress,
       via_ai: false,
       commerce_protocol: "direct_web",
-      phone_verified: verified,
-      phone_verified_at: verified ? new Date().toISOString() : undefined,
       notes: "Created via storefront checkout with Razorpay",
       created_at: new Date().toISOString(),
     }
@@ -4430,11 +4395,8 @@ function CheckoutView({
     }
     setAddrError(null)
 
-    // Step-up verification rule: Phone number must be confirmed with 6-digit OTP before Razorpay payment
-    if (!isPhoneVerified) {
-      setPendingPay(true)
-      setOtpModalOpen(true)
-      toast.info("Please confirm your mobile number with the 6-digit OTP to proceed to payment.")
+    if (!isSignedIn) {
+      window.location.hash = "#/signup"
       return
     }
 
@@ -4457,7 +4419,7 @@ function CheckoutView({
         <div>
           <h1 className="font-heading text-2xl font-semibold">Checkout</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Enter delivery details, confirm mobile via OTP, and complete payment with Razorpay.
+            Enter your delivery details and complete payment securely with Razorpay.
           </p>
         </div>
 
@@ -4484,10 +4446,7 @@ function CheckoutView({
                 )}
                 {!showNewAddr ? (
                   <div className="grid gap-3">
-                    {addresses.map((a) => {
-                      const aPhoneClean = (a.phone || "").replace(/[^\d]/g, "").slice(-10)
-                      const aVerified = verifiedPhones.has(aPhoneClean)
-
+                {addresses.map((a) => {
                       return (
                         <label
                           key={a.id}
@@ -4512,21 +4471,6 @@ function CheckoutView({
                                   {a.pincode}
                                 </Badge>
                               </div>
-                              {aVerified ? (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1 font-medium"
-                                >
-                                  <CheckCircle2 className="size-3" /> Mobile Verified
-                                </Badge>
-                              ) : (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[11px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 font-medium"
-                                >
-                                  <Lock className="size-3" /> OTP Required
-                                </Badge>
-                              )}
                             </div>
                             <div className="mt-1 font-medium text-foreground">
                               {a.name} · {a.phone}
@@ -4635,9 +4579,13 @@ function CheckoutView({
                     <div className="sm:col-span-2 flex gap-2 pt-2">
                       <Button
                         size="sm"
-                        onClick={() => {
-                          if (!newAddr.name?.trim() || !newAddr.phone?.trim() || !newAddr.line1?.trim() || !newAddr.pincode?.trim()) {
-                            setAddrError("Please enter full name, mobile, address line, and pincode")
+                        onClick={async () => {
+                          if (!isSignedIn || !clerkUser) {
+                            window.location.hash = "#/signup"
+                            return
+                          }
+                          if (!newAddr.name?.trim() || !newAddr.phone?.trim() || !newAddr.email?.trim() || !newAddr.line1?.trim() || !newAddr.city?.trim() || !newAddr.state?.trim() || !newAddr.pincode?.trim()) {
+                            setAddrError("Please enter name, email, mobile, address, city, state, and pincode")
                             return
                           }
                           const newId = `addr_${Date.now()}`
@@ -4646,15 +4594,33 @@ function CheckoutView({
                             label: newAddr.label || "Other",
                             name: newAddr.name.trim(),
                             phone: newAddr.phone.trim(),
-                            email: newAddr.email?.trim() || "customer@razent.local",
+                            email: newAddr.email.trim(),
                             line1: newAddr.line1.trim(),
-                            city: newAddr.city?.trim() || "Bengaluru",
-                            state: newAddr.state?.trim() || "Karnataka",
+                            city: newAddr.city.trim(),
+                            state: newAddr.state.trim(),
                             pincode: newAddr.pincode.trim(),
                             country: "IN",
                           }
                           setAddresses((prev) => [createdAddr, ...prev])
                           setSelectedAddr(newId)
+                          const metadata = {
+                            ...(customerProfile?.metadata || {}),
+                            addresses: [createdAddr, ...addresses],
+                          }
+                          if (customerUser) {
+                            await updateProfile({ metadata })
+                          } else {
+                            await supabase.from("profiles").upsert(
+                              {
+                                user_id: clerkUser.id,
+                                role: "customer",
+                                full_name: clerkUser.fullName || "Customer",
+                                email: clerkUser.primaryEmailAddress?.emailAddress || createdAddr.email,
+                                metadata,
+                              },
+                              { onConflict: "user_id" },
+                            )
+                          }
                           setShowNewAddr(false)
                           setNewAddr({})
                           setAddrError(null)
@@ -4676,42 +4642,6 @@ function CheckoutView({
                   </div>
                 )}
 
-                {/* Step-up Phone Verification Callout Banner */}
-                {!showNewAddr && (
-                  <div className="pt-1">
-                    {isPhoneVerified ? (
-                      <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs">
-                        <div className="flex items-center gap-2.5 text-emerald-700 dark:text-emerald-300">
-                          <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
-                          <span>
-                            Mobile <b>+91 {activePhoneClean}</b> verified for order dispatch & payment security.
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-primary/20 bg-primary/5 text-xs">
-                        <div className="flex items-start gap-2.5">
-                          <div className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                            <Lock className="size-3.5" />
-                          </div>
-                          <div>
-                            <div className="font-semibold text-foreground">Step-up Mobile Verification</div>
-                            <div className="text-muted-foreground mt-0.5">
-                              Verify <b>+91 {activePhoneClean}</b> with a 6-digit OTP before Razorpay payment.
-                            </div>
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={() => setOtpModalOpen(true)}
-                          className="gap-1.5 shrink-0 h-8"
-                        >
-                          <Smartphone className="size-3.5" /> Verify Mobile
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
               </CardContent>
             </Card>
 
@@ -5032,27 +4962,6 @@ function CheckoutView({
         </div>
       </div>
 
-      {/* Step-up Phone Verification OTP Modal */}
-      <CheckoutOtpModal
-        open={otpModalOpen}
-        phone={activeAddress?.phone || "9876543210"}
-        onClose={() => {
-          setOtpModalOpen(false)
-          setPendingPay(false)
-        }}
-        onVerified={(verifiedPhone) => {
-          const clean = verifiedPhone.replace(/[^\d]/g, "").slice(-10) || "9876543210"
-          setVerifiedPhones((prev) => new Set(prev).add(clean))
-          setOtpModalOpen(false)
-          if (pendingPay) {
-            setPendingPay(false)
-            // Auto-trigger payment with verified state
-            setTimeout(() => {
-              executePayment(activeAddress, true)
-            }, 300)
-          }
-        }}
-      />
     </section>
   )
 }

@@ -31,8 +31,10 @@ function normalizeN8nResult(data: any, catalog: Product[]): ChatAgentResult {
     products = data.products_recommended
   }
 
-  const replyText =
-    data?.text || data?.output || data?.last_message || data?.reply || "How can I assist you today?"
+  const replyText = data?.text || data?.output || data?.last_message || data?.reply
+  if (typeof replyText !== "string" || replyText.trim().length === 0) {
+    throw new Error("n8n workflow returned an empty response")
+  }
   if (products.length === 0 && catalog.length > 0 && typeof replyText === "string") {
     const textLower = replyText.toLowerCase()
     const detected = catalog.filter((p) => textLower.includes(p.title.toLowerCase()))

@@ -35,18 +35,22 @@ import {
   Wifi,
   WifiOff,
   Info,
+  WalletCards,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isN8nAgentEnabled } from "@/lib/agent/n8nAgent"
 import { isOpenRouterConfigured } from "@/lib/agent/chatAgent"
 import { toast } from "sonner"
+import { DEFAULT_TEST_UPI_METHODS, getSavedTestCards } from "@/lib/protocol/regulatoryWrapper"
 
 export default function AIAssistantPage() {
   const navigate = useNavigate()
-  const { user, profile } = useCustomerAuth()
+  const { user, profile, updateProfile } = useCustomerAuth()
   const { storeProfile } = useSettings()
   const [products, setProducts] = useState<Product[]>([])
   const [input, setInput] = useState("")
+  const agentPurchaseEnabled = Boolean(profile?.metadata?.agentPurchaseEnabled)
+  const [showWallet, setShowWallet] = useState(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -56,20 +60,13 @@ export default function AIAssistantPage() {
 
   // Load real-time product catalog
   useEffect(() => {
-    const unsub = subscribeToProducts((event) => {
-      if (event?.new) {
-        setProducts((prev) => {
-          const filtered = prev.filter((p) => p.id !== (event.new as Product).id)
-          return [event.new as Product, ...filtered]
-        })
-      }
-    })
-    // Initial load
-    import("@/lib/api/client").then(({ listProducts }) => {
+    const refreshProducts = () => import("@/lib/api/client").then(({ listProducts }) => {
       listProducts().then((list) => {
         if (list.length > 0) setProducts(list)
       })
     })
+    const unsub = subscribeToProducts(refreshProducts)
+    refreshProducts()
     return unsub
   }, [])
 
@@ -101,6 +98,24 @@ export default function AIAssistantPage() {
     inputRef.current?.focus()
   }
 
+  const handleAgentPurchaseToggle = async () => {
+    if (!user) {
+      navigate("/signup")
+      return
+    }
+    const { error } = await updateProfile({
+      metadata: {
+        ...(profile?.metadata || {}),
+        agentPurchaseEnabled: !agentPurchaseEnabled,
+      },
+    })
+    if (error) {
+      toast.error("Could not update agent purchase permission", { description: error.message })
+      return
+    }
+    toast.success(!agentPurchaseEnabled ? "Agent purchases enabled" : "Agent purchases disabled")
+  }
+
   const handleSuggestion = async (suggestion: string) => {
     if (isLoading) return
     await sendMessage(suggestion)
@@ -128,7 +143,7 @@ export default function AIAssistantPage() {
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-border/60 bg-background/95 backdrop-blur-sm sticky top-0 z-20 shrink-0">
+      <header className="relative flex items-center gap-3 px-4 py-3 border-b border-border/60 bg-background/95 backdrop-blur-sm sticky top-0 z-20 shrink-0">
         <Button
           variant="ghost"
           size="icon"
@@ -170,7 +185,44 @@ export default function AIAssistantPage() {
             </Button>
           )}
           <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-full"
+            onClick={() => setShowWallet((visible) => !visible)}
+            title="Test wallet"
+          >
+            <WalletCards className="w-4 h-4" />
+          </Button>
+          <Button
+            variant={agentPurchaseEnabled ? "default" : "outline"}
+            size="sm"
+            className="text-[11px]"
+            onClick={handleAgentPurchaseToggle}
+          >
+            Agent purchases {agentPurchaseEnabled ? "On" : "Off"}
+          </Button>
         </div>
+        {showWallet && (
+          <div className="absolute right-4 top-14 z-40 w-72 rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl">
+            <p className="text-xs font-semibold">Razorpay test wallet</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">Sandbox methods only. No real payment credentials are stored.</p>
+            <div className="mt-3 space-y-2">
+              {DEFAULT_TEST_UPI_METHODS.map((method) => (
+                <div key={method.id} className="flex items-center justify-between rounded-md bg-muted px-2 py-1.5 text-xs">
+                  <span>{method.label}</span>
+                  <span className="font-mono text-[10px]">{method.vpa}</span>
+                </div>
+              ))}
+              {getSavedTestCards().map((card) => (
+                <div key={card.id} className="flex items-center justify-between rounded-md bg-muted px-2 py-1.5 text-xs">
+                  <span>{card.network} {card.cardType}</span>
+                  <span className="font-mono text-[10px]">{card.maskedNumber}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Chat body */}

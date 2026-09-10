@@ -18,17 +18,21 @@ export function Conversation({ className, children, ...props }: ConversationProp
 
 export interface ConversationContentProps extends React.HTMLAttributes<HTMLDivElement> {}
 
-export function ConversationContent({ className, children, ...props }: ConversationContentProps) {
-  return (
-    <div
-      data-slot="ai-conversation-content"
-      className={cn("flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6 scroll-smooth", className)}
-      {...props}
-    >
-      {children}
-    </div>
-  )
-}
+export const ConversationContent = React.forwardRef<HTMLDivElement, ConversationContentProps>(
+  ({ className, children, ...props }, ref) => {
+    return (
+      <div
+        ref={ref}
+        data-slot="ai-conversation-content"
+        className={cn("flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6 scroll-smooth", className)}
+        {...props}
+      >
+        {children}
+      </div>
+    )
+  },
+)
+ConversationContent.displayName = "ConversationContent"
 
 export interface ConversationScrollButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   visible?: boolean

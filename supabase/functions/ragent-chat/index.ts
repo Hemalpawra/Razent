@@ -250,28 +250,32 @@ const storefrontTools = {
     parameters: z.object({
       items: z.array(z.object({ product_id: z.string(), qty: z.number().int().positive() })),
       shipping_address: z.object({
-        full_name: z.string().default("Store Customer"),
-        phone: z.string().default("9876543210"),
-        email: z.string().default("customer@razent.local"),
-        line1: z.string().default("123 MG Road"),
+        full_name: z.string().min(1),
+        phone: z.string().min(1),
+        email: z.string().email(),
+        line1: z.string().min(1),
         line2: z.string().optional(),
-        city: z.string().default("Bengaluru"),
-        state: z.string().default("Karnataka"),
-        pincode: z.string().default("560001"),
-        country: z.string().default("India"),
-      }).default({
-        full_name: "Store Customer",
-        phone: "9876543210",
-        email: "customer@razent.local",
-        line1: "123 MG Road",
-        city: "Bengaluru",
-        state: "Karnataka",
-        pincode: "560001",
-        country: "India",
+        city: z.string().min(1),
+        state: z.string().min(1),
+        pincode: z.string().min(1),
+        country: z.string().min(1),
       }),
       mandate_id: z.string().optional(),
     }),
     execute: async (input) => {
+      const { data: customerProfile } = await supabase
+        .from("profiles")
+        .select("metadata")
+        .eq("email", input.shipping_address.email)
+        .maybeSingle()
+      if (customerProfile?.metadata?.agentPurchaseEnabled !== true) {
+        return {
+          ok: false,
+          error: "AGENT_PURCHASE_DISABLED",
+          message: "Agent purchases are disabled for this customer account. The customer must complete checkout themselves.",
+        }
+      }
+
       // Resolve line items
       const lineItems: Array<{ product_id: string; title: string; image_url: string; qty: number; unit_price_paise: number }> = []
       let total_paise = 0
