@@ -114,9 +114,42 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  let upstreamData: any;
   try {
-    return json(JSON.parse(rawText), 200);
+    upstreamData = JSON.parse(rawText);
   } catch {
     return json({ text: rawText, toolCallsExecuted: ["n8n_chat_workflow"] }, 200);
   }
+
+  const upstreamText = String(
+    upstreamData?.text || upstreamData?.output || upstreamData?.last_message || "",
+  ).trim();
+  const echoedInput = lastUser.trim().toLowerCase();
+
+  if (!upstreamText || (echoedInput && upstreamText.toLowerCase() === echoedInput)) {
+    const { data: savedConversation } = await supabase
+      .from("conversations")
+      .select("last_message, products_recommended, selected_product, status")
+      .eq("external_id", sessionId)
+      .maybeSingle();
+
+    const savedText = String(savedConversation?.last_message || "").trim();
+    if (savedText && savedText.toLowerCase() !== echoedInput) {
+      return json(
+        {
+          text: savedText,
+          output: savedText,
+          products: savedConversation?.products_recommended || [],
+          checkoutAction: savedConversation?.selected_product
+            ? { product: savedConversation.selected_product }
+            : null,
+          status: savedConversation?.status || "active",
+          toolCallsExecuted: ["n8n_chat_workflow", "conversation_readback"],
+        },
+        200,
+      );
+    }
+  }
+
+  return json(upstreamData, 200);
 });

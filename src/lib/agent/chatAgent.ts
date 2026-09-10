@@ -168,17 +168,19 @@ import { isN8nAgentEnabled, executeN8nAgentTurn } from "./n8nAgent"
  */
 export async function executeChatAgentTurn({
   messages,
+  sessionId,
   catalog,
   onToolCall,
 }: {
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>
+  sessionId?: string
   catalog: Product[]
   onToolCall?: (toolName: string) => void
 }): Promise<ChatAgentResult> {
   // Tier 1: Try n8n Agent Workflow (if configured and reachable)
   if (isN8nAgentEnabled) {
     try {
-      const n8nResult = await executeN8nAgentTurn({ messages, catalog, onToolCall })
+      const n8nResult = await executeN8nAgentTurn({ messages, sessionId, catalog, onToolCall })
       return n8nResult
     } catch (n8nErr: any) {
       console.error("[chatAgent] n8n workflow failed:", n8nErr?.message)

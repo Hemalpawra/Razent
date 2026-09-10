@@ -590,7 +590,7 @@ export async function upsertConversation(
 
 export async function updateConversationStatus(
   id: string,
-  status: "active" | "closed" | "resolved" | "paid",
+  status: "active" | "inactive" | "closed" | "resolved" | "paid",
 ): Promise<boolean> {
   try {
     const { error } = await supabase
@@ -1343,4 +1343,3 @@ export function subscribeToProducts(onUpdate: () => void): () => void {
     supabase.removeChannel(channel)
   }
 }
-

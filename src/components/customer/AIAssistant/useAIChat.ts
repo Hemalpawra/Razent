@@ -27,6 +27,16 @@ function genId() {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
 
+function createConversationId() {
+  if (typeof window === "undefined") return `ai_conv_${Date.now()}`
+  const key = "razent_ai_conversation_id"
+  const existing = window.sessionStorage.getItem(key)
+  if (existing) return existing
+  const created = `ai_conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  window.sessionStorage.setItem(key, created)
+  return created
+}
+
 export const CHAT_SUGGESTIONS = [
   "Show me grocery deals",
   "Best electronics under ₹5000",
@@ -37,13 +47,14 @@ export const CHAT_SUGGESTIONS = [
 ]
 
 export function useAIChat(products: Product[] = [], externalConversationId?: string) {
-  const convExtId = useRef(externalConversationId || `ai_conv_${Date.now()}`)
+  const convExtId = useRef(externalConversationId || createConversationId())
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [activeToolCall, setActiveToolCall] = useState<string | null>(null)
   const abortRef = useRef(false)
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const persistConversation = useCallback(async (msgs: ChatMessage[]) => {
+  const persistConversation = useCallback(async (msgs: ChatMessage[], status: "active" | "inactive") => {
     if (msgs.length === 0) return
     const state = useCustomerAuth.getState()
     const { storeProfile } = useSettings.getState()
@@ -56,15 +67,23 @@ export function useAIChat(products: Product[] = [], externalConversationId?: str
       customer_email: state.profile?.email || state.user?.email || undefined,
       type: "human_customer",
       protocol: "direct_web",
-      status: "active",
+      status,
       last_message: last.content.slice(0, 200),
       messages: msgs.map((m) => ({
-        role: m.role,
-        content: m.content,
-        timestamp: m.timestamp,
+        id: m.id,
+        role: m.role === "user" ? "customer" : "ai",
+        text: m.content,
+        at: new Date(m.timestamp).toISOString(),
       })),
     })
   }, [])
+
+  const scheduleInactivity = useCallback((msgs: ChatMessage[]) => {
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
+    inactivityTimer.current = setTimeout(() => {
+      void persistConversation(msgs, "inactive")
+    }, 60_000)
+  }, [persistConversation])
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -80,6 +99,7 @@ export function useAIChat(products: Product[] = [], externalConversationId?: str
 
       const updatedWithUser = [...messages, userMsg]
       setMessages(updatedWithUser)
+      void persistConversation(updatedWithUser, "active")
       setIsLoading(true)
       setActiveToolCall(null)
 
@@ -91,6 +111,7 @@ export function useAIChat(products: Product[] = [], externalConversationId?: str
       try {
         const result = await executeChatAgentTurn({
           messages: historyForAI,
+          sessionId: convExtId.current,
           catalog: products,
           onToolCall: (toolName) => {
             if (!abortRef.current) setActiveToolCall(toolName)
@@ -111,7 +132,8 @@ export function useAIChat(products: Product[] = [], externalConversationId?: str
 
         const finalMsgs = [...updatedWithUser, assistantMsg]
         setMessages(finalMsgs)
-        persistConversation(finalMsgs).catch(() => {})
+        persistConversation(finalMsgs, "active").catch(() => {})
+        scheduleInactivity(finalMsgs)
       } catch (err: any) {
         console.warn("[useAIChat] turn error:", err)
         const errorMsg: ChatMessage = {
@@ -126,7 +148,7 @@ export function useAIChat(products: Product[] = [], externalConversationId?: str
         setIsLoading(false)
       }
     },
-    [messages, isLoading, products, persistConversation],
+    [messages, isLoading, products, persistConversation, scheduleInactivity],
   )
 
   const clearChat = useCallback(() => {
@@ -134,7 +156,11 @@ export function useAIChat(products: Product[] = [], externalConversationId?: str
     setIsLoading(false)
     setActiveToolCall(null)
     abortRef.current = false
-    convExtId.current = `ai_conv_${Date.now()}`
+    if (typeof window !== "undefined") {
+      const nextId = `ai_conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      window.sessionStorage.setItem("razent_ai_conversation_id", nextId)
+      convExtId.current = nextId
+    }
   }, [])
 
   const stopGeneration = useCallback(() => {
