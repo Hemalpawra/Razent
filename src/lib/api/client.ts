@@ -29,10 +29,7 @@ import type { AuditEvent, AuditSession } from "@/lib/types/audit"
 import type { Conversation } from "@/lib/types/conversation"
 import { supabase, getUser } from "@/lib/api/supabase"
 import { useError } from "@/state/useError"
-import { mockProducts } from "@/lib/mock/products"
-import { mockOrders } from "@/lib/mock/orders"
-import { mockConversations } from "@/lib/mock/conversations"
-import { mockAuditSessions } from "@/lib/mock/audit"
+import { productStore } from "@/lib/storage/productStore"
 import {
   verifyAP2Mandate,
   approveAuto,
@@ -40,27 +37,6 @@ import {
   type X402Challenge,
 } from "@/lib/protocol/agenticCommerce"
 import { getSavedTestCards } from "@/lib/protocol/regulatoryWrapper"
-import { orderStore } from "@/lib/storage/orderStore"
-
-function filterMockProducts(items: Product[], args: ListProductsArgs): Product[] {
-  let res = [...items]
-  if (args.q) {
-    const q = args.q.toLowerCase()
-    res = res.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q),
-    )
-  }
-  if (args.category && args.category !== "All") {
-    res = res.filter((p) => p.category.toLowerCase() === args.category!.toLowerCase())
-  }
-  if (args.status) {
-    res = res.filter((p) => p.status === args.status)
-  }
-  return res
-}
 
 // ─────────────────────────────────────────────────────────────────
 // DB row mappers (Q2 — reconcile SQL↔TS shape)
@@ -241,40 +217,48 @@ export type ListProductsArgs = {
 export async function listProducts(
   args: ListProductsArgs = {},
 ): Promise<Product[]> {
-  try {
-    let q = supabase.from("products").select("*").order("created_at", {
-      ascending: false,
+  let q = supabase.from("products").select("*").order("created_at", {
+    ascending: false,
+  })
+  if (args.q) q = q.ilike("title", `%${args.q}%`)
+  if (args.category && args.category !== "All") q = q.eq("category", args.category)
+  if (args.status) q = q.eq("status", args.status)
+  const { data, error } = await q
+  if (error) {
+    console.error("[listProducts] Supabase error:", error.message)
+    useError.getState().push({
+      title: "listProducts",
+      description: error.message,
+      severity: "error",
     })
-    if (args.q) q = q.ilike("title", `%${args.q}%`)
-    if (args.category && args.category !== "All") q = q.eq("category", args.category)
-    if (args.status) q = q.eq("status", args.status)
-    const { data, error } = await q
-    if (error) {
-      console.warn("[listProducts] Supabase error, using mock products:", error.message)
-      return filterMockProducts(mockProducts, args)
-    }
-    if (!data || data.length === 0) {
-      return filterMockProducts(mockProducts, args)
-    }
-    return data.map(mapDbProduct)
-  } catch (err: any) {
-    console.warn("[listProducts] fetch error, using mock products:", err?.message)
-    return filterMockProducts(mockProducts, args)
+    throw error
   }
+  const products = (data || []).map(mapDbProduct)
+  // Sync in-memory productStore with live Supabase catalog
+  products.forEach((p) => productStore.upsert(p))
+  return products
 }
 
 export async function getProduct(id: string): Promise<Product | null> {
-  try {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .or(`external_id.eq.${id},id.eq.${id}`)
-      .maybeSingle()
-    if (!error && data) return mapDbProduct(data)
-  } catch (err: any) {
-    console.warn("[getProduct] fetch error:", err?.message)
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .or(`external_id.eq.${id},id.eq.${id}`)
+    .maybeSingle()
+  if (error) {
+    console.error("[getProduct] Supabase error:", error.message)
+    useError.getState().push({
+      title: "getProduct",
+      description: error.message,
+      severity: "error",
+    })
+    throw error
   }
-  return mockProducts.find((p) => p.id === id) || null
+  const mapped = data ? mapDbProduct(data) : null
+  if (mapped) {
+    productStore.upsert(mapped)
+  }
+  return mapped
 }
 
 export type UpsertProductInput = Omit<
@@ -346,33 +330,25 @@ export async function deleteProduct(
 // ─────────────────────────────────────────────────────────────────
 
 export async function listOrders(): Promise<Order[]> {
-  try {
-    const merchantId = await requireMerchantId()
-    let q = supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false })
-    if (merchantId) {
-      q = q.or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
-    }
-    const { data, error } = await q
-    if (error || !data || data.length === 0) {
-      const storeOrders = orderStore.list()
-      const storeIds = new Set(storeOrders.map((o) => o.id))
-      const extraMock = mockOrders.filter((o) => !storeIds.has(o.id))
-      return [...storeOrders, ...extraMock].sort((a, b) => b.created_at.localeCompare(a.created_at))
-    }
-    const dbOrders = data.map(mapDbOrder)
-    const dbIds = new Set(dbOrders.map((o) => o.id))
-    const extra = orderStore.list().filter((o) => !dbIds.has(o.id))
-    return [...extra, ...dbOrders].sort((a, b) => b.created_at.localeCompare(a.created_at))
-  } catch (err) {
-    console.warn("[listOrders] fetch error, using fallback orders:", err)
-    const storeOrders = orderStore.list()
-    const storeIds = new Set(storeOrders.map((o) => o.id))
-    const extraMock = mockOrders.filter((o) => !storeIds.has(o.id))
-    return [...storeOrders, ...extraMock].sort((a, b) => b.created_at.localeCompare(a.created_at))
+  const merchantId = await requireMerchantId()
+  let q = supabase
+    .from("orders")
+    .select("*")
+    .order("created_at", { ascending: false })
+  if (merchantId) {
+    q = q.or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
   }
+  const { data, error } = await q
+  if (error) {
+    console.error("[listOrders] Supabase error:", error.message)
+    useError.getState().push({
+      title: "listOrders",
+      description: error.message,
+      severity: "error",
+    })
+    throw error
+  }
+  return (data || []).map(mapDbOrder)
 }
 
 export async function updateOrderStatus(
@@ -415,17 +391,21 @@ export async function refundOrder(orderId: string): Promise<boolean> {
 }
 
 export async function getOrder(id: string): Promise<Order | null> {
-  try {
-    const { data, error } = await supabase
-      .from("orders")
-      .select("*")
-      .or(`external_id.eq.${id},id.eq.${id}`)
-      .maybeSingle()
-    if (!error && data) return mapDbOrder(data)
-  } catch (err) {
-    console.warn("[getOrder] fetch error:", err)
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .or(`external_id.eq.${id},id.eq.${id}`)
+    .maybeSingle()
+  if (error) {
+    console.error("[getOrder] Supabase error:", error.message)
+    useError.getState().push({
+      title: "getOrder",
+      description: error.message,
+      severity: "error",
+    })
+    throw error
   }
-  return orderStore.get(id) || mockOrders.find((o) => o.id === id || (o as any).external_id === id) || null
+  return data ? mapDbOrder(data) : null
 }
 
 export type TrackOrderArgs = {
@@ -463,19 +443,10 @@ export async function trackOrder(args: TrackOrderArgs | string): Promise<Order |
     const { data, error } = await supabase
       .from("orders")
       .select("*")
-      .eq("external_id", rawOrderId)
+      .or(`external_id.ilike.${rawOrderId},id.eq.${rawOrderId}`)
       .maybeSingle()
 
     if (error || !data) {
-      const localOrder = orderStore.get(rawOrderId) || mockOrders.find((o) => o.id.toUpperCase() === rawOrderId || (o as any).external_id?.toUpperCase() === rawOrderId)
-      if (localOrder) {
-        const shipping = (localOrder.shipping_address as any) || {}
-        const storedPhone = (shipping.phone || "").replace(/\D/g, "")
-        const storedEmail = (shipping.email || "").trim().toLowerCase()
-        if (storedPhone.endsWith(last10Mobile) && storedEmail === rawEmail) {
-          return localOrder
-        }
-      }
       return null
     }
 
@@ -504,40 +475,45 @@ export async function trackOrder(args: TrackOrderArgs | string): Promise<Order |
 // ─────────────────────────────────────────────────────────────────
 
 export async function listConversations(): Promise<Conversation[]> {
-  try {
-    const merchantId = await requireMerchantId()
-    let q = supabase
-      .from("conversations")
-      .select("*")
-      .order("updated_at", { ascending: false })
-    if (merchantId) {
-      q = q.or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
-    }
-    const { data, error } = await q
-    if (error || !data || data.length === 0) {
-      return mockConversations
-    }
-    return data.map(mapDbConversation)
-  } catch (err) {
-    console.warn("[listConversations] fetch error, using fallback:", err)
-    return mockConversations
+  const merchantId = await requireMerchantId()
+  let q = supabase
+    .from("conversations")
+    .select("*")
+    .order("updated_at", { ascending: false })
+  if (merchantId) {
+    q = q.or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
   }
+  const { data, error } = await q
+  if (error) {
+    console.error("[listConversations] Supabase error:", error.message)
+    useError.getState().push({
+      title: "listConversations",
+      description: error.message,
+      severity: "error",
+    })
+    throw error
+  }
+  return (data || []).map(mapDbConversation)
 }
 
 export async function getConversation(
   id: string,
 ): Promise<Conversation | null> {
-  try {
-    const { data, error } = await supabase
-      .from("conversations")
-      .select("*")
-      .or(`external_id.eq.${id},id.eq.${id}`)
-      .maybeSingle()
-    if (!error && data) return mapDbConversation(data)
-  } catch (err) {
-    console.warn("[getConversation] fetch error:", err)
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("*")
+    .or(`external_id.eq.${id},id.eq.${id}`)
+    .maybeSingle()
+  if (error) {
+    console.error("[getConversation] Supabase error:", error.message)
+    useError.getState().push({
+      title: "getConversation",
+      description: error.message,
+      severity: "error",
+    })
+    throw error
   }
-  return mockConversations.find((c) => c.id === id || (c as any).external_id === id) || null
+  return data ? mapDbConversation(data) : null
 }
 
 export type UpsertConversationInput = {
@@ -652,24 +628,25 @@ export function subscribeToConversations(callback: (payload: any) => void) {
 // ─────────────────────────────────────────────────────────────────
 
 export async function listAuditSessions(): Promise<AuditSession[]> {
-  try {
-    const merchantId = await requireMerchantId()
-    let q = supabase
-      .from("audit_sessions_view")
-      .select("*")
-      .order("created_at", { ascending: false })
-    if (merchantId) {
-      q = q.or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
-    }
-    const { data, error } = await q
-    if (error || !data || data.length === 0) {
-      return mockAuditSessions
-    }
-    return data.map(mapDbAuditSession)
-  } catch (err) {
-    console.warn("[listAuditSessions] fetch error, using fallback:", err)
-    return mockAuditSessions
+  const merchantId = await requireMerchantId()
+  let q = supabase
+    .from("audit_sessions_view")
+    .select("*")
+    .order("created_at", { ascending: false })
+  if (merchantId) {
+    q = q.or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
   }
+  const { data, error } = await q
+  if (error) {
+    console.error("[listAuditSessions] Supabase error:", error.message)
+    useError.getState().push({
+      title: "listAuditSessions",
+      description: error.message,
+      severity: "error",
+    })
+    throw error
+  }
+  return (data || []).map(mapDbAuditSession)
 }
 
 export type LogAuditEventInput = {
@@ -713,210 +690,134 @@ export async function logAuditEvent(
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Dashboard / Analytics (Q4 — views rewritten per merchant)
+// Dashboard / Analytics (Pure Supabase Views)
 // ─────────────────────────────────────────────────────────────────
 
-function getFallbackDashboard(): DashboardData {
-  const orders = mockOrders
-  const paidOrders = orders.filter((o) => o.status === "paid")
-  const totalRevMonth = paidOrders.reduce((acc, o) => acc + o.total_paise, 0)
-  const lowStockCount = mockProducts.filter((p) => (p.stock ?? 0) <= (p.stock_threshold ?? 10)).length
-  const pendingCount = orders.filter((o) => o.shipping_status === "pending" || o.shipping_status === "packed").length
-  const activeConvs = mockConversations.filter((c) => c.status === "active" || c.status === "paid").length
+export async function getDashboard(): Promise<DashboardData> {
+  const merchantId = await requireMerchantId().catch(() => SEEDED_MERCHANT_ID)
+  const { data, error } = await supabase
+    .from("dashboard_view")
+    .select("*")
+    .or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[getDashboard] Supabase error:", error.message)
+    useError.getState().push({
+      title: "getDashboard",
+      description: error.message,
+      severity: "error",
+    })
+    throw error
+  }
+  if (!data) {
+    throw new Error("No dashboard data returned from Supabase")
+  }
+
+  // Calculate daily revenue from live orders table in Supabase
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+  const { data: recentOrders } = await supabase
+    .from("orders")
+    .select("created_at, total_paise, status")
+    .gte("created_at", sevenDaysAgo)
+    .order("created_at", { ascending: true })
 
   const dailyRevMap = new Map<string, number>()
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400000)
     const key = d.toLocaleDateString("en-IN", { month: "short", day: "numeric" })
-    dailyRevMap.set(key, 12000 + ((i * 4731) % 18000))
+    dailyRevMap.set(key, 0)
   }
+
+  if (recentOrders) {
+    recentOrders.forEach((o) => {
+      if (o.status === "paid") {
+        const key = new Date(o.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })
+        if (dailyRevMap.has(key)) {
+          dailyRevMap.set(key, (dailyRevMap.get(key) || 0) + Number(o.total_paise))
+        }
+      }
+    })
+  }
+
   const revenueDaily = Array.from(dailyRevMap.entries()).map(([date, revenue_paise]) => ({
     date,
     revenue_paise,
   }))
 
   return {
-    active_conversations: activeConvs || 4,
-    orders_today: paidOrders.length || 5,
-    revenue_month_paise: totalRevMonth || 124500,
-    ai_status: "online",
-    low_stock_products: lowStockCount || 3,
-    pending_orders: pendingCount || 2,
-    recent_orders: orders.slice(0, 5) as any,
-    needs_attention: [
-      { id: "na_1", type: "low_stock", title: "Low Stock Alert", description: "Farm Fresh White Eggs & Amul Dark Chocolate below threshold", severity: "warning" },
-      { id: "na_2", type: "fulfillment", title: "Orders Ready to Ship", description: "2 orders packed and awaiting courier pickup", severity: "info" }
-    ],
-    revenue_vs_prev_pct: 18.4,
-    orders_vs_prev_pct: 12.0,
-    conversion_vs_prev_pct: 4.2,
-    upsell_vs_prev_pct: 8.5,
-    aov_vs_prev_pct: 5.1,
-    conversion_rate_pct: 4.8,
-    upsell_revenue_paise: 24500,
-    aov_paise: Math.round(totalRevMonth / (paidOrders.length || 1)),
+    active_conversations: Number(data.active_conversations ?? 0),
+    orders_today: Number(data.orders_today ?? 0),
+    revenue_month_paise: Number(data.revenue_month_paise ?? 0),
+    ai_status: (data.ai_status ?? "online") as "online" | "degraded" | "offline",
+    low_stock_products: Number(data.low_stock_products ?? 0),
+    pending_orders: Number(data.pending_orders ?? 0),
+    recent_orders: Array.isArray(data.recent_orders) ? data.recent_orders : [],
+    needs_attention: Array.isArray(data.needs_attention) ? data.needs_attention : [],
+    revenue_vs_prev_pct: undefined,
+    orders_vs_prev_pct: undefined,
+    conversion_vs_prev_pct: undefined,
+    upsell_vs_prev_pct: undefined,
+    aov_vs_prev_pct: undefined,
+    conversion_rate_pct: undefined,
+    upsell_revenue_paise: undefined,
+    aov_paise: undefined,
     revenue_daily_paise: revenueDaily,
   }
 }
 
-function getFallbackAnalytics(): AnalyticsData {
-  const orders = mockOrders
-  const statusCounts: Record<string, number> = { paid: 0, created: 0, failed: 0, refunded: 0 }
-  orders.forEach((o) => {
-    const s = o.status as "paid" | "created" | "failed" | "refunded"
-    if (statusCounts[s] !== undefined) statusCounts[s]++
-  })
-  const ordersByStatus = Object.entries(statusCounts).map(([status, count]) => ({
-    status: status as any,
-    count: count || 1,
-  }))
+export async function getAnalytics(): Promise<AnalyticsData> {
+  const merchantId = await requireMerchantId().catch(() => SEEDED_MERCHANT_ID)
+  const { data, error } = await supabase
+    .from("analytics_view")
+    .select("*")
+    .or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
+    .maybeSingle()
 
-  const dailyRevMap = new Map<string, { revenue: number; orders: number }>()
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000)
-    const key = d.toLocaleDateString("en-IN", { month: "short", day: "numeric" })
-    dailyRevMap.set(key, {
-      revenue: 14000 + ((i * 3829) % 22000),
-      orders: 2 + (i % 4),
+  if (error) {
+    console.error("[getAnalytics] Supabase error:", error.message)
+    useError.getState().push({
+      title: "getAnalytics",
+      description: error.message,
+      severity: "error",
     })
+    throw error
   }
-  const revenueSeries = Array.from(dailyRevMap.entries()).map(([date, val]) => ({
-    date,
-    revenue_paise: val.revenue,
-    orders: val.orders,
-  }))
+  if (!data) {
+    throw new Error("No analytics data returned from Supabase")
+  }
 
-  const topCategories = [
-    { category: "Fruits", revenue_paise: 48500 },
-    { category: "Vegetables", revenue_paise: 38200 },
-    { category: "Dairy & Bakery", revenue_paise: 54600 },
-    { category: "Snacks & Munchies", revenue_paise: 24600 },
-    { category: "Beverages", revenue_paise: 31400 },
-    { category: "Household", revenue_paise: 18500 },
-  ]
+  const statusObj = data.orders_by_status ?? {}
+  const statusArray = Object.entries(statusObj).map(([status, count]) => ({
+    status: status as "paid" | "created" | "failed" | "refunded",
+    count: Number(count),
+  }))
+  const rawSeries = data.daily_revenue ?? data.revenue_series ?? []
+  const revenueSeries = Array.isArray(rawSeries)
+    ? rawSeries.map((r: any) => ({
+        date: r.date,
+        revenue_paise: Number(r.revenue_paise ?? r.revenue ?? 0),
+        orders: Number(r.orders ?? 0),
+      }))
+    : []
+  const rawCategories = data.top_categories ?? []
+  const topCategories = Array.isArray(rawCategories)
+    ? rawCategories.map((c: any) => ({
+        category: c.category,
+        revenue_paise: Number(c.revenue_paise ?? c.revenue ?? 0),
+      }))
+    : []
 
   return {
     revenue_series: revenueSeries,
-    orders_by_status: ordersByStatus,
+    orders_by_status: statusArray,
     top_categories: topCategories,
-    aov_paise: 2480,
-    conversion_rate_pct: 4.8,
-    insights: [
-      "AI Shopping Assistant contributed to 42% of total order value with autonomous suggestions.",
-      "Peak quick-commerce traffic observed between 6:00 PM and 9:30 PM IST.",
-      "Dairy & Bakery holds the highest repeat order frequency at 78%."
-    ],
+    aov_paise: Number(data.aov_paise ?? 0),
+    conversion_rate_pct: Number(data.conversion_rate_pct ?? 0),
+    insights: Array.isArray(data.insights)
+      ? data.insights.map((i: any) => (typeof i === "string" ? i : i.insight || JSON.stringify(i)))
+      : [],
   }
-}
-
-export async function getDashboard(): Promise<DashboardData> {
-  const merchantId = SEEDED_MERCHANT_ID
-  try {
-    const { data, error } = await supabase
-      .from("dashboard_view")
-      .select("*")
-      .or(`merchant_id.eq.${merchantId}`)
-      .maybeSingle()
-
-    if (!error && data) {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
-      const { data: recentOrders } = await supabase
-        .from("orders")
-        .select("created_at, total_paise, status")
-        .gte("created_at", sevenDaysAgo)
-        .order("created_at", { ascending: true })
-
-      const dailyRevMap = new Map<string, number>()
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(Date.now() - i * 86400000)
-        const key = d.toLocaleDateString("en-IN", { month: "short", day: "numeric" })
-        dailyRevMap.set(key, 0)
-      }
-
-      if (recentOrders) {
-        recentOrders.forEach((o) => {
-          if (o.status === "paid") {
-            const key = new Date(o.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })
-            if (dailyRevMap.has(key)) {
-              dailyRevMap.set(key, (dailyRevMap.get(key) || 0) + Number(o.total_paise))
-            }
-          }
-        })
-      }
-
-      const revenueDaily = Array.from(dailyRevMap.entries()).map(([date, revenue_paise]) => ({
-        date,
-        revenue_paise,
-      }))
-
-      return {
-        active_conversations: Number(data.active_conversations ?? 0),
-        orders_today: Number(data.orders_today ?? 0),
-        revenue_month_paise: Number(data.revenue_month_paise ?? 0),
-        ai_status: (data.ai_status ?? "online") as "online" | "degraded" | "offline",
-        low_stock_products: Number(data.low_stock_products ?? 0),
-        pending_orders: Number(data.pending_orders ?? 0),
-        recent_orders: Array.isArray(data.recent_orders) ? data.recent_orders : [],
-        needs_attention: Array.isArray(data.needs_attention) ? data.needs_attention : [],
-        revenue_vs_prev_pct: undefined,
-        orders_vs_prev_pct: undefined,
-        conversion_vs_prev_pct: undefined,
-        upsell_vs_prev_pct: undefined,
-        aov_vs_prev_pct: undefined,
-        conversion_rate_pct: undefined,
-        upsell_revenue_paise: undefined,
-        aov_paise: undefined,
-        revenue_daily_paise: revenueDaily,
-      }
-    }
-  } catch (err: any) {
-    console.warn("[getDashboard] fetch error, using fallback:", err?.message)
-  }
-  return getFallbackDashboard()
-}
-
-export async function getAnalytics(): Promise<AnalyticsData> {
-  try {
-    const merchantId = await requireMerchantId().catch(() => null)
-    const { data, error } = await supabase
-      .from("analytics_view")
-      .select("*")
-      .or(`merchant_id.eq.${merchantId},merchant_id.eq.${SEEDED_MERCHANT_ID}`)
-      .maybeSingle()
-    if (!error && data) {
-      const statusObj = data.orders_by_status ?? {}
-      const statusArray = Object.entries(statusObj).map(([status, count]) => ({
-        status: status as "paid" | "created" | "failed" | "refunded",
-        count: Number(count),
-      }))
-      const rawSeries = data.daily_revenue ?? data.revenue_series ?? []
-      const revenueSeries = Array.isArray(rawSeries)
-        ? rawSeries.map((r: any) => ({
-            date: r.date,
-            revenue_paise: Number(r.revenue_paise ?? r.revenue ?? 0),
-            orders: Number(r.orders ?? 0),
-          }))
-        : []
-      const rawCategories = data.top_categories ?? []
-      const topCategories = Array.isArray(rawCategories)
-        ? rawCategories.map((c: any) => ({
-            category: c.category,
-            revenue_paise: Number(c.revenue_paise ?? c.revenue ?? 0),
-          }))
-        : []
-      return {
-        revenue_series: revenueSeries,
-        orders_by_status: statusArray,
-        top_categories: topCategories,
-        aov_paise: Number(data.aov_paise ?? 0),
-        conversion_rate_pct: Number(data.conversion_rate_pct ?? 0),
-        insights: Array.isArray(data.insights) ? data.insights : [],
-      }
-    }
-  } catch (err: any) {
-    console.warn("[getAnalytics] fetch error, using fallback:", err?.message)
-  }
-  return getFallbackAnalytics()
 }
 
 // ─────────────────────────────────────────────────────────────────

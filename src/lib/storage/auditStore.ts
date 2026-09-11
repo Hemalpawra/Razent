@@ -4,12 +4,9 @@
  * in later sections) are appended here so the Audit Trail table reflects
  * them in-session.
  */
-import { mockAuditSessions } from "@/lib/mock/audit"
 import type { AuditSession, AuditEvent } from "@/lib/types/audit"
 
-const sessions = new Map<string, AuditSession>(
-  mockAuditSessions.map((s) => [s.session_id, s]),
-)
+const sessions = new Map<string, AuditSession>()
 
 function newSessionId() {
   return `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`

@@ -3,10 +3,9 @@
  * (singleton at module scope). Used as the fallback when Supabase env is
  * missing, and during local dev. Never throws.
  */
-import { mockProducts } from "@/lib/mock/products"
 import type { Product } from "@/lib/types/product"
 
-const store = new Map<string, Product>(mockProducts.map((p) => [p.id, p]))
+const store = new Map<string, Product>()
 
 export const productStore = {
   list(): Product[] {

@@ -3,10 +3,9 @@
  * Supabase fallback; also where new orders from executeAgentCheckout land
  * so the merchant Orders screen and Track Order can find them in-session.
  */
-import { mockOrders } from "@/lib/mock/orders"
 import type { Order } from "@/lib/types/order"
 
-const store = new Map<string, Order>(mockOrders.map((o) => [o.id, o]))
+const store = new Map<string, Order>()
 
 export const orderStore = {
   list(): Order[] {

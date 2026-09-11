@@ -3,12 +3,9 @@
  * sessions created via executeAgentCheckout land here so the merchant
  * AIAgent live table reflects them in-session.
  */
-import { mockConversations } from "@/lib/mock/conversations"
 import type { Conversation } from "@/lib/types/conversation"
 
-const store = new Map<string, Conversation>(
-  mockConversations.map((c) => [c.id, c]),
-)
+const store = new Map<string, Conversation>()
 
 export const conversationStore = {
   list(): Conversation[] {

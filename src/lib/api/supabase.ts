@@ -18,11 +18,11 @@ import {
 } from "@supabase/supabase-js"
 
 const DEFAULT_SUPABASE_URL = "https://flsjhsnfurxkzawdimyi.supabase.co"
-const DEFAULT_SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsc2poc25mdXJ4a3phd2RpbXlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NzU4NDEsImV4cCI6MjEwMzI1MTg0MX0.0WWRzsUkp-KF_9e2Oq4gcLjToxwzQE3ht05yxrBRx_g"
+const DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_BJfbmQGnWlGSTL22LHJVxA_p3DeEUAi"
 
 const rawUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim()
 const rawKey =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ||
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim()
 
 const url = rawUrl || DEFAULT_SUPABASE_URL

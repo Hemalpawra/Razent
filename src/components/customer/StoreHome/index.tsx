@@ -53,7 +53,7 @@ import {
 import { InvoiceModal, type InvoiceData } from "./InvoiceModal"
 import { orderStore } from "@/lib/storage/orderStore"
 import { toast } from "sonner"
-import { mockProducts } from "@/lib/mock/products"
+import { productStore } from "@/lib/storage/productStore"
 import { CustomerProfileMenu } from "@/components/customer/auth/CustomerProfileMenu"
 import { AIAssistantWidget } from "@/components/customer/AIAssistant"
 import { useCustomerAuth } from "@/state/useCustomerAuth"
@@ -555,7 +555,7 @@ export default function StoreHome() {
 
   const handleOpenInvoiceModal = (customOrder?: any) => {
     const rawItems = (customOrder?.items || lastOrderSnapshot || cart || []).map((it: any) => {
-      const p = activeProducts.find((x) => x.id === it.id || x.id === it.product_id) || mockProducts.find((x) => x.id === it.id)
+      const p = activeProducts.find((x) => x.id === it.id || x.id === it.product_id) || productStore.get(it.id)
       return {
         title: it.title || p?.title || "Grocery item",
         qty: it.qty || 1,
@@ -1554,7 +1554,7 @@ export default function StoreHome() {
               </Card>
             ) : (
               cart.map((c) => {
-                const p = activeProducts.find((x) => x.id === c.id) || productsList.find((x) => x.id === c.id) || mockProducts.find((x) => x.id === c.id) || {
+                const p = activeProducts.find((x) => x.id === c.id) || productsList.find((x) => x.id === c.id) || productStore.get(c.id) || {
                   id: c.id,
                   title: "Grocery Item",
                   price_paise: 9900,
@@ -1884,7 +1884,7 @@ function ProductCard({
   onAdd,
   onBuy,
 }: {
-  p: typeof mockProducts[number]
+  p: Product
   onOpen: () => void
   onAdd: () => void
   onBuy: () => void
@@ -2008,7 +2008,7 @@ function ListRow({
   onAdd,
   onBuy,
 }: {
-  p: typeof mockProducts[number]
+  p: Product
   onOpen: () => void
   onAdd: () => void
   onBuy: () => void
@@ -2116,7 +2116,7 @@ function ListRow({
 /* -------------------------------------------------------------------------- */
 
 interface ProductDetailProps {
-  product: typeof mockProducts[number]
+  product: Product
 
   onClose: () => void
 
@@ -2133,7 +2133,7 @@ interface ProductDetailProps {
 
 // Generate deterministic product-specific data
 
-function generateSpecs(p: typeof mockProducts[number]) {
+function generateSpecs(p: Product) {
   if (
     (p as any).specifications &&
     typeof (p as any).specifications === "object" &&
@@ -2295,7 +2295,7 @@ function generateSpecs(p: typeof mockProducts[number]) {
   return keys.map((k, i) => ({ key: k, value: vals[i % vals.length] }))
 }
 
-function productDescription(p: typeof mockProducts[number]) {
+function productDescription(p: Product) {
   if (p.description && p.description.trim()) {
     return p.description
   }
@@ -2331,7 +2331,7 @@ function productDescription(p: typeof mockProducts[number]) {
   )
 }
 
-function productFeatures(p: typeof mockProducts[number]) {
+function productFeatures(p: Product) {
   if (
     (p as any).features &&
     Array.isArray((p as any).features) &&
@@ -2466,7 +2466,7 @@ function productFeatures(p: typeof mockProducts[number]) {
   )
 }
 
-function relatedProducts(p: typeof mockProducts[number]) {
+function relatedProducts(p: Product) {
   // Same category, different products
   const sameCat = mockProducts
     .filter(
@@ -3772,7 +3772,7 @@ function CartView({
           {/* LEFT: Cart items */}
           <div className="space-y-4">
             {cart.map((c) => {
-              const p: Product = (products || []).find((x: Product) => x.id === c.id) || mockProducts.find((x: Product) => x.id === c.id) || {
+              const p: Product = (products || []).find((x: Product) => x.id === c.id) || productStore.get(c.id) || {
                 id: c.id,
                 title: "Grocery Item",
                 description: "Fresh quality grocery product",
@@ -4142,7 +4142,7 @@ function CheckoutView({
     }
 
     const items = cart.map((c) => {
-      const p = (products || []).find((x) => x.id === c.id) || mockProducts.find((x) => x.id === c.id)
+      const p = (products || []).find((x) => x.id === c.id) || productStore.get(c.id)
       return {
         product_id: c.id,
         title: p?.title ?? c.id,
@@ -4836,7 +4836,7 @@ function CheckoutView({
                   {cart.map((c) => {
                     const p =
                       (products || []).find((x) => x.id === c.id) ||
-                      mockProducts.find((x) => x.id === c.id)
+                      productStore.get(c.id)
                     const itemTitle = p?.title || "Product"
                     const itemPrice = p?.price_paise || 0
 
@@ -5136,7 +5136,7 @@ function PaymentSuccessView({
   const displayItems = (
     cartSnapshot.length > 0
       ? cartSnapshot
-      : [{ id: products?.[0]?.id || mockProducts[0]?.id || "p1", qty: 1 } as CartItem]
+      : [{ id: products?.[0]?.id || productStore.list()[0]?.id || "p1", qty: 1 } as CartItem]
   ).slice(0, 4)
 
   const shippingCost = cartTotal > 149900 ? 0 : 4900
@@ -5233,7 +5233,7 @@ function PaymentSuccessView({
                 <Separator />
                 <div className="space-y-2">
                   {displayItems.map((c) => {
-                    const p = (products || []).find((x) => x.id === c.id) || mockProducts.find((x) => x.id === c.id)
+                    const p = (products || []).find((x) => x.id === c.id) || productStore.get(c.id)
 
                     if (!p) return null
 
