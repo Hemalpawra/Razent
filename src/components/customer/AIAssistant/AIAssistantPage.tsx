@@ -51,43 +51,12 @@ import {
   MessageSquare,
   ShoppingCart,
   Clock,
-  Compass,
-  Tag,
-  PackageSearch,
-  Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isN8nAgentEnabled } from "@/lib/agent/n8nAgent"
 import { isOpenRouterConfigured } from "@/lib/agent/chatAgent"
 import { toast } from "sonner"
 import { DEFAULT_TEST_UPI_METHODS, getSavedTestCards } from "@/lib/protocol/regulatoryWrapper"
-
-const STARTER_PROMPTS = [
-  {
-    icon: Compass,
-    title: "Discover Trending",
-    description: "Explore bestselling items and popular products right now",
-    prompt: "Show me trending products and bestsellers in the store",
-  },
-  {
-    icon: Tag,
-    title: "Deals Under ₹999",
-    description: "Find high-value budget picks and exclusive discounts",
-    prompt: "Show me top-rated deals and items under ₹999",
-  },
-  {
-    icon: PackageSearch,
-    title: "Track My Order",
-    description: "Check delivery progress and live location for recent purchases",
-    prompt: "Help me track my recent order delivery status",
-  },
-  {
-    icon: Zap,
-    title: "Instant AI Checkout",
-    description: "Quickly assemble cart items and prepare instant checkout",
-    prompt: "Help me find and checkout a smartphone charger or cable",
-  },
-]
 
 export default function AIAssistantPage() {
   const navigate = useNavigate()
@@ -505,36 +474,8 @@ export default function AIAssistantPage() {
                 </div>
               )}
 
-              {/* 2x2 Starter Prompts Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-lg">
-                {STARTER_PROMPTS.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <button
-                      key={item.title}
-                      type="button"
-                      onClick={() => handleSuggestion(item.prompt)}
-                      className="group flex flex-col gap-1.5 p-3 rounded-xl border border-border/70 bg-card hover:border-foreground/30 hover:bg-accent/40 active:scale-[0.99] transition-all text-left shadow-2xs cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="size-7 rounded-lg bg-muted flex items-center justify-center text-foreground group-hover:bg-foreground group-hover:text-background transition-colors">
-                          <Icon className="size-3.5" />
-                        </div>
-                        <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                          Send ↵
-                        </span>
-                      </div>
-                      <p className="text-xs font-semibold text-foreground">{item.title}</p>
-                      <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2">
-                        {item.description}
-                      </p>
-                    </button>
-                  )
-                })}
-              </div>
-
               <div className="w-full max-w-lg">
-                <SuggestionList label="More ideas">
+                <SuggestionList label="Suggestions">
                   {CHAT_SUGGESTIONS.map((s) => (
                     <Suggestion key={s} onClick={() => handleSuggestion(s)}>
                       {s}
