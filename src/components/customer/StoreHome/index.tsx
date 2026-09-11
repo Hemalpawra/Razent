@@ -1,11 +1,8 @@
-import { useMemo, useState, useEffect } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useMemo, useState, useEffect } from "react"
+import { useSearchParams, useNavigate } from "react-router-dom"
 import { useCart } from "@/state/useCart"
-
 import { Button } from "@/components/ui/button"
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
 import { Input } from "@/components/ui/input"
 
 import { Badge } from "@/components/ui/badge"
@@ -4089,6 +4086,7 @@ function CheckoutView({
 
   const { profile: customerProfile, updateProfile } = useClerkCustomerProfile()
   const { user: clerkUser, isSignedIn } = useUser()
+  const navigate = useNavigate()
 
   useEffect(() => {
     let active = true
@@ -4380,7 +4378,7 @@ function CheckoutView({
     setAddrError(null)
 
     if (!isSignedIn) {
-      window.location.hash = "#/signup"
+      navigate("/signup")
       return
     }
 
@@ -4565,7 +4563,7 @@ function CheckoutView({
                         size="sm"
                         onClick={async () => {
                           if (!isSignedIn || !clerkUser) {
-                            window.location.hash = "#/signup"
+                            navigate("/signup")
                             return
                           }
                           if (!newAddr.name?.trim() || !newAddr.phone?.trim() || !newAddr.email?.trim() || !newAddr.line1?.trim() || !newAddr.city?.trim() || !newAddr.state?.trim() || !newAddr.pincode?.trim()) {

@@ -1,6 +1,6 @@
 /**
  * AIAssistantPage - Full-screen AI Shopping Assistant
- * Accessible at /#/assistant
+ * Accessible at /assistant
  * Uses shadcn/ui AI primitives: Conversation, PromptInput, SuggestionList, ToolCall
  */
 import { useEffect, useRef, useState } from "react"

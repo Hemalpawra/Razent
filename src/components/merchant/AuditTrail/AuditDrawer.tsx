@@ -25,6 +25,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import type { AuditSession, AuditEvent, AuditResult } from "@/lib/types/audit"
+import { useNavigate } from "react-router-dom"
+import { isMerchantSubdomain } from "@/lib/utils/subdomain"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useUI } from "@/state/useUI"
 import { useMerchant } from "@/state/useMerchant"
@@ -96,6 +98,9 @@ export default function AuditDrawer({
     session?.events.find((e) => e.related_product)?.related_product ||
     null
 
+  const navigate = useNavigate()
+  const isSubdomain = isMerchantSubdomain()
+
   const handleViewConversation = () => {
     if (role === "view_only") {
       toast.info("You are using the view-only merchant account. Conversation details are restricted.")
@@ -103,7 +108,7 @@ export default function AuditDrawer({
     }
     onClose()
     setActiveScreen("ai_agent")
-    window.location.hash = "#/merchant/ai_agent"
+    navigate(isSubdomain ? "/ai_agent" : "/merchant/ai_agent")
   }
 
   const handleViewOrder = () => {
@@ -114,13 +119,13 @@ export default function AuditDrawer({
     onClose()
     useUI.getState().openOrderDrawer(session.order_id)
     setActiveScreen("orders")
-    window.location.hash = "#/merchant/orders"
+    navigate(isSubdomain ? "/orders" : "/merchant/orders")
   }
 
   const handleViewProduct = () => {
     onClose()
     setActiveScreen("products")
-    window.location.hash = "#/merchant/products"
+    navigate(isSubdomain ? "/products" : "/merchant/products")
     if (relatedProduct) {
       toast.info(`Filtering products for: ${relatedProduct}`)
     }
@@ -134,7 +139,7 @@ export default function AuditDrawer({
     onClose()
     useUI.getState().openOrderDrawer(session.order_id)
     setActiveScreen("orders")
-    window.location.hash = "#/merchant/orders"
+    navigate(isSubdomain ? "/orders" : "/merchant/orders")
   }
 
   return (

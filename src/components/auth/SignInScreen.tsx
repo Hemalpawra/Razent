@@ -1,11 +1,13 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Eye, Lock, ShieldCheck, ArrowRight, Store } from "lucide-react"
+import { Eye, Lock, ShieldCheck, ArrowRight, ArrowLeft, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { useMerchant } from "@/state/useMerchant"
+
+import { isMerchantSubdomain, getStorefrontUrl } from "@/lib/utils/subdomain"
 
 export default function SignInScreen() {
   const navigate = useNavigate()
@@ -16,9 +18,11 @@ export default function SignInScreen() {
   const [adminPassword, setAdminPassword] = useState("")
   const [adminError, setAdminError] = useState<string | null>(null)
 
+  const dashboardPath = isMerchantSubdomain() ? "/dashboard" : "/merchant/dashboard"
+
   const handleViewOnlySignIn = () => {
     signInViewOnly()
-    navigate("/admin/dashboard")
+    navigate(dashboardPath)
   }
 
   const handleAdminSignInSubmit = (e: React.FormEvent) => {
@@ -26,14 +30,33 @@ export default function SignInScreen() {
     setAdminError(null)
     const result = signInAdmin(adminEmail, adminPassword)
     if (result.success) {
-      navigate("/admin/dashboard")
+      navigate(dashboardPath)
     } else {
       setAdminError(result.error || "Invalid administrator credentials.")
     }
   }
 
+  const handleBackToStore = () => {
+    if (isMerchantSubdomain()) {
+      window.location.href = getStorefrontUrl("/")
+    } else {
+      navigate("/")
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4 sm:p-6">
+    <div className="relative min-h-screen bg-muted/40 p-4 sm:p-6 flex flex-col justify-center items-center">
+      <div className="w-full max-w-md mb-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleBackToStore}
+          className="gap-2 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Store
+        </Button>
+      </div>
       <Card className="w-full max-w-md rounded-2xl bg-card shadow-xl border-border/80">
         <CardContent className="p-6 sm:p-8 space-y-6">
           <div className="space-y-1.5 text-center">

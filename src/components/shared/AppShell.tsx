@@ -16,6 +16,7 @@ import { ThemeToggle } from "@/components/shared/ThemeToggle"
 import StoreHome from "@/components/customer/StoreHome"
 import { useUI, type Screen } from "@/state/useUI"
 import { useMerchant } from "@/state/useMerchant"
+import { isMerchantSubdomain, getStorefrontUrl } from "@/lib/utils/subdomain"
 import {
   Sidebar,
   SidebarContent,
@@ -80,16 +81,18 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
     if (drawerOrderId) closeOrderDrawer()
     if (drawerProductId) closeProductDrawer()
     setScreen(key)
+    const isSubdomain = isMerchantSubdomain()
     const routeMap: Record<string, string> = {
-      dashboard: "/merchant/dashboard",
-      products: "/merchant/products",
-      orders: "/merchant/orders",
-      analytics: "/merchant/analytics",
-      ai_agent: "/merchant/ai_agent",
-      audit_trail: "/merchant/audit_trail",
-      settings: "/merchant/settings",
+      dashboard: isSubdomain ? "/dashboard" : "/merchant/dashboard",
+      products: isSubdomain ? "/products" : "/merchant/products",
+      orders: isSubdomain ? "/orders" : "/merchant/orders",
+      analytics: isSubdomain ? "/analytics" : "/merchant/analytics",
+      ai_agent: isSubdomain ? "/ai_agent" : "/merchant/ai_agent",
+      audit_trail: isSubdomain ? "/audit_trail" : "/merchant/audit_trail",
+      settings: isSubdomain ? "/settings" : "/merchant/settings",
     }
-    const path = routeMap[key] || "/merchant/dashboard"
+    const fallback = isSubdomain ? "/dashboard" : "/merchant/dashboard"
+    const path = routeMap[key] || fallback
     navigate(path)
   }
 
@@ -177,8 +180,12 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
               onClick={() => {
                 if (drawerOrderId) closeOrderDrawer()
                 if (drawerProductId) closeProductDrawer()
-                setRole("store")
-                navigate("/")
+                if (isMerchantSubdomain()) {
+                  window.location.href = getStorefrontUrl("/")
+                } else {
+                  setRole("store")
+                  navigate("/")
+                }
               }}
               className={
                 "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors " +

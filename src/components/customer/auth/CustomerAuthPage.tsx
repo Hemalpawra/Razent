@@ -26,14 +26,16 @@ export default function CustomerAuthPage({ initialMode }: CustomerAuthPageProps)
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md items-center justify-center">
         {mode === "signup" ? (
           <SignUp
-            routing="hash"
+            routing="path"
+            path="/signup"
             signInUrl="/login"
             fallbackRedirectUrl="/"
             appearance={{ elements: { card: "shadow-lg" } }}
           />
         ) : (
           <SignIn
-            routing="hash"
+            routing="path"
+            path="/login"
             signUpUrl="/signup"
             fallbackRedirectUrl="/"
             appearance={{ elements: { card: "shadow-lg" } }}

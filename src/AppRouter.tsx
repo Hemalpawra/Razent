@@ -1,10 +1,11 @@
 import { useEffect } from "react"
-import { HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"
 import ThemeProvider from "@/app/ThemeProvider"
 import { Toaster } from "@/components/shared/Toaster"
 import { EnvErrorBoundary } from "@/components/shared/EnvErrorBoundary"
 import { initMerchantAuth, useMerchant } from "@/state/useMerchant"
 import { initCustomerAuth } from "@/state/useCustomerAuth"
+import { isMerchantSubdomain, getMerchantUrl } from "@/lib/utils/subdomain"
 
 import { AppShell } from "@/components/shared/AppShell"
 import StoreHome from "@/components/customer/StoreHome"
@@ -22,36 +23,97 @@ import SettingsScreen from "@/components/merchant/Settings"
 
 function AdminLayout() {
   const { role, isLoading } = useMerchant()
-  if (isLoading) return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-sm text-muted-foreground">Loading admin...</p></div>
-  return <AppShell readOnly={role === "view_only"}><Outlet /></AppShell>
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Loading admin...</p>
+      </div>
+    )
+  }
+  return (
+    <AppShell readOnly={role === "view_only"}>
+      <Outlet />
+    </AppShell>
+  )
 }
 
-function RouterApp() {
+function ExternalRedirect({ to }: { to: string }) {
   useEffect(() => {
-    initMerchantAuth()
-    initCustomerAuth()
-  }, [])
+    window.location.replace(to)
+  }, [to])
 
   return (
-    <ThemeProvider>
-      <Toaster />
-      <EnvErrorBoundary>
-        <Routes>
-          <Route path="/" element={<StoreHome />} />
-          <Route path="/assistant" element={<AIAssistantPage />} />
-          
-          {/* Customer Authentication */}
-          <Route path="/login" element={<CustomerAuthPage initialMode="login" />} />
-          <Route path="/signup" element={<CustomerAuthPage initialMode="signup" />} />
-          <Route path="/customer/login" element={<Navigate to="/login" replace />} />
-          <Route path="/customer/signup" element={<Navigate to="/signup" replace />} />
-          <Route path="/customer/auth" element={<CustomerAuthPage />} />
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <p className="text-sm text-muted-foreground">Redirecting to merchant portal...</p>
+    </div>
+  )
+}
 
-          {/* Canonical sign-in and legacy alias */}
+function MerchantRoutes() {
+  return (
+    <Routes>
+      <Route path="/signin" element={<SignInScreen />} />
+      <Route path="/sign-in" element={<Navigate to="/signin" replace />} />
+
+      {/* Top-level merchant console routes */}
+      <Route element={<AdminLayout />}>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<DashboardScreen />} />
+        <Route path="/products" element={<ProductsScreen />} />
+        <Route path="/orders" element={<OrdersScreen />} />
+        <Route path="/analytics" element={<AnalyticsScreen />} />
+        <Route path="/ai_agent" element={<AIAgentScreen />} />
+        <Route path="/audit_trail" element={<AuditTrailScreen />} />
+        <Route path="/settings" element={<SettingsScreen />} />
+
+        {/* Backward-compatibility aliases for /merchant/* */}
+        <Route path="/merchant" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/merchant/dashboard" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/merchant/products" element={<Navigate to="/products" replace />} />
+        <Route path="/merchant/orders" element={<Navigate to="/orders" replace />} />
+        <Route path="/merchant/analytics" element={<Navigate to="/analytics" replace />} />
+        <Route path="/merchant/ai_agent" element={<Navigate to="/ai_agent" replace />} />
+        <Route path="/merchant/audit_trail" element={<Navigate to="/audit_trail" replace />} />
+        <Route path="/merchant/settings" element={<Navigate to="/settings" replace />} />
+      </Route>
+
+      {/* Legacy /admin/* redirects */}
+      <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/admin/*" element={<Navigate to="/dashboard" replace />} />
+
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  )
+}
+
+function StorefrontRoutes() {
+  const host = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : ""
+  const isProdVercel = host === "razent.vercel.app" || (host.endsWith(".vercel.app") && !host.startsWith("merchant."))
+
+  return (
+    <Routes>
+      <Route path="/" element={<StoreHome />} />
+      <Route path="/assistant" element={<AIAssistantPage />} />
+
+      {/* Customer Authentication with clean path routing */}
+      <Route path="/login/*" element={<CustomerAuthPage initialMode="login" />} />
+      <Route path="/signup/*" element={<CustomerAuthPage initialMode="signup" />} />
+      <Route path="/customer/login/*" element={<Navigate to="/login" replace />} />
+      <Route path="/customer/signup/*" element={<Navigate to="/signup" replace />} />
+      <Route path="/customer/auth/*" element={<CustomerAuthPage />} />
+
+      {/* Merchant Console: In production, redirect to merchant subdomain */}
+      {isProdVercel ? (
+        <>
+          <Route path="/signin" element={<ExternalRedirect to={getMerchantUrl("/signin")} />} />
+          <Route path="/merchant/*" element={<ExternalRedirect to={getMerchantUrl("/dashboard")} />} />
+          <Route path="/admin/*" element={<ExternalRedirect to={getMerchantUrl("/dashboard")} />} />
+        </>
+      ) : (
+        /* In local dev, support direct /merchant and /signin paths */
+        <>
           <Route path="/signin" element={<SignInScreen />} />
           <Route path="/sign-in" element={<Navigate to="/signin" replace />} />
-
-          {/* Canonical Merchant Console (/#/merchant/*) */}
           <Route path="/merchant" element={<AdminLayout />}>
             <Route index element={<Navigate to="/merchant/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardScreen />} />
@@ -62,19 +124,31 @@ function RouterApp() {
             <Route path="audit_trail" element={<AuditTrailScreen />} />
             <Route path="settings" element={<SettingsScreen />} />
           </Route>
-
-          {/* Legacy /admin/* redirects to /merchant/* */}
           <Route path="/admin" element={<Navigate to="/merchant/dashboard" replace />} />
-          <Route path="/admin/dashboard" element={<Navigate to="/merchant/dashboard" replace />} />
-          <Route path="/admin/products" element={<Navigate to="/merchant/products" replace />} />
-          <Route path="/admin/orders" element={<Navigate to="/merchant/orders" replace />} />
-          <Route path="/admin/analytics" element={<Navigate to="/merchant/analytics" replace />} />
-          <Route path="/admin/ai_agent" element={<Navigate to="/merchant/ai_agent" replace />} />
-          <Route path="/admin/audit_trail" element={<Navigate to="/merchant/audit_trail" replace />} />
-          <Route path="/admin/settings" element={<Navigate to="/merchant/settings" replace />} />
+          <Route path="/admin/*" element={<Navigate to="/merchant/dashboard" replace />} />
+        </>
+      )}
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
+function RouterApp() {
+  const isMerchant = isMerchantSubdomain()
+
+  useEffect(() => {
+    initMerchantAuth()
+    if (!isMerchant) {
+      initCustomerAuth()
+    }
+  }, [isMerchant])
+
+  return (
+    <ThemeProvider>
+      <Toaster />
+      <EnvErrorBoundary>
+        {isMerchant ? <MerchantRoutes /> : <StorefrontRoutes />}
       </EnvErrorBoundary>
     </ThemeProvider>
   )
@@ -82,8 +156,8 @@ function RouterApp() {
 
 export default function AppRouter() {
   return (
-    <HashRouter>
+    <BrowserRouter>
       <RouterApp />
-    </HashRouter>
+    </BrowserRouter>
   )
 }

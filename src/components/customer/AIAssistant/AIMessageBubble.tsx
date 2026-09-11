@@ -8,6 +8,7 @@ import type { ChatMessage } from "./useAIChat"
 import type { Product } from "@/lib/types/product"
 import { formatPrice } from "@/lib/types/product"
 import { useCart } from "@/state/useCart"
+import { useNavigate } from "react-router-dom"
 
 interface AIMessageBubbleProps {
   message: ChatMessage
@@ -128,6 +129,7 @@ function formatInline(text: string) {
 }
 
 export function AIMessageBubble({ message, storeName = "Razent" }: AIMessageBubbleProps) {
+  const navigate = useNavigate()
   const addToCart = useCart((s) => s.addToCart)
   const isUser = message.role === "user"
 
@@ -192,7 +194,7 @@ export function AIMessageBubble({ message, storeName = "Razent" }: AIMessageBubb
             size="sm"
             className="gap-2 mt-1 shadow-sm"
             onClick={() => {
-              window.location.hash = "/?view=checkout"
+              navigate("/?view=checkout")
             }}
           >
             <ShoppingCart className="w-4 h-4" />

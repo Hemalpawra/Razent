@@ -26,6 +26,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useNavigate } from "react-router-dom"
+import { isMerchantSubdomain, getStorefrontUrl } from "@/lib/utils/subdomain"
 import { formatPrice } from "@/lib/types/order"
 import type { Order } from "@/lib/types/order"
 import { useMerchant } from "@/state/useMerchant"
@@ -56,6 +58,7 @@ export default function OrderDrawer({
   onClose,
   order,
 }: OrderDrawerProps) {
+  const navigate = useNavigate()
   const isMobile = useIsMobile()
   const { role, hasPermission } = useMerchant()
   const canRefund = hasPermission("refund_orders")
@@ -68,12 +71,13 @@ export default function OrderDrawer({
     }
     onClose()
     useUI.getState().setActiveScreen("ai_agent")
-    window.location.hash = "#/merchant/ai_agent"
+    navigate(isMerchantSubdomain() ? "/ai_agent" : "/merchant/ai_agent")
   }
 
   const handleViewTracking = () => {
     if (!order?.id) return
-    window.open(`/#/?track=${order.id}`, "_blank")
+    const trackingUrl = getStorefrontUrl(`/?track=${order.id}`)
+    window.open(trackingUrl, "_blank")
   }
 
   const handleRefund = async () => {
