@@ -1,0 +1,197 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Razent Pre-Production Agentic Commerce API (UCP / ACP / AP2)",
+    "version": "2026.1.0",
+    "description": "Authoritative machine-to-machine commerce gateway unifying Universal Commerce Protocol (UCP), Agentic Commerce Protocol (ACP), and Google Agent Payments Protocol (AP2) backed by Razorpay Test Rails."
+  },
+  "servers": [
+    {
+      "url": "https://ragent.local/api/a2a",
+      "description": "Local Agent Gateway"
+    },
+    {
+      "url": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1",
+      "description": "Supabase Edge Gateway"
+    }
+  ],
+  "paths": {
+    "/acp/checkout_sessions": {
+      "post": {
+        "summary": "Create ACP Checkout Session",
+        "description": "Initiates an ACP checkout session, negotiating capabilities and generating an authoritative Razorpay order ID.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ACPCheckoutSessionCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Checkout session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACPCheckoutSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or invalid item payload"
+          }
+        }
+      }
+    },
+    "/acp/checkout_sessions/{id}": {
+      "get": {
+        "summary": "Retrieve ACP Checkout Session",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACPCheckoutSession"
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" }
+        }
+      }
+    },
+    "/acp/checkout_sessions/{id}/complete": {
+      "post": {
+        "summary": "Complete ACP Checkout Session",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ACPCheckoutSessionCompleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout session completed and order settled"
+          },
+          "400": {
+            "description": "Settlement failed or mandate verification rejected"
+          }
+        }
+      }
+    },
+    "/ucp/catalog": {
+      "get": {
+        "summary": "UCP Federated Catalog Search",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" } },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "max_price_paise", "in": "query", "schema": { "type": "integer" } },
+          { "name": "in_stock_only", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": {
+          "200": { "description": "Catalog matching products" }
+        }
+      }
+    },
+    "/ap2/mandate": {
+      "post": {
+        "summary": "Create AP2 Cart Mandate",
+        "description": "Produces an RFC 8785 canonical SHA-256 hash and WebCrypto ES256 digital signature of requested items.",
+        "responses": {
+          "200": { "description": "Authorized Cart Mandate" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ACPCheckoutSessionCreateRequest": {
+        "type": "object",
+        "required": ["line_items", "capabilities"],
+        "properties": {
+          "line_items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["item_id", "quantity"],
+              "properties": {
+                "item_id": { "type": "string" },
+                "quantity": { "type": "integer", "minimum": 1 }
+              }
+            }
+          },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "supported_interventions": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "supported_handlers": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "ACPCheckoutSession": {
+        "type": "object",
+        "required": ["id", "status", "line_items", "totals"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["open", "processing", "completed", "canceled", "expired"]
+          },
+          "currency": { "type": "string", "example": "INR" },
+          "totals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "amount": { "type": "integer" }
+              }
+            }
+          }
+        }
+      },
+      "ACPCheckoutSessionCompleteRequest": {
+        "type": "object",
+        "required": ["payment_handler"],
+        "properties": {
+          "payment_handler": { "type": "string" },
+          "mandate_id": { "type": "string" },
+          "razorpay_payment_id": { "type": "string" },
+          "razorpay_signature": { "type": "string" }
+        }
+      }
+    }
+  }
+}

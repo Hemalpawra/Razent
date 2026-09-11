@@ -1,47 +1,34 @@
 {
-  "protocol": "ap2",
-  "version": "1.0.0",
-  "specification": "https://github.com/google-agentic-commerce/AP2",
-  "trust_framework": "Google Agent Payments Protocol",
-  "roles_supported": ["Merchant", "Merchant Payment Processor"],
-  "mandate_types": [
-    "IntentMandate",
-    "CartMandate",
-    "PaymentMandate"
-  ],
-  "modalities": [
-    "HumanPresent",
-    "HumanNotPresent"
-  ],
-  "supported_payment_methods": [
-    {
-      "method": "https://npci.org.in/upi-autopay",
-      "rail": "UPI",
-      "max_limit_paise": 1500000,
-      "settlement": "Razorpay Instant Reserve",
-      "sandbox_test_vpa": {
-        "success": "success@razorpay",
-        "failure": "failure@razorpay"
-      }
+  "ap2_version": "1.0.0",
+  "specification_url": "https://github.com/google-agentic-commerce/AP2",
+  "merchant": {
+    "id": "merchant_one_razent",
+    "name": "Merchant One",
+    "currency": "INR",
+    "country": "IN"
+  },
+  "roles_supported": ["merchant", "settlement_bridge"],
+  "mandate_chain": {
+    "intent_mandate": {
+      "required_fields": ["id", "price_cap_paise", "currency", "agent_id"],
+      "optional_fields": ["skus", "intent_expiry", "user_signature"]
     },
-    {
-      "method": "https://w3c.github.io/payment-request",
-      "rail": "CardTokenization",
-      "token_standards": ["RBI_CoF_Tokenization"],
-      "requires_3ds_step_up_above_paise": 1500000,
-      "test_cards": [
-        { "network": "Visa", "cardNumber": "4100 2800 0000 1007", "cardType": "Debit", "cardSubType": "Consumer" },
-        { "network": "Mastercard", "cardNumber": "5555 5100 0008 1006", "cardType": "Credit", "cardSubType": "Business" },
-        { "network": "Mastercard", "cardNumber": "5180 2872 0009 1001", "cardType": "Prepaid", "cardSubType": "Consumer" },
-        { "network": "RuPay", "cardNumber": "6527 6589 0000 1005", "cardType": "Credit", "cardSubType": "Consumer" },
-        { "network": "Diners", "cardNumber": "3608 280009 1007", "cardType": "Credit", "cardSubType": "Consumer" },
-        { "network": "Amex", "cardNumber": "3402 560004 01007", "cardType": "Credit", "cardSubType": "Consumer" }
-      ]
+    "cart_mandate": {
+      "canonicalization": "RFC-8785",
+      "hash_algorithm": "SHA-256",
+      "signature_algorithm": "ES256",
+      "jwks_uri": "/.well-known/jwks.json",
+      "validity_seconds": 900
+    },
+    "payment_mandate": {
+      "supported_rails": ["upi_autopay", "cards"],
+      "cryptographic_binding": "SHA-256-JCS",
+      "threshold_regulation": {
+        "regulatory_body": "NPCI/RBI",
+        "max_recurring_limit_paise": 1500000,
+        "step_up_protocol": "x402"
+      }
     }
-  ],
-  "cryptographic_verification": {
-    "algorithm": "RS256",
-    "hash_algorithm": "SHA-256",
-    "jwt_expiration_seconds": 900
-  }
+  },
+  "verification_endpoint": "/api/a2a/ap2/mandate/verify"
 }

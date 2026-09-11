@@ -1,0 +1,15 @@
+{
+  "keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "VDpJcA5gFuJsvoo46tKMgUuxWbaJsSy0gsXBEZIV498",
+      "y": "4dT5lbrVzjHODGzTAqEUQVtg5WgQ3H03Bki3QSwJHTo",
+      "kid": "merchant-key-p256-primary",
+      "use": "sig",
+      "alg": "ES256",
+      "key_ops": ["verify"],
+      "ext": true
+    }
+  ]
+}

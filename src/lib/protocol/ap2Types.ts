@@ -13,6 +13,8 @@
 // ============================================================================
 
 export interface IntentMandate {
+  /** Optional unique identifier for this mandate */
+  id?: string
   /**
    * If true, human presence/confirmation is required before completing purchase.
    * If false, external AI agent can autonomously purchase within constraints (Human-Not-Present).
@@ -22,6 +24,8 @@ export interface IntentMandate {
   natural_language_description: string
   /** Maximum price cap in paise (e.g. 200000 = ₹2,000). Aligned with NPCI ₹15,000 UPI AutoPay limit */
   price_cap_paise: number
+  /** ISO currency code */
+  currency?: "INR" | "USD"
   /** Allowed merchant IDs. If null/empty, any suitable merchant is allowed */
   merchants?: string[]
   /** Specific product SKUs/IDs permitted. If null/empty, any SKU matching description is allowed */
@@ -32,6 +36,8 @@ export interface IntentMandate {
   intent_expiry: string
   /** Customer/delegator identifier or public key */
   customer_id?: string
+  /** Autonomous buyer agent identifier executing on behalf of user */
+  agent_id?: string
   /** Digital signature from customer / trusted surface confirming intent */
   user_signature?: string
 }
@@ -170,7 +176,7 @@ export interface A2AAgentManifest {
   name: string
   description: string
   protocol_version: string
-  protocols_supported: Array<"acp" | "ap2" | "ncpi_uap" | "x402">
+  protocols_supported: Array<"ucp" | "acp" | "ap2" | "ncpi_uap" | "x402">
   endpoints: {
     acp_catalog: string
     acp_cart: string
@@ -208,4 +214,18 @@ export interface ACPCatalogResponse {
     in_stock: boolean
   }>
   total_matches: number
+}
+
+export interface AP2VerificationResult {
+  ok: boolean
+  protocol: "ap2"
+  mandate_chain_id?: string
+  cart_hash_valid?: boolean
+  merchant_signature_valid?: boolean
+  price_cap_valid?: boolean
+  expiry_valid?: boolean
+  sku_whitelist_valid?: boolean
+  requires_step_up?: boolean
+  step_up_reason?: string
+  reason?: string
 }

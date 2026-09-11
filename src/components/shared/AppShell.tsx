@@ -10,6 +10,7 @@ import {
   Store,
   Shield,
   LogOut,
+  Radio,
 } from "lucide-react"
 import { Outlet } from "react-router-dom"
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
@@ -52,6 +53,7 @@ const navGroups: {
     label: "AI & Sales",
     items: [
       { label: "AI Agent", key: "ai_agent", icon: Bot },
+      { label: "Protocols (UCP/ACP/AP2)", key: "protocols", icon: Radio },
       { label: "Orders", key: "orders", icon: ShoppingCart },
       { label: "Audit Trail", key: "audit_trail", icon: FileText },
       { label: "Analytics", key: "analytics", icon: BarChart3 },
@@ -86,6 +88,7 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
       dashboard: isSubdomain ? "/dashboard" : "/merchant/dashboard",
       products: isSubdomain ? "/products" : "/merchant/products",
       orders: isSubdomain ? "/orders" : "/merchant/orders",
+      protocols: isSubdomain ? "/protocols" : "/merchant/protocols",
       analytics: isSubdomain ? "/analytics" : "/merchant/analytics",
       ai_agent: isSubdomain ? "/ai_agent" : "/merchant/ai_agent",
       audit_trail: isSubdomain ? "/audit_trail" : "/merchant/audit_trail",

@@ -1,84 +1,78 @@
 {
-  "ucp": {
-    "version": "2026-01-23",
-    "specification": "https://ucp.dev/specification/overview",
-    "transports_supported": ["rest", "a2a", "mcp"],
-    "services": {
-      "dev.ucp.shopping": {
-        "rest": {
-          "endpoint": "https://razent.store/api/ucp/shopping",
-          "openapi": "https://razent.store/api/ucp/shopping/openapi.json"
-        },
-        "a2a": {
-          "endpoint": "https://razent.store/api/a2a",
-          "agent_card": "https://razent.store/.well-known/agent.json"
-        },
-        "mcp": {
-          "endpoint": "https://razent.store/api/mcp",
-          "openrpc": "https://razent.store/api/mcp/openrpc.json"
-        }
-      },
-      "dev.ucp.common": {
-        "rest": {
-          "endpoint": "https://razent.store/api/ucp/common"
-        }
-      }
+  "ucp_version": "2026-01-16",
+  "business_name": "Merchant One (Razent Quick Commerce)",
+  "merchant_id": "merchant_one_razent",
+  "description": "Universal Commerce Protocol manifest for 10-15 min grocery delivery. Supports federated catalog query, synchronized carts, and cryptographic checkout bridge.",
+  "currency": "INR",
+  "country": "IN",
+  "transports": ["rest", "a2a", "mcp"],
+  "services": {
+    "dev.ucp.shopping.catalog": {
+      "transport": "rest",
+      "endpoint": "/api/a2a/ucp/catalog",
+      "version": "1.0.0",
+      "methods": ["GET", "POST"],
+      "description": "Federated product catalog discovery and full-text search"
     },
-    "capabilities": [
-      {
-        "id": "dev.ucp.shopping.catalog",
-        "version": "1.0.0",
-        "description": "Product catalog discovery, inventory lookup, and category filtering"
-      },
-      {
-        "id": "dev.ucp.shopping.cart",
-        "version": "1.0.0",
-        "description": "Cart session lifecycle management with real-time tax calculation"
-      },
-      {
-        "id": "dev.ucp.shopping.checkout",
-        "version": "1.0.0",
-        "description": "Autonomous and human-present checkout sessions"
-      },
-      {
-        "id": "dev.ucp.shopping.orders",
-        "version": "1.0.0",
-        "description": "Order lifecycle tracking, delivery ETA, and webhook status updates"
-      }
-    ],
-    "extensions": [
-      {
-        "id": "dev.ucp.shopping.ap2_mandate",
-        "version": "2025.0",
-        "specification": "https://github.com/google-agentic-commerce/AP2",
-        "mandates": ["IntentMandate", "CartMandate", "PaymentMandate"],
-        "required_for_autonomous_checkout": true
-      }
-    ],
-    "payment_handlers": [
-      {
-        "id": "dev.ucp.payment.upi",
-        "rail": "NPCI_UPI_AUTOPAY",
-        "currency": "INR",
-        "max_recurring_limit_paise": 1500000,
-        "test_credentials": {
-          "success_vpa": "success@razorpay",
-          "failure_vpa": "failure@razorpay"
-        }
-      },
-      {
-        "id": "dev.ucp.payment.card_token",
-        "rail": "RBI_COF_TOKENIZATION",
-        "networks": ["Visa", "Mastercard", "RuPay", "Diners", "Amex"],
-        "requires_3ds_step_up_above_paise": 1500000
-      }
-    ]
+    "dev.ucp.shopping.cart": {
+      "transport": "rest",
+      "endpoint": "/api/a2a/ucp/cart",
+      "version": "1.0.0",
+      "methods": ["POST"],
+      "description": "Ephemeral cart negotiation with integer paise arithmetic and tax calculation"
+    },
+    "dev.ucp.shopping.orders": {
+      "transport": "rest",
+      "endpoint": "/api/a2a/ucp/orders",
+      "version": "1.0.0",
+      "methods": ["GET"],
+      "description": "Order lifecycle state tracking, delivery rider assignment, and fulfillment status"
+    },
+    "dev.ucp.shopping.checkout": {
+      "transport": "rest",
+      "endpoint": "/api/a2a/acp/checkout_sessions",
+      "version": "2026-01-16",
+      "protocol": "acp",
+      "methods": ["POST", "GET"],
+      "description": "Direct bridge to Agentic Commerce Protocol checkout sessions"
+    }
   },
-  "business": {
-    "id": "b57fec42-c785-466e-b225-3f7a27edcccb",
-    "name": "Razent Instant Retail",
-    "country": "IN",
-    "currency": "INR",
-    "settlement": "Razorpay Escrow (T+1/T+2)"
+  "payment_handlers": [
+    {
+      "id": "dev.acp.upi_autopay",
+      "name": "UPI AutoPay / e-Mandate",
+      "spec": "NPCI UPI 2.0 / AutoPay Circular 2023",
+      "supported_currencies": ["INR"],
+      "max_limit_rupees": 15000
+    },
+    {
+      "id": "dev.acp.tokenized.card",
+      "name": "RBI Tokenized Credit/Debit Cards",
+      "spec": "RBI CoFT / Network Tokenization",
+      "supported_currencies": ["INR", "USD"]
+    },
+    {
+      "id": "dev.acp.seller_backed.saved_card",
+      "name": "Razorpay Vault Stored Payment",
+      "spec": "Razorpay Customer Tokenization API",
+      "supported_currencies": ["INR"]
+    },
+    {
+      "id": "dev.acp.seller_backed.store_credit",
+      "name": "Merchant Wallet Credit",
+      "spec": "Internal Razent Wallet",
+      "supported_currencies": ["INR"]
+    }
+  ],
+  "mcp_server": {
+    "name": "razent-commerce-mcp",
+    "endpoint": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/ragent-chat",
+    "protocol_version": "2024-11-05"
+  },
+  "cryptography": {
+    "jwks_uri": "/.well-known/jwks.json",
+    "hash_algorithm": "SHA-256",
+    "canonicalization": "RFC-8785",
+    "signature_algorithm": "ES256"
   }
 }

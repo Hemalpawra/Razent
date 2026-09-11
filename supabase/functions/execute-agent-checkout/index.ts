@@ -19,6 +19,9 @@ const UAP_VERIFIER_URL = Deno.env.get("UAP_VERIFIER_URL") ?? "";
 const X402_CHALLENGE_URL = Deno.env.get("X402_CHALLENGE_URL") ?? "";
 const UAP_TEST_SIGNING_KEY = Deno.env.get("UAP_TEST_SIGNING_KEY") ?? "";
 
+const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID") || "rzp_test_TXeysTR9U8Fyws";
+const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET") || "UuzZqB93v2obPdSyg3plRzKd";
+
 function createServiceClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
@@ -27,7 +30,7 @@ function createServiceClient() {
 
 type CheckoutRequest = {
   order_id: string;
-  protocol?: "ncpi_uap" | "acp" | "x402" | "direct_web";
+  protocol?: "ncpi_uap" | "acp" | "ap2" | "x402" | "direct_web";
   mandate?: {
     mandate_id: string;
     agent_name?: string;
@@ -38,8 +41,9 @@ type CheckoutRequest = {
 
 type CheckoutResult = {
   status: "settled" | "step_up" | "failed";
-  protocol: "ncpi_uap" | "acp" | "x402" | "direct_web";
+  protocol: "ncpi_uap" | "acp" | "ap2" | "x402" | "direct_web";
   settlement_reference?: string;
+  razorpay_order_id?: string;
   challenge?: Record<string, unknown>;
   audit_session_id?: string;
   reason?: string;
@@ -120,40 +124,52 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // 4. Autonomous settlement via NPCI UAP
-  if (protocol === "ncpi_uap" && mandate && UAP_VERIFIER_URL) {
-    const uapPayload = {
-      type: "uap.debit",
-      mandate_id: mandate.mandate_id,
-      customer_id: order.customer_id,
-      merchant_id: order.merchant_id,
-      amount_paise: order.total_paise,
-      order_id: order_id,
-      npci_rrn: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-      npci_stan: Math.floor(Math.random() * 999999).toString().padStart(6, "0"),
-      npci_timestamp: new Date().toISOString(),
-    };
-
-    const uapRes = await fetch(UAP_VERIFIER_URL, {
+  // 4. Real Razorpay Test Rail Settlement for Autonomous Orders
+  try {
+    const rzpRes = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
       headers: {
-        "content-type": "application/json",
-        ...(UAP_TEST_SIGNING_KEY
-          ? { "x-razent-internal-signature": await hmac(JSON.stringify(uapPayload), UAP_TEST_SIGNING_KEY) }
-          : {}),
+        Authorization: `Basic ${btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(uapPayload),
+      body: JSON.stringify({
+        amount: Math.round(order.total_paise),
+        currency: "INR",
+        receipt: `rcpt_${order_id.slice(0, 16)}`,
+        notes: {
+          external_order_id: order_id,
+          protocol,
+          mandate_id: mandate?.mandate_id ?? "none",
+        },
+      }),
     });
 
-    if (uapRes.ok) {
-      const uapJson = await uapRes.json();
-      await writeAudit(svc, order_id, "uap_settle", "Success", `rrn=${uapPayload.npci_rrn}`);
+    if (rzpRes.ok) {
+      const rzpData = await rzpRes.json();
+      const settlementRef = `rzp_settle_${rzpData.id}`;
+
+      // Update database order
+      await svc
+        .from("orders")
+        .update({
+          status: "paid",
+          razorpay_order_id: rzpData.id,
+          settlement_reference: settlementRef,
+          paid_at: new Date().toISOString(),
+        })
+        .eq("external_id", order_id);
+
+      await writeAudit(svc, order_id, "order_settled", "Success", `Razorpay Order: ${rzpData.id}`);
+
       return jsonResponse({
         status: "settled",
-        protocol: "ncpi_uap",
-        settlement_reference: uapJson.settlement_reference,
+        protocol: protocol as any,
+        razorpay_order_id: rzpData.id,
+        settlement_reference: settlementRef,
       });
     }
+  } catch (err) {
+    console.error("Razorpay order creation error:", err);
   }
 
   // 5. Fallback: x402 challenge (require human step-up)

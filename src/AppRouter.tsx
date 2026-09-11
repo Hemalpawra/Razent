@@ -21,6 +21,7 @@ import AnalyticsScreen from "@/components/merchant/Analytics"
 import AIAgentScreen from "@/components/merchant/AIAgent"
 import AuditTrailScreen from "@/components/merchant/AuditTrail"
 import SettingsScreen from "@/components/merchant/Settings"
+import ProtocolManagerPage from "@/components/merchant/Protocol/ProtocolManagerPage"
 
 function AdminLayout() {
   const { role, isLoading } = useMerchant()
@@ -65,6 +66,7 @@ function MerchantRoutes() {
         <Route path="/analytics" element={<AnalyticsScreen />} />
         <Route path="/ai_agent" element={<AIAgentScreen />} />
         <Route path="/audit_trail" element={<AuditTrailScreen />} />
+        <Route path="/protocols" element={<ProtocolManagerPage />} />
         <Route path="/settings" element={<SettingsScreen />} />
 
         {/* Backward-compatibility aliases for /merchant/* */}
@@ -75,6 +77,7 @@ function MerchantRoutes() {
         <Route path="/merchant/analytics" element={<Navigate to="/analytics" replace />} />
         <Route path="/merchant/ai_agent" element={<Navigate to="/ai_agent" replace />} />
         <Route path="/merchant/audit_trail" element={<Navigate to="/audit_trail" replace />} />
+        <Route path="/merchant/protocols" element={<Navigate to="/protocols" replace />} />
         <Route path="/merchant/settings" element={<Navigate to="/settings" replace />} />
       </Route>
 
@@ -135,6 +138,7 @@ function StorefrontRoutes() {
             <Route path="analytics" element={<AnalyticsScreen />} />
             <Route path="ai_agent" element={<AIAgentScreen />} />
             <Route path="audit_trail" element={<AuditTrailScreen />} />
+            <Route path="protocols" element={<ProtocolManagerPage />} />
             <Route path="settings" element={<SettingsScreen />} />
           </Route>
           <Route path="/admin" element={<Navigate to="/merchant/dashboard" replace />} />

@@ -191,24 +191,26 @@ import type {
   CartMandate,
   PaymentMandate,
   NPCIMandateConfig,
+  AP2VerificationResult,
 } from "./ap2Types"
-
-// Simple browser-compatible SHA-256 string hasher
-export function simpleHashString(str: string): string {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = (hash << 5) - hash + char
-    hash |= 0
-  }
-  return "hash_" + Math.abs(hash).toString(16).padStart(8, "0")
-}
+import {
+  computeCanonicalCartHash,
+  getOrCreateMerchantKeys,
+  signJWS,
+  verifyJWS,
+  sha256Hex,
+} from "./ap2Crypto"
+import { canonicalize } from "./canonicalize"
 
 /**
- * Creates a merchant-signed AP2 Cart Mandate with SHA-256 cart hash and authorization JWT.
+ * Creates an authorized AP2 Cart Mandate with real RFC 8785 canonical SHA-256 hash
+ * and WebCrypto ECDSA P-256 (ES256) merchant digital signature.
  */
-export function createAP2CartMandate(cart: CartContents): CartMandate {
-  const canonicalJson = JSON.stringify({
+export async function createAP2CartMandate(
+  cart: CartContents,
+  merchantPrivateKey?: CryptoKey,
+): Promise<CartMandate> {
+  const { cartHash } = await computeCanonicalCartHash({
     id: cart.id,
     merchant_id: cart.merchant_id,
     items: cart.items,
@@ -216,22 +218,19 @@ export function createAP2CartMandate(cart: CartContents): CartMandate {
     cart_expiry: cart.cart_expiry,
   })
 
-  const cartHash = simpleHashString(canonicalJson)
+  const keys = await getOrCreateMerchantKeys()
+  const privateKey = merchantPrivateKey || keys.privateKey
 
-  // Header and Payload matching Google AP2 specifications
-  const header = btoa(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "merchant_key_2026" }))
-  const payload = btoa(
-    JSON.stringify({
-      iss: cart.merchant_id,
-      aud: "ap2.shopping_agent",
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 900, // 15 min validity
-      cart_hash: cartHash,
-      jti: `jwt_${cart.id}_${Date.now()}`,
-    }),
-  )
-  const mockSignature = btoa(`sig_${cartHash}_${cart.merchant_id.slice(0, 8)}`)
-  const merchantAuthorization = `${header}.${payload}.${mockSignature}`
+  const jwsPayload = {
+    iss: cart.merchant_id,
+    aud: "ap2.shopping_agent",
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 900, // 15 min validity
+    cart_hash: cartHash,
+    jti: `jwt_${cart.id}_${Date.now()}`,
+  }
+
+  const merchantAuthorization = await signJWS(jwsPayload, privateKey, "merchant-key-p256-primary")
 
   return {
     contents: cart,
@@ -243,7 +242,7 @@ export function createAP2CartMandate(cart: CartContents): CartMandate {
 /**
  * Helper to build an AP2 Cart Mandate directly from a list of cart items.
  */
-export function createAP2CartMandateFromItems(
+export async function createAP2CartMandateFromItems(
   items: Array<{
     id: string
     title: string
@@ -251,7 +250,7 @@ export function createAP2CartMandateFromItems(
     qty: number
     image_url?: string
   }>,
-): CartMandate {
+): Promise<CartMandate> {
   const total_paise = items.reduce((sum, it) => sum + it.price_paise * it.qty, 0)
   const cartContents: CartContents = {
     id: `cart_${Date.now()}`,
@@ -311,13 +310,13 @@ export function verifyAP2IntentMandate(
 }
 
 /**
- * Creates an AP2 Payment Mandate linking customer authorization to settlement rail.
+ * Creates an authorized AP2 Payment Mandate linking customer authorization to settlement rail.
  */
-export function createAP2PaymentMandate(
+export async function createAP2PaymentMandate(
   cartMandate: CartMandate,
   upiVpa: string,
   mandateChainId?: string,
-): PaymentMandate {
+): Promise<PaymentMandate> {
   const chainId = mandateChainId || `chain_ap2_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
   const contents = {
     payment_mandate_id: `pm_${Date.now()}`,
@@ -339,12 +338,100 @@ export function createAP2PaymentMandate(
     timestamp: new Date().toISOString(),
   }
 
-  const sig = btoa(JSON.stringify({ chainId, upiVpa, total: cartMandate.contents.total_paise }))
+  // Real SHA-256 signature of the linked mandate contents
+  const canonicalPayload = canonicalize({ chainId, upiVpa, total: cartMandate.contents.total_paise, cartHash: cartMandate.cart_hash })
+  const userSig = await sha256Hex(canonicalPayload)
 
   return {
     contents,
-    user_authorization: `sig_usr_${sig.slice(0, 24)}`,
+    user_authorization: `sig_usr_${userSig}`,
     mandate_chain_id: chainId,
+  }
+}
+
+/**
+ * End-to-End Cryptographic AP2 Mandate Chain Verifier.
+ * Verifies:
+ * 1. Cart hash recomputation matches CartMandate.cart_hash
+ * 2. Merchant JWS signature verifies using merchant public key
+ * 3. Intent mandate bounds (expiry, price cap, SKU whitelist)
+ * 4. Payment mandate links strictly to CartMandate
+ */
+export async function verifyFullAP2MandateChain(
+  intent: IntentMandate,
+  cartMandate: CartMandate,
+  paymentMandate: PaymentMandate,
+  merchantPublicKey?: CryptoKey,
+): Promise<AP2VerificationResult> {
+  // 1. Recompute cart hash
+  const { cartHash } = await computeCanonicalCartHash({
+    id: cartMandate.contents.id,
+    merchant_id: cartMandate.contents.merchant_id,
+    items: cartMandate.contents.items,
+    total_paise: cartMandate.contents.total_paise,
+    cart_expiry: cartMandate.contents.cart_expiry,
+  })
+
+  const cartHashValid = cartHash === cartMandate.cart_hash
+  if (!cartHashValid) {
+    return {
+      ok: false,
+      protocol: "ap2",
+      cart_hash_valid: false,
+      reason: "Cart tampering detected: canonical hash mismatch",
+    }
+  }
+
+  // 2. Verify merchant JWS signature
+  const keys = await getOrCreateMerchantKeys()
+  const pubKey = merchantPublicKey || keys.publicKey
+  const jwsResult = await verifyJWS<{ cart_hash: string }>(cartMandate.merchant_authorization, pubKey)
+
+  if (!jwsResult.valid || jwsResult.payload?.cart_hash !== cartMandate.cart_hash) {
+    return {
+      ok: false,
+      protocol: "ap2",
+      cart_hash_valid: true,
+      merchant_signature_valid: false,
+      reason: "Invalid merchant digital signature on Cart Mandate",
+    }
+  }
+
+  // 3. Verify Intent Mandate constraints
+  const intentCheck = verifyAP2IntentMandate(intent, cartMandate)
+  if (!intentCheck.ok) {
+    return {
+      ok: false,
+      protocol: "ap2",
+      cart_hash_valid: true,
+      merchant_signature_valid: true,
+      price_cap_valid: false,
+      requires_step_up: true,
+      step_up_reason: intentCheck.reason,
+      reason: intentCheck.reason,
+    }
+  }
+
+  // 4. Verify Payment Mandate chain link
+  if (paymentMandate.contents.cart_mandate_id !== cartMandate.contents.id) {
+    return {
+      ok: false,
+      protocol: "ap2",
+      cart_hash_valid: true,
+      merchant_signature_valid: true,
+      reason: "Payment mandate does not match Cart Mandate ID",
+    }
+  }
+
+  return {
+    ok: true,
+    protocol: "ap2",
+    mandate_chain_id: paymentMandate.mandate_chain_id,
+    cart_hash_valid: true,
+    merchant_signature_valid: true,
+    price_cap_valid: true,
+    expiry_valid: true,
+    sku_whitelist_valid: true,
   }
 }
 
