@@ -1,5 +1,73 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/merchant/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "razent.vercel.app"
+        }
+      ],
+      "destination": "https://razent-merchant.vercel.app/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/merchant",
+      "has": [
+        {
+          "type": "host",
+          "value": "razent.vercel.app"
+        }
+      ],
+      "destination": "https://razent-merchant.vercel.app/dashboard",
+      "permanent": false
+    },
+    {
+      "source": "/signin",
+      "has": [
+        {
+          "type": "host",
+          "value": "razent.vercel.app"
+        }
+      ],
+      "destination": "https://razent-merchant.vercel.app/signin",
+      "permanent": false
+    },
+    {
+      "source": "/sign-in",
+      "has": [
+        {
+          "type": "host",
+          "value": "razent.vercel.app"
+        }
+      ],
+      "destination": "https://razent-merchant.vercel.app/signin",
+      "permanent": false
+    },
+    {
+      "source": "/admin/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "razent.vercel.app"
+        }
+      ],
+      "destination": "https://razent-merchant.vercel.app/dashboard",
+      "permanent": false
+    },
+    {
+      "source": "/admin",
+      "has": [
+        {
+          "type": "host",
+          "value": "razent.vercel.app"
+        }
+      ],
+      "destination": "https://razent-merchant.vercel.app/dashboard",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/__clerk/(.*)",

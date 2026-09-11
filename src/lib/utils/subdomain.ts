@@ -40,7 +40,12 @@ export function isMerchantSubdomain(): boolean {
 export function getMerchantUrl(path = "/dashboard"): string {
   if (typeof window === "undefined") return path
 
-  const cleanPath = path.startsWith("/") ? path : `/${path}`
+  // Normalize path: strip leading /merchant or /admin prefix
+  let normalized = path.replace(/^\/(merchant|admin)(\/|$)/, "/")
+  if (!normalized || normalized === "/") {
+    normalized = "/dashboard"
+  }
+  const cleanPath = normalized.startsWith("/") ? normalized : `/${normalized}`
 
   // If explicit merchant base URL is configured in env (e.g. https://merchant.yourdomain.com)
   if (import.meta.env.VITE_MERCHANT_URL) {
@@ -62,6 +67,9 @@ export function getMerchantUrl(path = "/dashboard"): string {
   }
 
   // Local development fallback: keep within current host under /merchant
+  if (cleanPath === "/signin" || cleanPath === "/sign-in") {
+    return "/signin"
+  }
   return `/merchant${cleanPath === "/dashboard" ? "/dashboard" : cleanPath}`
 }
 

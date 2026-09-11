@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom"
 import ThemeProvider from "@/app/ThemeProvider"
 import { Toaster } from "@/components/shared/Toaster"
 import { EnvErrorBoundary } from "@/components/shared/EnvErrorBoundary"
@@ -86,6 +86,27 @@ function MerchantRoutes() {
   )
 }
 
+const isLocalhost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1")
+
+function MerchantRedirect() {
+  const location = useLocation()
+
+  useEffect(() => {
+    const fullPath = location.pathname + location.search
+    const targetUrl = getMerchantUrl(fullPath)
+    window.location.replace(targetUrl)
+  }, [location.pathname, location.search])
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <p className="text-sm text-muted-foreground">Redirecting to merchant portal...</p>
+    </div>
+  )
+}
+
 function StorefrontRoutes() {
   return (
     <Routes>
@@ -99,21 +120,34 @@ function StorefrontRoutes() {
       <Route path="/customer/signup/*" element={<Navigate to="/signup" replace />} />
       <Route path="/customer/auth/*" element={<CustomerAuthPage />} />
 
-      {/* Direct Merchant Console Routes */}
-      <Route path="/signin" element={<SignInScreen />} />
-      <Route path="/sign-in" element={<Navigate to="/signin" replace />} />
-      <Route path="/merchant" element={<AdminLayout />}>
-        <Route index element={<Navigate to="/merchant/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardScreen />} />
-        <Route path="products" element={<ProductsScreen />} />
-        <Route path="orders" element={<OrdersScreen />} />
-        <Route path="analytics" element={<AnalyticsScreen />} />
-        <Route path="ai_agent" element={<AIAgentScreen />} />
-        <Route path="audit_trail" element={<AuditTrailScreen />} />
-        <Route path="settings" element={<SettingsScreen />} />
-      </Route>
-      <Route path="/admin" element={<Navigate to="/merchant/dashboard" replace />} />
-      <Route path="/admin/*" element={<Navigate to="/merchant/dashboard" replace />} />
+      {/* Merchant Console Routes - direct on local dev, redirected in production */}
+      {isLocalhost ? (
+        <>
+          <Route path="/signin" element={<SignInScreen />} />
+          <Route path="/sign-in" element={<Navigate to="/signin" replace />} />
+          <Route path="/merchant" element={<AdminLayout />}>
+            <Route index element={<Navigate to="/merchant/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardScreen />} />
+            <Route path="products" element={<ProductsScreen />} />
+            <Route path="orders" element={<OrdersScreen />} />
+            <Route path="analytics" element={<AnalyticsScreen />} />
+            <Route path="ai_agent" element={<AIAgentScreen />} />
+            <Route path="audit_trail" element={<AuditTrailScreen />} />
+            <Route path="settings" element={<SettingsScreen />} />
+          </Route>
+          <Route path="/admin" element={<Navigate to="/merchant/dashboard" replace />} />
+          <Route path="/admin/*" element={<Navigate to="/merchant/dashboard" replace />} />
+        </>
+      ) : (
+        <>
+          <Route path="/signin" element={<MerchantRedirect />} />
+          <Route path="/sign-in" element={<MerchantRedirect />} />
+          <Route path="/merchant" element={<MerchantRedirect />} />
+          <Route path="/merchant/*" element={<MerchantRedirect />} />
+          <Route path="/admin" element={<MerchantRedirect />} />
+          <Route path="/admin/*" element={<MerchantRedirect />} />
+        </>
+      )}
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

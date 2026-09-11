@@ -5,6 +5,7 @@ import { User, LogOut, PackageCheck, Shield, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { getMerchantUrl } from "@/lib/utils/subdomain"
 
 interface CustomerProfileMenuProps {
   onOpenTrackOrder?: () => void
@@ -124,7 +125,12 @@ export function CustomerProfileMenu({ onOpenTrackOrder }: CustomerProfileMenuPro
               type="button"
               onClick={() => {
                 setIsOpen(false)
-                navigate("/signin")
+                const merchantUrl = getMerchantUrl("/dashboard")
+                if (merchantUrl.startsWith("http")) {
+                  window.location.href = merchantUrl
+                } else {
+                  navigate(merchantUrl)
+                }
               }}
               className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-xs text-muted-foreground rounded-lg hover:bg-accent hover:text-foreground transition-colors text-left"
             >
