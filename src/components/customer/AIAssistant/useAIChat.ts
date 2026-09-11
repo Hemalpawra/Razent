@@ -11,6 +11,7 @@ import { executeChatAgentTurn } from "@/lib/agent/chatAgent"
 import {
   upsertConversation,
   listCustomerConversations,
+  logAuditEvent,
 } from "@/lib/api/client"
 import { useCustomerAuth } from "@/state/useCustomerAuth"
 import { useUser } from "@clerk/react"
@@ -249,6 +250,24 @@ export function useAIChat(products: Product[] = [], initialConversationId?: stri
           }
         }
 
+        // Log customer_request to DB audit session
+        logAuditEvent({
+          session_id: convExtId.current,
+          customer: customerName || customerEmail || "Online Customer",
+          actor_label: "Customer",
+          event: {
+            id: `ev_${Date.now()}_req`,
+            type: "customer_request",
+            timestamp: new Date().toISOString(),
+            actor: "Customer",
+            source: "AI Agent",
+            result: "Success",
+            reason: `User inquiry: "${trimmedText.slice(0, 100)}"`,
+            payload_summary: trimmedText,
+            status_code: 200,
+          },
+        }).catch(() => {})
+
         const assistantMsg: ChatMessage = {
           id: genId(),
           role: "assistant",
@@ -258,6 +277,47 @@ export function useAIChat(products: Product[] = [], initialConversationId?: stri
           products: result.products,
           checkoutAction: result.checkoutAction,
           orderCheckout,
+        }
+
+        // Log product_recommendation if recommendations were made
+        if (result.products && result.products.length > 0) {
+          logAuditEvent({
+            session_id: convExtId.current,
+            customer: customerName || customerEmail || "Online Customer",
+            actor_label: "AI Assistant",
+            event: {
+              id: `ev_${Date.now()}_rec`,
+              type: "product_recommendation",
+              timestamp: new Date().toISOString(),
+              actor: "AI Assistant",
+              source: "AI Agent",
+              result: "Success",
+              reason: `AI suggested ${result.products.length} product(s)`,
+              payload_summary: result.products.map((p) => p.title).join(", "),
+              related_product: result.products[0]?.title,
+              status_code: 200,
+            },
+          }).catch(() => {})
+        }
+
+        // Log order_review_shown if checkout card attached
+        if (orderCheckout) {
+          logAuditEvent({
+            session_id: convExtId.current,
+            customer: customerName || customerEmail || "Online Customer",
+            actor_label: "AI Assistant",
+            event: {
+              id: `ev_${Date.now()}_rev`,
+              type: "order_review_shown",
+              timestamp: new Date().toISOString(),
+              actor: "AI Assistant",
+              source: "AI Agent",
+              result: "Success",
+              reason: `Checkout review card presented for ${candidateProducts.length} items`,
+              payload_summary: `Estimated: ₹${((orderCheckout.totalPaise || 0) / 100).toFixed(2)}`,
+              status_code: 200,
+            },
+          }).catch(() => {})
         }
 
         const finalMsgs = [...updatedWithUser, assistantMsg]
