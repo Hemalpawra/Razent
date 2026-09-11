@@ -7,6 +7,7 @@ import {
 } from "@/lib/api/client"
 import { formatPrice, type Product } from "@/lib/types/product"
 import { useSettings } from "@/state/useSettings"
+import { getAgentPurchaseEnabled } from "@/state/useAgentPurchase"
 import {
   SearchCatalogInput,
   SearchCatalogOutput,
@@ -249,6 +250,21 @@ export async function executeCreateOrder(
       qty: item.qty,
       unit_price_paise: product.price_paise,
     })
+  }
+
+  // Enforce Agent Purchase Permission: If turned off, agent is strictly forbidden from placing orders
+  if (!getAgentPurchaseEnabled()) {
+    assistantStateMachine.transition("blocked", {
+      reason: "Agent purchases are disabled in the customer's wallet settings.",
+    })
+    return {
+      success: false,
+      totalPaise,
+      phoneVerified: input.shippingAddress.phoneVerified,
+      status: "blocked_permission",
+      errorMessage:
+        "Agent purchases are currently turned OFF in your Wallet settings. Please turn on Agent Purchases in your Wallet to allow the assistant to place orders.",
+    }
   }
 
   // Check OTP Gate: Money actions require verified phone

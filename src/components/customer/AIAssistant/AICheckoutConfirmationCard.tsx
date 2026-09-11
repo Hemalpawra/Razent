@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +12,7 @@ import {
   MapPin,
   User,
   ShieldCheck,
+  ShieldAlert,
   ChevronRight,
   Loader2,
   Sparkles,
@@ -19,6 +21,7 @@ import type { Product } from "@/lib/types/product"
 import { formatPrice } from "@/lib/types/product"
 import { createStorefrontOrder } from "@/lib/api/client"
 import { useCart } from "@/state/useCart"
+import { useAgentPurchase } from "@/state/useAgentPurchase"
 import { toast } from "sonner"
 import type { Order } from "@/lib/types/order"
 
@@ -55,6 +58,8 @@ export function AICheckoutConfirmationCard({
   const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | "cod">("upi")
 
   const clearCart = useCart((s) => s.clearCart)
+  const navigate = useNavigate()
+  const { agentPurchaseEnabled } = useAgentPurchase()
 
   const items = products.length > 0 ? products : []
   const subtotalPaise = items.reduce((acc, p) => acc + (p.price_paise || 0), 0)
@@ -62,6 +67,13 @@ export function AICheckoutConfirmationCard({
   const totalPaise = subtotalPaise + deliveryPaise
 
   const handleConfirmOrder = async () => {
+    if (!agentPurchaseEnabled) {
+      toast.error("Agent purchases are disabled", {
+        description: "Please enable Agent Purchases in your Wallet to allow placing orders via AI Assistant.",
+      })
+      return
+    }
+
     if (items.length === 0) {
       toast.error("No items to checkout")
       return
@@ -339,16 +351,42 @@ export function AICheckoutConfirmationCard({
       </CardContent>
 
       <CardFooter className="flex flex-col gap-2 pt-0">
+        {!agentPurchaseEnabled && (
+          <div className="w-full flex items-center justify-between gap-2 p-2.5 rounded-lg border border-border bg-muted/60 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <ShieldAlert className="size-4 shrink-0 text-amber-500" />
+              <div className="text-left">
+                <p className="font-semibold text-foreground text-[11px]">Agent Purchases Disabled</p>
+                <p className="text-[10px] text-muted-foreground">Ordering is turned off in your Wallet settings.</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px] shrink-0 font-medium"
+              onClick={() => navigate("/wallet")}
+            >
+              Open Wallet
+            </Button>
+          </div>
+        )}
+
         <Button
           type="button"
           className="w-full font-semibold gap-2 shadow-sm text-xs h-9"
-          disabled={isPlacing || items.length === 0}
+          disabled={isPlacing || items.length === 0 || !agentPurchaseEnabled}
           onClick={handleConfirmOrder}
         >
           {isPlacing ? (
             <>
               <Loader2 className="animate-spin" data-icon="inline-start" />
               <span>Confirming Order...</span>
+            </>
+          ) : !agentPurchaseEnabled ? (
+            <>
+              <ShieldAlert data-icon="inline-start" />
+              <span>Ordering Blocked (Enable in Wallet)</span>
             </>
           ) : (
             <>
@@ -358,7 +396,9 @@ export function AICheckoutConfirmationCard({
           )}
         </Button>
         <p className="text-[10px] text-muted-foreground/70 text-center">
-          Human verification step: You can review and modify all details before final confirmation.
+          {agentPurchaseEnabled
+            ? "Human verification step: You can review and modify all details before final confirmation."
+            : "To allow the AI Assistant to confirm and place this order, enable Agent Purchases in your Wallet."}
         </p>
       </CardFooter>
     </Card>

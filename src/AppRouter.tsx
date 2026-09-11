@@ -10,6 +10,7 @@ import { isMerchantSubdomain, getMerchantUrl } from "@/lib/utils/subdomain"
 import { AppShell } from "@/components/shared/AppShell"
 import StoreHome from "@/components/customer/StoreHome"
 import { AIAssistantPage } from "@/components/customer/AIAssistant"
+import WalletPage from "@/components/customer/Wallet/WalletPage"
 import SignInScreen from "@/components/auth/SignInScreen"
 import CustomerAuthPage from "@/components/customer/auth/CustomerAuthPage"
 
@@ -112,6 +113,7 @@ function StorefrontRoutes() {
     <Routes>
       <Route path="/" element={<StoreHome />} />
       <Route path="/assistant" element={<AIAssistantPage />} />
+      <Route path="/wallet" element={<WalletPage />} />
 
       {/* Customer Authentication with clean path routing */}
       <Route path="/login/*" element={<CustomerAuthPage initialMode="login" />} />

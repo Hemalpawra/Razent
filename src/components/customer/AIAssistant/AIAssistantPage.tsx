@@ -56,20 +56,19 @@ import { cn } from "@/lib/utils"
 import { isN8nAgentEnabled } from "@/lib/agent/n8nAgent"
 import { isOpenRouterConfigured } from "@/lib/agent/chatAgent"
 import { toast } from "sonner"
-import { DEFAULT_TEST_UPI_METHODS, getSavedTestCards } from "@/lib/protocol/regulatoryWrapper"
+import { useAgentPurchase } from "@/state/useAgentPurchase"
 
 export default function AIAssistantPage() {
   const navigate = useNavigate()
   const { user } = useUser()
-  const { profile, updateProfile } = useClerkCustomerProfile()
+  const { profile } = useClerkCustomerProfile()
   const { storeProfile } = useSettings()
   const cartCount = useCart((s) => s.getItemCount())
+  const { agentPurchaseEnabled, toggle: toggleAgentPurchase } = useAgentPurchase()
 
   const [products, setProducts] = useState<Product[]>([])
   const [input, setInput] = useState("")
   const [historyOpen, setHistoryOpen] = useState(false)
-  const agentPurchaseEnabled = Boolean(profile?.metadata?.agentPurchaseEnabled)
-  const [showWallet, setShowWallet] = useState(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -130,24 +129,6 @@ export default function AIAssistantPage() {
     setInput("")
     await sendMessage(text)
     inputRef.current?.focus()
-  }
-
-  const handleAgentPurchaseToggle = async () => {
-    if (!user) {
-      navigate("/signup")
-      return
-    }
-    const { error } = await updateProfile({
-      metadata: {
-        ...(profile?.metadata || {}),
-        agentPurchaseEnabled: !agentPurchaseEnabled,
-      },
-    })
-    if (error) {
-      toast.error("Could not update agent purchase permission", { description: error.message })
-      return
-    }
-    toast.success(!agentPurchaseEnabled ? "Agent purchases enabled" : "Agent purchases disabled")
   }
 
   const handleSuggestion = async (suggestion: string) => {
@@ -277,8 +258,8 @@ export default function AIAssistantPage() {
             variant="ghost"
             size="icon"
             className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
-            onClick={() => setShowWallet((visible) => !visible)}
-            title="Test wallet"
+            onClick={() => navigate("/wallet")}
+            title="Wallet & Payment Credentials"
           >
             <WalletCards className="size-4" />
           </Button>
@@ -287,43 +268,19 @@ export default function AIAssistantPage() {
             variant={agentPurchaseEnabled ? "default" : "outline"}
             size="sm"
             className="text-[11px] h-8 hidden md:inline-flex"
-            onClick={handleAgentPurchaseToggle}
+            onClick={async () => {
+              const next = await toggleAgentPurchase()
+              toast(next ? "Agent purchases enabled" : "Agent purchases disabled", {
+                description: next
+                  ? "AI Assistant is authorized to place orders."
+                  : "AI Assistant is blocked from placing orders.",
+              })
+            }}
+            title="Toggle Agent Purchases (or manage in Wallet)"
           >
             Agent Purchases: {agentPurchaseEnabled ? "On" : "Off"}
           </Button>
         </div>
-
-        {/* Sandbox wallet dropdown */}
-        {showWallet && (
-          <div className="absolute right-4 top-14 z-40 w-72 rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl">
-            <p className="text-xs font-semibold">Razorpay test wallet</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Sandbox methods only. No real payment credentials are stored.
-            </p>
-            <div className="mt-3 flex flex-col gap-2">
-              {DEFAULT_TEST_UPI_METHODS.map((method) => (
-                <div
-                  key={method.id}
-                  className="flex items-center justify-between rounded-md bg-muted px-2 py-1.5 text-xs"
-                >
-                  <span>{method.label}</span>
-                  <span className="font-mono text-[10px]">{method.vpa}</span>
-                </div>
-              ))}
-              {getSavedTestCards().map((card) => (
-                <div
-                  key={card.id}
-                  className="flex items-center justify-between rounded-md bg-muted px-2 py-1.5 text-xs"
-                >
-                  <span>
-                    {card.network} {card.cardType}
-                  </span>
-                  <span className="font-mono text-[10px]">{card.maskedNumber}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </header>
 
       {/* Chat History Sheet */}
