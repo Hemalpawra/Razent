@@ -53,7 +53,15 @@ export function getMerchantUrl(path = "/dashboard"): string {
     return cleanPath
   }
 
-  // Same domain fallback: keep within current host under /merchant
+  const hostname = window.location.hostname.toLowerCase()
+
+  // Production Vercel domain: razent.vercel.app -> razent-merchant.vercel.app
+  if (hostname === "razent.vercel.app" || (hostname.endsWith(".vercel.app") && !hostname.includes("-merchant"))) {
+    const merchantHost = hostname.replace(".vercel.app", "-merchant.vercel.app")
+    return `${window.location.protocol}//${merchantHost}${cleanPath}`
+  }
+
+  // Local development fallback: keep within current host under /merchant
   return `/merchant${cleanPath === "/dashboard" ? "/dashboard" : cleanPath}`
 }
 
