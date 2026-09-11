@@ -31,6 +31,7 @@ import {
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
 import { useAIChat, CHAT_SUGGESTIONS } from "./useAIChat"
 import { AIMessageBubble } from "./AIMessageBubble"
+import { AIThinkingIndicator } from "./AIThinkingIndicator"
 import { useUser } from "@clerk/react"
 import { useClerkCustomerProfile } from "@/state/useClerkCustomerProfile"
 import { useSettings } from "@/state/useSettings"
@@ -455,24 +456,10 @@ export default function AIAssistantPage() {
                 />
               ))}
 
-              {/* Live tool call indicator */}
-              {isLoading && activeToolCall && (
-                <div className="flex justify-start pl-11">
-                  <ToolCall name={activeToolCall} state="calling" />
-                </div>
-              )}
-
-              {/* Typing indicator */}
-              {isLoading && !activeToolCall && (
-                <div className="flex gap-3 pl-0 items-start">
-                  <div className="size-7 rounded-full bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shrink-0 mt-0.5">
-                    <Sparkles className="size-3.5" />
-                  </div>
-                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl rounded-tl-xs bg-muted/60 border border-border/40">
-                    <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                    <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                    <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce" />
-                  </div>
+              {/* Thinking & Shimmer state during execution (n8n agentic workflow / tool calling) */}
+              {isLoading && (
+                <div className="w-full">
+                  <AIThinkingIndicator activeToolCall={activeToolCall} />
                 </div>
               )}
             </div>

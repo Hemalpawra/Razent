@@ -40,9 +40,11 @@ interface AIMessageBubbleProps {
 
 function ProductCard({
   product,
+  index = 0,
   onOpenDetails,
 }: {
   product: Product
+  index?: number
   onOpenDetails: (p: Product) => void
 }) {
   const [added, setAdded] = useState(false)
@@ -59,7 +61,11 @@ function ProductCard({
   return (
     <Card
       onClick={() => onOpenDetails(product)}
-      className="flex items-center gap-3 p-3 rounded-xl border border-border/70 bg-card hover:border-foreground/30 hover:bg-accent/20 transition-all cursor-pointer group text-left shadow-xs"
+      style={{
+        animationDelay: `${index * 70}ms`,
+        animationFillMode: "both",
+      }}
+      className="flex items-center gap-3 p-3 rounded-xl border border-border/70 bg-card hover:border-foreground/30 hover:bg-accent/20 hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group text-left shadow-xs animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-300 ease-out"
     >
       {product.image_url ? (
         <img
@@ -123,7 +129,11 @@ function renderMarkdown(text: string) {
       result.push(
         <ul key={`ul_${result.length}`} className="flex flex-col gap-1 my-2 list-none">
           {listItems.map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm">
+            <li
+              key={i}
+              className="flex items-start gap-2 text-sm animate-text-reveal"
+              style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
+            >
               <span className="text-primary mt-1.5 shrink-0">•</span>
               <span dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
             </li>
@@ -135,12 +145,30 @@ function renderMarkdown(text: string) {
   }
 
   lines.forEach((line, i) => {
+    const delayStyle = { animationDelay: `${Math.min(i * 25, 250)}ms` }
+
     if (line.startsWith("# ")) {
       flushList()
-      result.push(<h3 key={i} className="font-bold text-sm mt-3 mb-1 text-foreground">{line.slice(2)}</h3>)
+      result.push(
+        <h3
+          key={i}
+          className="font-bold text-sm mt-3 mb-1 text-foreground animate-text-reveal"
+          style={delayStyle}
+        >
+          {line.slice(2)}
+        </h3>
+      )
     } else if (line.startsWith("## ")) {
       flushList()
-      result.push(<h4 key={i} className="font-semibold text-sm mt-2 mb-0.5 text-foreground">{line.slice(3)}</h4>)
+      result.push(
+        <h4
+          key={i}
+          className="font-semibold text-sm mt-2 mb-0.5 text-foreground animate-text-reveal"
+          style={delayStyle}
+        >
+          {line.slice(3)}
+        </h4>
+      )
     } else if (line.match(/^[-*]\s/)) {
       listItems.push(line.slice(2))
     } else if (line.match(/^\d+\.\s/)) {
@@ -153,7 +181,11 @@ function renderMarkdown(text: string) {
       const cells = line.split("|").filter((c) => c.trim() !== "")
       if (!line.includes("---")) {
         result.push(
-          <div key={i} className={`grid text-xs py-1 ${cells.length <= 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+          <div
+            key={i}
+            className={`grid text-xs py-1 animate-text-reveal ${cells.length <= 2 ? "grid-cols-2" : "grid-cols-3"}`}
+            style={delayStyle}
+          >
             {cells.map((cell, ci) => (
               <span
                 key={ci}
@@ -172,7 +204,8 @@ function renderMarkdown(text: string) {
       result.push(
         <p
           key={i}
-          className="text-sm leading-relaxed"
+          className="text-sm leading-relaxed animate-text-reveal"
+          style={delayStyle}
           dangerouslySetInnerHTML={{ __html: formatInline(line) }}
         />,
       )
@@ -253,7 +286,7 @@ export function AIMessageBubble({
               "text-sm leading-relaxed break-words shadow-xs",
               isUser
                 ? "bg-secondary text-secondary-foreground border-border/40 font-medium px-4 py-2.5 max-w-full"
-                : "bg-card text-foreground border-border/70 px-4 py-3.5 max-w-full",
+                : "bg-card text-foreground border-border/70 px-4 py-3.5 max-w-full animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-out",
             )}
           >
             <BubbleContent>
@@ -268,10 +301,11 @@ export function AIMessageBubble({
           {/* Product cards */}
           {!isUser && message.products && message.products.length > 0 && (
             <div className="w-full flex flex-col gap-2 mt-2">
-              {message.products.slice(0, 4).map((product) => (
+              {message.products.slice(0, 4).map((product, index) => (
                 <ProductCard
                   key={product.id}
                   product={product}
+                  index={index}
                   onOpenDetails={handleOpenDetails}
                 />
               ))}
@@ -280,7 +314,7 @@ export function AIMessageBubble({
 
           {/* Autonomous Checkout / Order Confirmation Card */}
           {!isUser && message.orderCheckout && message.orderCheckout.products.length > 0 && (
-            <div className="w-full mt-2">
+            <div className="w-full mt-2 animate-in fade-in-0 zoom-in-98 slide-in-from-bottom-2 duration-300 ease-out">
               <AICheckoutConfirmationCard
                 products={message.orderCheckout.products}
                 customerName={customerName}

@@ -24,6 +24,7 @@ import { SuggestionList, Suggestion } from "@/components/ui/ai/suggestion"
 import { ToolCall } from "@/components/ui/ai/tool-call"
 import { Button } from "@/components/ui/button"
 import { AIMessageBubble } from "./AIMessageBubble"
+import { AIThinkingIndicator } from "./AIThinkingIndicator"
 import { useAIChat, CHAT_SUGGESTIONS } from "./useAIChat"
 import type { Product } from "@/lib/types/product"
 import {
@@ -189,22 +190,10 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
                     />
                   ))}
 
-                  {isLoading && activeToolCall && (
-                    <div className="flex justify-start pl-11">
-                      <ToolCall name={activeToolCall} state="calling" />
-                    </div>
-                  )}
-
-                  {isLoading && !activeToolCall && (
-                    <div className="flex gap-2 pl-0">
-                      <div className="size-7 rounded-full bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shrink-0">
-                        <Sparkles className="size-3.5" />
-                      </div>
-                      <div className="flex items-center gap-1 px-3 py-2 rounded-xl rounded-tl-xs bg-muted/60 border border-border/40">
-                        <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                        <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                        <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce" />
-                      </div>
+                  {/* Thinking & Shimmer state during execution */}
+                  {isLoading && (
+                    <div className="w-full">
+                      <AIThinkingIndicator activeToolCall={activeToolCall} />
                     </div>
                   )}
                 </>
