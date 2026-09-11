@@ -221,7 +221,7 @@ export async function listProducts(
   let q = supabase.from("products").select("*").order("created_at", {
     ascending: false,
   })
-  if (args.q) q = q.ilike("title", `%${args.q}%`)
+  if (args.q) q = q.or(`title.ilike.%${args.q}%,description.ilike.%${args.q}%,category.ilike.%${args.q}%`)
   if (args.category && args.category !== "All") q = q.eq("category", args.category)
   if (args.status) q = q.eq("status", args.status)
   const { data, error } = await q

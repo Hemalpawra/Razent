@@ -131,7 +131,7 @@
             }
           ]
         },
-        "url": "=https://flsjhsnfurxkzawdimyi.supabase.co/rest/v1/products?apikey=sb_publishable_BJfbmQGnWlGSTL22LHJVxA_p3DeEUAi&select=id,title,price_paise,mrp_paise,category,stock,unit&title=ilike.*{{ $fromAI('query') }}*",
+        "url": "=https://flsjhsnfurxkzawdimyi.supabase.co/rest/v1/products?apikey=sb_publishable_BJfbmQGnWlGSTL22LHJVxA_p3DeEUAi&select=id,title,price_paise,mrp_paise,category,stock,unit&or=(title.ilike.*{{ $fromAI('query') }}*,category.ilike.*{{ $fromAI('query') }}*,description.ilike.*{{ $fromAI('query') }}*)",
         "method": "GET",
         "authentication": "none",
         "options": {}
