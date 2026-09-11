@@ -250,13 +250,16 @@ export async function listProducts(
     if (args.status) q = q.eq("status", args.status)
     const { data, error } = await q
     if (error) {
-      console.warn("[listProducts] Supabase returned error:", error.message)
-      return []
+      console.warn("[listProducts] Supabase error, using mock products:", error.message)
+      return filterMockProducts(mockProducts, args)
     }
-    return (data || []).map(mapDbProduct)
+    if (!data || data.length === 0) {
+      return filterMockProducts(mockProducts, args)
+    }
+    return data.map(mapDbProduct)
   } catch (err: any) {
-    console.warn("[listProducts] fetch error:", err?.message)
-    return []
+    console.warn("[listProducts] fetch error, using mock products:", err?.message)
+    return filterMockProducts(mockProducts, args)
   }
 }
 
@@ -271,7 +274,7 @@ export async function getProduct(id: string): Promise<Product | null> {
   } catch (err: any) {
     console.warn("[getProduct] fetch error:", err?.message)
   }
-  return null
+  return mockProducts.find((p) => p.id === id) || null
 }
 
 export type UpsertProductInput = Omit<

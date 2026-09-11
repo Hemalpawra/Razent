@@ -2,10 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/__clerk/(.*)",
-      "destination": "https://frontend-api.clerk.dev/__clerk/$1"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
