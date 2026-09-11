@@ -15,7 +15,7 @@ export function SuggestionList({ label = "Suggestions", className, children, ...
     >
       {label && (
         <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap flex items-center gap-1 shrink-0">
-          <Sparkles className="w-3.5 h-3.5 text-primary" /> {label}:
+          <Sparkles className="size-3.5 text-primary" /> {label}:
         </span>
       )}
       {children}

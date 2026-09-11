@@ -13,6 +13,7 @@ import { PrinterIcon, DownloadIcon, CheckCircle2Icon, Building2Icon, UserIcon } 
 import type { Order } from "@/lib/types/order"
 import { getOrder } from "@/lib/api/client"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Empty, EmptyContent, EmptyTitle, EmptyDescription } from "@/components/ui/empty"
 
 interface InvoiceDialogProps {
   open: boolean
@@ -108,31 +109,35 @@ export default function InvoiceDialog({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1.5 text-xs rounded-lg"
                 onClick={handlePrint}
                 disabled={loading || !order}
               >
-                <PrinterIcon className="size-3.5" /> Print / PDF
+                <PrinterIcon data-icon="inline-start" /> Print / PDF
               </Button>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="p-4 sm:p-6 space-y-6" ref={printRef}>
+        <div className="p-4 sm:p-6 flex flex-col gap-6" ref={printRef}>
           {loading ? (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               <Skeleton className="h-16 w-full rounded-xl" />
               <Skeleton className="h-28 w-full rounded-xl" />
               <Skeleton className="h-40 w-full rounded-xl" />
             </div>
           ) : !order ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              Order or Invoice record could not be loaded.
-            </div>
+            <Empty className="py-12">
+              <EmptyContent>
+                <EmptyTitle>Invoice Unavailable</EmptyTitle>
+                <EmptyDescription>
+                  Order or Invoice record could not be loaded.
+                </EmptyDescription>
+              </EmptyContent>
+            </Empty>
           ) : (
             <>
               {/* Invoice Meta Top */}
-              <div className="flex flex-col sm:flex-row justify-between gap-4 border-b pb-6">
+              <div className="flex flex-col sm:flex-row justify-between gap-4 pb-2">
                 <div>
                   <div className="text-xl font-bold font-heading text-foreground tracking-tight">
                     Razent Commerce Pvt Ltd
@@ -144,9 +149,11 @@ export default function InvoiceDialog({
                     BKC Commerce Hub, Bandra East, Mumbai, MH 400051
                   </p>
                 </div>
-                <div className="sm:text-right space-y-1">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-                    <CheckCircle2Icon className="size-3.5" /> Paid & Settled
+                <div className="sm:text-right flex flex-col gap-1">
+                  <div>
+                    <Badge variant="success" className="gap-1.5">
+                      <CheckCircle2Icon /> Paid & Settled
+                    </Badge>
                   </div>
                   <div className="text-sm font-mono font-semibold text-foreground mt-1">
                     {invoiceNumber}
@@ -161,10 +168,11 @@ export default function InvoiceDialog({
                   </div>
                 </div>
               </div>
+              <Separator />
 
               {/* Bill To / Ship To Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="rounded-lg border bg-card p-3 space-y-1.5">
+                <div className="rounded-lg border bg-card p-3 flex flex-col gap-1.5">
                   <div className="flex items-center gap-1.5 font-semibold text-foreground uppercase tracking-wider text-[11px] text-muted-foreground">
                     <UserIcon className="size-3.5" /> Billed & Shipped To
                   </div>
@@ -190,7 +198,7 @@ export default function InvoiceDialog({
                   )}
                 </div>
 
-                <div className="rounded-lg border bg-card p-3 space-y-1.5">
+                <div className="rounded-lg border bg-card p-3 flex flex-col gap-1.5">
                   <div className="flex items-center gap-1.5 font-semibold text-foreground uppercase tracking-wider text-[11px] text-muted-foreground">
                     <Building2Icon className="size-3.5" /> Order & Transaction Info
                   </div>
@@ -274,7 +282,7 @@ export default function InvoiceDialog({
 
               {/* Total Summary Breakdown */}
               <div className="flex justify-end text-xs">
-                <div className="w-full max-w-xs space-y-2 rounded-lg border bg-card p-4">
+                <div className="w-full max-w-xs flex flex-col gap-2 rounded-lg border bg-card p-4">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Taxable Value:</span>
                     <span>₹{subtotal.toFixed(2)}</span>
@@ -302,7 +310,8 @@ export default function InvoiceDialog({
               </div>
 
               {/* Footer Declaration */}
-              <div className="text-[11px] text-muted-foreground border-t pt-4 space-y-1">
+              <Separator />
+              <div className="text-[11px] text-muted-foreground flex flex-col gap-1">
                 <p>
                   Declaration: This is a computer-generated invoice issued in accordance with GST
                   Rules. No signature required.

@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Empty, EmptyContent, EmptyTitle } from "@/components/ui/empty"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useNavigate } from "react-router-dom"
 import { isMerchantSubdomain, getStorefrontUrl } from "@/lib/utils/subdomain"
@@ -160,7 +161,8 @@ export default function OrderDrawer({
     : []
 
   return (
-    <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
+    <>
+      <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
       <DrawerContent>
         <DrawerHeader>
           <div className="flex items-center justify-between pr-8">
@@ -176,14 +178,18 @@ export default function OrderDrawer({
             onClick={onClose}
             aria-label="Close"
           >
-            <XIcon className="size-4" />
+            <XIcon />
           </Button>
         </DrawerHeader>
 
         <DrawerBody>
           {!order ? (
-            <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-              No order selected.
+            <div className="px-6 py-12">
+              <Empty>
+                <EmptyContent>
+                  <EmptyTitle>No order selected</EmptyTitle>
+                </EmptyContent>
+              </Empty>
             </div>
           ) : (
             <div className="flex flex-col">
@@ -239,7 +245,7 @@ export default function OrderDrawer({
 
               <section className="px-6 py-4">
                 <Button variant="default" className="w-full" onClick={() => setInvoiceOpen(true)}>
-                  <FileTextIcon className="size-4" />
+                  <FileTextIcon data-icon="inline-start" />
                   View Invoice
                 </Button>
               </section>
@@ -250,7 +256,7 @@ export default function OrderDrawer({
                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
                   Customer Details
                 </h3>
-                <div className="space-y-2.5">
+                <div className="flex flex-col gap-2.5">
                   <div className="flex items-center gap-2">
                     <UserIcon className="size-3.5 text-muted-foreground shrink-0" />
                     <span className="text-sm">
@@ -279,7 +285,7 @@ export default function OrderDrawer({
                   <CreditCardIcon className="size-3.5 text-muted-foreground" />
                   Payment Details
                 </h3>
-                <div className="space-y-2.5">
+                <div className="flex flex-col gap-2.5">
                   <div className="flex justify-between gap-4 text-sm">
                     <span className="text-muted-foreground">Payment ID</span>
                     <span className="font-medium text-xs truncate max-w-[55%] text-right">
@@ -315,7 +321,7 @@ export default function OrderDrawer({
                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-4">
                   Order Timeline
                 </h3>
-                <div className="relative ml-3 border-l border-border/60 pl-6 space-y-6">
+                <div className="relative ml-3 border-l border-border/60 pl-6 flex flex-col gap-6">
                   {timeline.map((step) => (
                     <div key={step.label} className="relative">
                       <span
@@ -354,7 +360,7 @@ export default function OrderDrawer({
 
               <Separator />
 
-              <section className="px-6 py-4 space-y-3">
+              <section className="px-6 py-4 flex flex-col gap-3">
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" onClick={handleViewConversation}>
                     View Conversation
@@ -381,5 +387,12 @@ export default function OrderDrawer({
         </DrawerBody>
       </DrawerContent>
     </Drawer>
+
+    <InvoiceDialog
+      open={invoiceOpen}
+      onClose={() => setInvoiceOpen(false)}
+      order={order}
+    />
+  </>
   )
 }

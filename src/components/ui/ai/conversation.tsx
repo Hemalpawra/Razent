@@ -24,7 +24,7 @@ export const ConversationContent = React.forwardRef<HTMLDivElement, Conversation
       <div
         ref={ref}
         data-slot="ai-conversation-content"
-        className={cn("flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6 scroll-smooth", className)}
+        className={cn("flex-1 overflow-y-auto px-4 sm:px-6 py-6 flex flex-col gap-6 scroll-smooth", className)}
         {...props}
       >
         {children}
@@ -53,13 +53,13 @@ export function ConversationScrollButton({
       data-slot="ai-conversation-scroll-button"
       onClick={onClick}
       className={cn(
-        "absolute bottom-20 right-6 z-30 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer",
+        "absolute bottom-20 right-6 z-30 p-2.5 rounded-full bg-primary text-primary-foreground shadow-md hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer",
         className
       )}
       aria-label="Scroll to bottom"
       {...props}
     >
-      <ArrowDown className="w-4 h-4" />
+      <ArrowDown className="size-4" />
     </button>
   )
 }

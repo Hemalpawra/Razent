@@ -15,10 +15,12 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Empty, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty"
 import { useUI } from "@/state/useUI"
 import { getOrder } from "@/lib/api/client"
 import { formatPrice } from "@/lib/types/order"
 import type { Order } from "@/lib/types/order"
+import InvoiceDialog from "./InvoiceDialog"
 
 function formatPaid(paise: number) {
   const rupees = paise / 100
@@ -37,6 +39,7 @@ export default function OrderDetailScreen() {
 
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
 
   useEffect(() => {
     if (!drawerId) { setLoading(false); return }
@@ -124,22 +127,27 @@ export default function OrderDetailScreen() {
 
       <div className="p-4">
         {loading ? (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             <Skeleton className="h-20 w-full rounded-xl" />
             <Skeleton className="h-24 w-full rounded-xl" />
             <Skeleton className="h-32 w-full rounded-xl" />
           </div>
         ) : !order ? (
-          <Card className="flex flex-col items-center justify-center p-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              No order selected. Please go back and select an order.
-            </p>
-            <Button variant="outline" onClick={handleBack} className="mt-4">
-              Back to Orders
-            </Button>
+          <Card className="p-8">
+            <Empty>
+              <EmptyContent>
+                <EmptyTitle>No order selected</EmptyTitle>
+                <EmptyDescription>
+                  Please go back and select an order from the list.
+                </EmptyDescription>
+                <Button variant="outline" onClick={handleBack} className="mt-2">
+                  Back to Orders
+                </Button>
+              </EmptyContent>
+            </Empty>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             {}
             <Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -155,7 +163,7 @@ export default function OrderDetailScreen() {
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
                 Order Items
               </h3>
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {order.items.map((item) => (
                   <div
                     key={item.product_id}
@@ -184,8 +192,12 @@ export default function OrderDetailScreen() {
             </Card>
 
             {}
-            <Button variant="default" className="w-full">
-              <FileTextIcon className="size-4" />
+            <Button
+              variant="default"
+              className="w-full"
+              onClick={() => setInvoiceOpen(true)}
+            >
+              <FileTextIcon data-icon="inline-start" />
               View Invoice
             </Button>
 
@@ -196,7 +208,7 @@ export default function OrderDetailScreen() {
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
                 Customer Details
               </h3>
-              <div className="space-y-2.5">
+              <div className="flex flex-col gap-2.5">
                 <div className="flex items-center gap-2">
                   <UserIcon className="size-4 text-muted-foreground shrink-0" />
                   <span className="text-sm">
@@ -224,7 +236,7 @@ export default function OrderDetailScreen() {
                 <CreditCardIcon className="size-4 text-muted-foreground" />
                 Payment Details
               </h3>
-              <div className="space-y-2.5">
+              <div className="flex flex-col gap-2.5">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Payment ID</span>
                   <span className="font-medium text-xs truncate max-w-[55%] text-right">
@@ -257,7 +269,7 @@ export default function OrderDetailScreen() {
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-4">
                 Order Timeline
               </h3>
-              <div className="relative ml-4 border-l-2 border-border/60 pl-6 space-y-6">
+              <div className="relative ml-4 border-l-2 border-border/60 pl-6 flex flex-col gap-6">
                 {timeline.map((step) => (
                   <div key={step.label} className="relative">
                     <span
@@ -295,7 +307,7 @@ export default function OrderDetailScreen() {
             </Card>
 
             {}
-            <Card className="p-4 space-y-3">
+            <Card className="p-4 flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline">View Conversation</Button>
                 <Button variant="outline">View Tracking</Button>
@@ -307,6 +319,12 @@ export default function OrderDetailScreen() {
           </div>
         )}
       </div>
+
+      <InvoiceDialog
+        open={invoiceOpen}
+        onClose={() => setInvoiceOpen(false)}
+        order={order}
+      />
     </div>
   )
 }

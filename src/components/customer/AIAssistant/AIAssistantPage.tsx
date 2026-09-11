@@ -51,12 +51,43 @@ import {
   MessageSquare,
   ShoppingCart,
   Clock,
+  Compass,
+  Tag,
+  PackageSearch,
+  Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isN8nAgentEnabled } from "@/lib/agent/n8nAgent"
 import { isOpenRouterConfigured } from "@/lib/agent/chatAgent"
 import { toast } from "sonner"
 import { DEFAULT_TEST_UPI_METHODS, getSavedTestCards } from "@/lib/protocol/regulatoryWrapper"
+
+const STARTER_PROMPTS = [
+  {
+    icon: Compass,
+    title: "Discover Trending",
+    description: "Explore bestselling items and popular products right now",
+    prompt: "Show me trending products and bestsellers in the store",
+  },
+  {
+    icon: Tag,
+    title: "Deals Under ₹999",
+    description: "Find high-value budget picks and exclusive discounts",
+    prompt: "Show me top-rated deals and items under ₹999",
+  },
+  {
+    icon: PackageSearch,
+    title: "Track My Order",
+    description: "Check delivery progress and live location for recent purchases",
+    prompt: "Help me track my recent order delivery status",
+  },
+  {
+    icon: Zap,
+    title: "Instant AI Checkout",
+    description: "Quickly assemble cart items and prepare instant checkout",
+    prompt: "Help me find and checkout a smartphone charger or cable",
+  },
+]
 
 export default function AIAssistantPage() {
   const navigate = useNavigate()
@@ -170,7 +201,7 @@ export default function AIAssistantPage() {
   ) : isOpenRouterConfigured ? (
     <Badge
       variant="outline"
-      className="gap-1 text-[10px] border-violet-500/40 text-violet-600 bg-violet-50 dark:bg-violet-950/30"
+      className="gap-1 text-[10px] border-border text-foreground bg-muted"
     >
       <Bot className="size-2.5" /> AI SDK
     </Badge>
@@ -186,47 +217,60 @@ export default function AIAssistantPage() {
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
-      <header className="relative flex items-center gap-3 px-4 py-3 border-b border-border/60 bg-background/95 backdrop-blur-sm sticky top-0 z-20 shrink-0">
+      <header className="relative flex items-center gap-2.5 px-4 py-2.5 border-b border-border/60 bg-background/95 backdrop-blur-sm sticky top-0 z-20 shrink-0">
         <Button
           variant="ghost"
           size="icon"
-          className="size-9 rounded-full shrink-0"
+          className="size-8 rounded-lg shrink-0"
           onClick={() => navigate("/")}
+          title="Back to store"
         >
           <ArrowLeft className="size-4" />
         </Button>
 
-        {/* Avatar */}
-        <div className="size-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
-          <Sparkles className="size-4 text-white" />
+        {/* Minimalist Monochrome Bot Avatar */}
+        <div className="size-8 rounded-lg bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shrink-0">
+          <Sparkles className="size-4" />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold text-foreground leading-tight truncate">
-              {storeName} AI Assistant
+              {storeName} Assistant
             </p>
             {engineBadge}
           </div>
           <p className="text-[11px] text-muted-foreground truncate">
             {user
               ? `Signed in as ${customerName}`
-              : "Guest mode — sign in to save chats"}
+              : "Guest mode · Sign in to save chats"}
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
+          {/* New Chat Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs hidden sm:inline-flex"
+            onClick={startNewChat}
+            title="Start new chat"
+          >
+            <Plus className="size-3.5" data-icon="inline-start" />
+            <span>New Chat</span>
+          </Button>
+
           {/* Chat History Sheet Trigger */}
           <Button
             variant="ghost"
             size="icon"
-            className="size-9 rounded-full relative text-muted-foreground hover:text-foreground"
+            className="size-8 rounded-lg relative text-muted-foreground hover:text-foreground"
             onClick={() => setHistoryOpen(true)}
             title="Chat History"
           >
             <History className="size-4" />
             {conversationsHistory.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary" />
+              <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary" />
             )}
           </Button>
 
@@ -234,7 +278,7 @@ export default function AIAssistantPage() {
           <Button
             variant="ghost"
             size="icon"
-            className="size-9 rounded-full relative text-muted-foreground hover:text-foreground"
+            className="size-8 rounded-lg relative text-muted-foreground hover:text-foreground"
             onClick={() => navigate("/?view=checkout")}
             title="View Cart"
           >
@@ -250,9 +294,9 @@ export default function AIAssistantPage() {
             <Button
               variant="ghost"
               size="icon"
-              className="size-9 rounded-full text-muted-foreground hover:text-destructive"
+              className="size-8 rounded-lg text-muted-foreground hover:text-destructive"
               onClick={handleClear}
-              title="New chat"
+              title="Clear current messages"
             >
               <Trash2 className="size-4" />
             </Button>
@@ -263,7 +307,7 @@ export default function AIAssistantPage() {
           <Button
             variant="ghost"
             size="icon"
-            className="size-9 rounded-full"
+            className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
             onClick={() => setShowWallet((visible) => !visible)}
             title="Test wallet"
           >
@@ -273,10 +317,10 @@ export default function AIAssistantPage() {
           <Button
             variant={agentPurchaseEnabled ? "default" : "outline"}
             size="sm"
-            className="text-[11px] h-8 hidden sm:inline-flex"
+            className="text-[11px] h-8 hidden md:inline-flex"
             onClick={handleAgentPurchaseToggle}
           >
-            Agent purchases {agentPurchaseEnabled ? "On" : "Off"}
+            Agent Purchases: {agentPurchaseEnabled ? "On" : "Off"}
           </Button>
         </div>
 
@@ -431,38 +475,66 @@ export default function AIAssistantPage() {
           className="px-4 sm:px-6 max-w-3xl mx-auto w-full"
         >
           {messages.length === 0 ? (
-            /* Welcome screen */
+            /* Welcome screen - ChatGPT / assistant-ui style */
             <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 py-8">
-              <div className="size-20 rounded-3xl bg-gradient-to-br from-violet-500 via-indigo-500 to-blue-500 flex items-center justify-center shadow-lg shadow-violet-500/25">
-                <Sparkles className="size-10 text-white" />
+              <div className="size-14 rounded-2xl bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shadow-xs">
+                <Sparkles className="size-7" />
               </div>
-              <div className="text-center flex flex-col gap-2">
-                <h2 className="text-2xl font-bold text-foreground">
-                  Hi{user && customerName ? `, ${customerName.split(" ")[0]}` : ""}! 👋
+              <div className="text-center flex flex-col gap-1.5">
+                <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                  {user && customerName ? `Hi ${customerName.split(" ")[0]}, how can I help?` : "How can I help you today?"}
                 </h2>
-                <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-                  I'm your AI shopping assistant for {storeName}. Ask me anything — discover products,
-                  prepare orders, or track live deliveries.
+                <p className="text-muted-foreground max-w-md text-sm leading-relaxed">
+                  I'm your AI shopping assistant for {storeName}. Discover products, check order status, or prepare instant checkout.
                 </p>
               </div>
 
               {!user && (
-                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40 text-amber-700 dark:text-amber-400 text-xs">
-                  <Info className="size-4 shrink-0" />
+                <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-muted/60 border border-border/60 text-muted-foreground text-xs max-w-md">
+                  <Info className="size-4 shrink-0 text-foreground" />
                   <span>
                     <button
-                      className="underline underline-offset-2 font-medium hover:text-amber-900 dark:hover:text-amber-200"
+                      type="button"
+                      className="underline underline-offset-2 font-medium text-foreground hover:opacity-80"
                       onClick={() => navigate("/login")}
                     >
                       Sign in
                     </button>{" "}
-                    to save your chat history across devices
+                    to save and access chat history across devices
                   </span>
                 </div>
               )}
 
-              <div className="w-full max-w-md">
-                <SuggestionList label="Try asking">
+              {/* 2x2 Starter Prompts Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-lg">
+                {STARTER_PROMPTS.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <button
+                      key={item.title}
+                      type="button"
+                      onClick={() => handleSuggestion(item.prompt)}
+                      className="group flex flex-col gap-1.5 p-3 rounded-xl border border-border/70 bg-card hover:border-foreground/30 hover:bg-accent/40 active:scale-[0.99] transition-all text-left shadow-2xs cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="size-7 rounded-lg bg-muted flex items-center justify-center text-foreground group-hover:bg-foreground group-hover:text-background transition-colors">
+                          <Icon className="size-3.5" />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                          Send ↵
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-foreground">{item.title}</p>
+                      <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2">
+                        {item.description}
+                      </p>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="w-full max-w-lg">
+                <SuggestionList label="More ideas">
                   {CHAT_SUGGESTIONS.map((s) => (
                     <Suggestion key={s} onClick={() => handleSuggestion(s)}>
                       {s}
@@ -494,14 +566,14 @@ export default function AIAssistantPage() {
 
               {/* Typing indicator */}
               {isLoading && !activeToolCall && (
-                <div className="flex gap-3 pl-0">
-                  <div className="size-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
-                    <Sparkles className="size-4 text-white" />
+                <div className="flex gap-3 pl-0 items-start">
+                  <div className="size-7 rounded-full bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shrink-0 mt-0.5">
+                    <Sparkles className="size-3.5" />
                   </div>
-                  <div className="flex items-center gap-1.5 px-4 py-3 rounded-2xl rounded-tl-sm bg-muted/70 border border-border/40">
-                    <span className="size-1.5 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                    <span className="size-1.5 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                    <span className="size-1.5 bg-muted-foreground/50 rounded-full animate-bounce" />
+                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl rounded-tl-xs bg-muted/60 border border-border/40">
+                    <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                    <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce" />
                   </div>
                 </div>
               )}
@@ -543,8 +615,8 @@ export default function AIAssistantPage() {
             autoFocus
           />
           <PromptInputActions>
-            <p className="text-[10px] text-muted-foreground/50 pl-2">
-              {isN8nAgentEnabled ? "Powered by n8n + AI" : "Powered by AI"}
+            <p className="text-[10px] text-muted-foreground/60 pl-2">
+              {isN8nAgentEnabled ? "n8n Agentic Workflow" : "Autonomous Commerce"}
             </p>
             <PromptInputSubmit
               isLoading={isLoading}
@@ -553,7 +625,7 @@ export default function AIAssistantPage() {
             />
           </PromptInputActions>
         </PromptInput>
-        <p className="text-center text-[10px] text-muted-foreground/50 mt-2">
+        <p className="text-center text-[10px] text-muted-foreground/60 mt-2">
           Razent AI Shopping Assistant · Autonomous Commerce with Human Verification
         </p>
       </div>

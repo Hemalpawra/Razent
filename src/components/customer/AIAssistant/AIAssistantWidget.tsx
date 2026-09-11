@@ -123,30 +123,30 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
           style={{ maxHeight: "calc(100vh - 7rem)" }}
         >
           {/* Panel header */}
-          <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shrink-0">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-              <Sparkles className="w-4 h-4" />
+          <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/70 bg-card text-card-foreground shrink-0">
+            <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0">
+              <Sparkles className="size-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold leading-tight">{storeName} Assistant</p>
-              <p className="text-[11px] text-white/70">Powered by AI • Real-time catalog</p>
+              <p className="text-sm font-semibold leading-tight text-foreground">{storeName} Assistant</p>
+              <p className="text-[11px] text-muted-foreground">Autonomous AI · Real-time catalog</p>
             </div>
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
                 onClick={handleExpand}
                 title="Open full screen"
               >
-                <Maximize2 className="w-3.5 h-3.5" />
+                <Maximize2 className="size-3.5" />
               </button>
               <button
                 type="button"
-                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
                 onClick={() => setIsOpen(false)}
                 title="Close"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="size-3.5" />
               </button>
             </div>
           </div>
@@ -156,12 +156,12 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
             <ConversationContent
               ref={scrollRef}
               onScroll={handleScroll}
-              className="px-3 py-3 space-y-4"
+              className="px-3 py-3 flex flex-col gap-4"
             >
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center gap-4 py-6 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/25">
-                    <Sparkles className="w-7 h-7 text-white" />
+                  <div className="size-12 rounded-2xl bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shadow-xs">
+                    <Sparkles className="size-6" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">How can I help?</p>
@@ -197,13 +197,13 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
 
                   {isLoading && !activeToolCall && (
                     <div className="flex gap-2 pl-0">
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
-                        <Sparkles className="w-3.5 h-3.5 text-white" />
+                      <div className="size-7 rounded-full bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shrink-0">
+                        <Sparkles className="size-3.5" />
                       </div>
-                      <div className="flex items-center gap-1 px-3 py-2 rounded-xl rounded-tl-sm bg-muted/70 border border-border/40">
-                        <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                        <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                        <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" />
+                      <div className="flex items-center gap-1 px-3 py-2 rounded-xl rounded-tl-xs bg-muted/60 border border-border/40">
+                        <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce" />
                       </div>
                     </div>
                   )}
@@ -244,7 +244,7 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
               <PromptInputActions>
                 <button
                   type="button"
-                  className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                  className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors cursor-pointer"
                   onClick={handleExpand}
                 >
                   Full screen
@@ -267,20 +267,20 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
         onClick={handleToggle}
         aria-label={isOpen ? "Close AI Assistant" : "Open AI Assistant"}
         className={cn(
-          "fixed bottom-5 right-5 z-50 flex items-center justify-center w-14 h-14 rounded-full shadow-lg shadow-violet-500/40 transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer select-none",
-          "bg-gradient-to-br from-violet-500 to-indigo-600 text-white",
+          "fixed bottom-5 right-5 z-50 flex items-center justify-center size-13 rounded-full shadow-lg shadow-black/15 transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer select-none border border-border/60",
+          "bg-foreground text-background dark:bg-primary dark:text-primary-foreground",
           isOpen && !isMobile && "rotate-180",
         )}
       >
         {isOpen && !isMobile ? (
-          <ChevronDown className="w-6 h-6" />
+          <ChevronDown className="size-5.5" />
         ) : (
-          <Sparkles className="w-6 h-6" />
+          <Sparkles className="size-5.5" />
         )}
 
         {/* Pulse ring animation when there are new messages */}
         {messages.length > 0 && !isOpen && (
-          <span className="absolute inset-0 rounded-full animate-ping bg-violet-400/40 pointer-events-none" />
+          <span className="absolute inset-0 rounded-full animate-ping bg-foreground/20 pointer-events-none" />
         )}
       </button>
     </>

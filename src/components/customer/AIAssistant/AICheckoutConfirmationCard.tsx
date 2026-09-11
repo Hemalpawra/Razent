@@ -120,10 +120,10 @@ export function AICheckoutConfirmationCard({
 
   if (placedOrder) {
     return (
-      <Card className="w-full border-emerald-500/40 bg-gradient-to-br from-emerald-500/5 via-background to-card shadow-md">
+      <Card className="w-full border-border bg-card shadow-sm">
         <CardHeader className="pb-3 text-left">
           <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-full bg-emerald-500 text-white">
+            <div className="flex size-7 items-center justify-center rounded-full bg-foreground text-background">
               <CheckCircle2 className="size-4" />
             </div>
             <div>
@@ -136,15 +136,15 @@ export function AICheckoutConfirmationCard({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3 pb-3 text-xs">
-          <div className="rounded-lg border border-border/60 bg-muted/30 p-2.5 space-y-1.5">
+        <CardContent className="flex flex-col gap-3 pb-3 text-xs">
+          <div className="rounded-lg border border-border bg-muted/40 p-2.5 flex flex-col gap-1.5">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Items:</span>
               <span className="font-medium text-foreground">{items.length} items</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Amount Paid:</span>
-              <span className="font-semibold text-emerald-600">{formatPrice(totalPaise)}</span>
+              <span className="font-semibold text-foreground">{formatPrice(totalPaise)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Delivery To:</span>
@@ -159,7 +159,7 @@ export function AICheckoutConfirmationCard({
         <CardFooter className="pt-0">
           <Button
             size="sm"
-            className="w-full text-xs font-semibold gap-1.5"
+            className="w-full text-xs font-semibold"
             onClick={() => {
               if (onOpenTrackOrder) {
                 onOpenTrackOrder(placedOrder.id)
@@ -168,7 +168,7 @@ export function AICheckoutConfirmationCard({
               }
             }}
           >
-            <PackageCheck className="size-4" />
+            <PackageCheck data-icon="inline-start" />
             Track Live Delivery
           </Button>
         </CardFooter>
@@ -199,9 +199,9 @@ export function AICheckoutConfirmationCard({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3 pb-3 text-xs">
+      <CardContent className="flex flex-col gap-3 pb-3 text-xs">
         {/* Selected Items */}
-        <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+        <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Selected Items ({items.length})
           </p>
@@ -229,7 +229,7 @@ export function AICheckoutConfirmationCard({
         </div>
 
         {/* Pre-filled Customer Details */}
-        <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 space-y-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 font-semibold text-foreground">
               <User className="size-3.5 text-primary" />
@@ -250,7 +250,7 @@ export function AICheckoutConfirmationCard({
         </div>
 
         {/* Pre-filled Shipping Address */}
-        <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 space-y-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 font-semibold text-foreground">
               <MapPin className="size-3.5 text-primary" />
@@ -265,7 +265,7 @@ export function AICheckoutConfirmationCard({
             </button>
           </div>
           {isEditingAddress ? (
-            <div className="space-y-1.5 pt-1">
+            <div className="flex flex-col gap-1.5 pt-1">
               <Input
                 value={addressLine}
                 onChange={(e) => setAddressLine(e.target.value)}
@@ -295,7 +295,7 @@ export function AICheckoutConfirmationCard({
         </div>
 
         {/* Payment Method Selector */}
-        <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 space-y-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
           <span className="flex items-center gap-1.5 font-semibold text-foreground">
             <CreditCard className="size-3.5 text-primary" />
             Payment Method
@@ -347,12 +347,12 @@ export function AICheckoutConfirmationCard({
         >
           {isPlacing ? (
             <>
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 className="animate-spin" data-icon="inline-start" />
               <span>Confirming Order...</span>
             </>
           ) : (
             <>
-              <ShieldCheck className="size-4" />
+              <ShieldCheck data-icon="inline-start" />
               <span>Confirm & Place Order ({formatPrice(totalPaise)})</span>
             </>
           )}

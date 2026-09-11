@@ -756,9 +756,10 @@ export async function logAuditEvent(
     merchant_id: merchantId,
   }
 
-  if (input.session_id) {
-    insertPayload.external_id = input.session_id
-  }
+  const sessionId =
+    input.session_id ||
+    `sess_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}_${Math.random().toString(36).slice(2, 8)}`
+  insertPayload.external_id = sessionId
 
   const { data, error } = await supabase
     .from("audit_sessions")

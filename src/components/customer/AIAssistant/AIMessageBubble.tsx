@@ -2,8 +2,24 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+  MessageFooter,
+} from "@/components/ui/message"
+import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { ToolCall } from "@/components/ui/ai/tool-call"
-import { Sparkles, User, ShoppingCart, ArrowRight, Check } from "lucide-react"
+import {
+  Sparkles,
+  User,
+  ShoppingCart,
+  Check,
+  Copy,
+  CheckCheck,
+  RotateCw,
+} from "lucide-react"
 import type { ChatMessage } from "./useAIChat"
 import type { Product } from "@/lib/types/product"
 import { formatPrice } from "@/lib/types/product"
@@ -19,6 +35,7 @@ interface AIMessageBubbleProps {
   customerEmail?: string | null
   customerPhone?: string | null
   onOpenTrackOrder?: (orderId: string) => void
+  onRetry?: () => void
 }
 
 function ProductCard({
@@ -40,15 +57,16 @@ function ProductCard({
   }
 
   return (
-    <div
+    <Card
       onClick={() => onOpenDetails(product)}
-      className="flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-background/90 hover:border-primary/40 hover:bg-accent/15 transition-all cursor-pointer group shadow-sm text-left"
+      className="flex items-center gap-3 p-3 rounded-xl border border-border/70 bg-card hover:border-foreground/30 hover:bg-accent/20 transition-all cursor-pointer group text-left shadow-xs"
     >
       {product.image_url ? (
         <img
           src={product.image_url}
           alt={product.title}
           className="size-12 object-cover rounded-lg shrink-0 bg-muted border border-border/40 group-hover:scale-105 transition-transform"
+          loading="lazy"
         />
       ) : (
         <div className="size-12 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/40">
@@ -59,9 +77,11 @@ function ProductCard({
         <p className="text-xs font-semibold text-foreground truncate group-hover:text-primary transition-colors">
           {product.title}
         </p>
-        <p className="text-[11px] text-muted-foreground truncate">{product.category || "General"}</p>
+        <p className="text-[11px] text-muted-foreground truncate">
+          {product.category || "General"}
+        </p>
         <div className="flex items-baseline gap-2 mt-0.5">
-          <span className="text-xs font-bold text-primary">
+          <span className="text-xs font-bold text-foreground">
             {formatPrice(product.price_paise, product.currency)}
           </span>
           {product.mrp_paise && product.mrp_paise > product.price_paise && (
@@ -74,22 +94,22 @@ function ProductCard({
       <Button
         size="sm"
         variant={added ? "secondary" : "outline"}
-        className="shrink-0 text-xs h-8 gap-1 transition-all"
+        className="shrink-0 text-xs h-8 px-2.5 transition-all"
         onClick={handleAdd}
       >
         {added ? (
           <>
-            <Check className="size-3.5 text-emerald-600" />
-            <span className="text-emerald-600 font-medium">Added</span>
+            <Check data-icon="inline-start" className="text-emerald-600 dark:text-emerald-400" />
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Added</span>
           </>
         ) : (
           <>
-            <ShoppingCart className="size-3.5" />
+            <ShoppingCart data-icon="inline-start" />
             <span>Add</span>
           </>
         )}
       </Button>
-    </div>
+    </Card>
   )
 }
 
@@ -166,8 +186,8 @@ function formatInline(text: string) {
   return text
     .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/`(.+?)`/g, '<code class="bg-muted rounded px-1 py-0.5 text-xs font-mono">$1</code>')
-    .replace(/₹(\d[\d,]*)/g, '<span class="font-semibold text-primary">₹$1</span>')
+    .replace(/`(.+?)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">$1</code>')
+    .replace(/₹(\d[\d,]*)/g, '<span class="font-semibold text-foreground">₹$1</span>')
 }
 
 export function AIMessageBubble({
@@ -176,62 +196,78 @@ export function AIMessageBubble({
   customerEmail,
   customerPhone,
   onOpenTrackOrder,
+  onRetry,
 }: AIMessageBubbleProps) {
   const isUser = message.role === "user"
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const handleOpenDetails = (product: Product) => {
     setSelectedProduct(product)
     setDialogOpen(true)
   }
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content).then(() => {
+      setCopied(true)
+      toast.success("Copied message to clipboard")
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
   return (
     <>
-      <div className={cn("flex gap-3", isUser ? "flex-row-reverse" : "flex-row")}>
+      <Message align={isUser ? "end" : "start"} className="group w-full">
         {/* Avatar */}
-        <Avatar className="size-8 shrink-0 mt-1">
-          {isUser ? (
-            <AvatarFallback className="bg-primary/10 text-primary text-xs">
-              <User className="size-4" />
-            </AvatarFallback>
-          ) : (
-            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-indigo-600 text-white text-xs">
-              <Sparkles className="size-4" />
-            </AvatarFallback>
-          )}
-        </Avatar>
+        <MessageAvatar>
+          <Avatar className="size-8 shrink-0">
+            {isUser ? (
+              <AvatarFallback className="bg-muted text-muted-foreground text-xs font-medium border border-border/60">
+                <User className="size-4" />
+              </AvatarFallback>
+            ) : (
+              <AvatarFallback className="bg-foreground text-background dark:bg-primary dark:text-primary-foreground text-xs font-semibold shadow-xs">
+                <Sparkles className="size-4" />
+              </AvatarFallback>
+            )}
+          </Avatar>
+        </MessageAvatar>
 
-        {/* Content */}
-        <div className={cn("flex flex-col gap-2 max-w-[85%] sm:max-w-[78%]", isUser ? "items-end" : "items-start")}>
+        {/* Content Column */}
+        <MessageContent className={cn("max-w-[88%] sm:max-w-[80%]", isUser ? "items-end" : "items-start")}>
           {/* Tool calls */}
           {!isUser && message.toolCallsExecuted && message.toolCallsExecuted.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 mb-1">
               {message.toolCallsExecuted.map((tool, i) => (
                 <ToolCall key={i} name={tool} state="result" />
               ))}
             </div>
           )}
 
-          {/* Message bubble */}
-          <div
+          {/* Bubble Surface */}
+          <Bubble
+            variant={isUser ? "secondary" : "outline"}
+            align={isUser ? "end" : "start"}
             className={cn(
-              "rounded-2xl px-4 py-3 text-sm leading-relaxed",
+              "text-sm leading-relaxed break-words shadow-xs",
               isUser
-                ? "bg-primary text-primary-foreground rounded-tr-sm shadow-sm"
-                : "bg-muted/70 text-foreground rounded-tl-sm border border-border/40",
+                ? "bg-secondary text-secondary-foreground border-border/40 font-medium px-4 py-2.5 max-w-full"
+                : "bg-card text-foreground border-border/70 px-4 py-3.5 max-w-full",
             )}
           >
-            {isUser ? (
-              <p>{message.content}</p>
-            ) : (
-              <div className="prose prose-sm max-w-none">{renderMarkdown(message.content)}</div>
-            )}
-          </div>
+            <BubbleContent>
+              {isUser ? (
+                <p className="whitespace-pre-wrap">{message.content}</p>
+              ) : (
+                <div className="flex flex-col gap-1">{renderMarkdown(message.content)}</div>
+              )}
+            </BubbleContent>
+          </Bubble>
 
           {/* Product cards */}
           {!isUser && message.products && message.products.length > 0 && (
-            <div className="w-full flex flex-col gap-2 mt-1">
+            <div className="w-full flex flex-col gap-2 mt-2">
               {message.products.slice(0, 4).map((product) => (
                 <ProductCard
                   key={product.id}
@@ -255,12 +291,46 @@ export function AIMessageBubble({
             </div>
           )}
 
-          {/* Timestamp */}
-          <span className="text-[10px] text-muted-foreground/60 px-1">
-            {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </span>
-        </div>
-      </div>
+          {/* Action Toolbar & Footer */}
+          <MessageFooter className="flex items-center gap-2 pt-0.5 text-[11px] text-muted-foreground select-none">
+            <span>
+              {new Date(message.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+
+            {!isUser && (
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6 text-muted-foreground hover:text-foreground rounded-md"
+                  onClick={handleCopy}
+                  title="Copy message"
+                >
+                  {copied ? (
+                    <CheckCheck className="size-3.5 text-foreground" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                </Button>
+                {onRetry && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 text-muted-foreground hover:text-foreground rounded-md"
+                    onClick={onRetry}
+                    title="Regenerate response"
+                  >
+                    <RotateCw className="size-3.5" />
+                  </Button>
+                )}
+              </div>
+            )}
+          </MessageFooter>
+        </MessageContent>
+      </Message>
 
       {/* Product Details Dialog */}
       <ProductDetailsDialog

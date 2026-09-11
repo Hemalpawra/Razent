@@ -18,9 +18,9 @@ export function ToolCall({
   ...props
 }: ToolCallProps) {
   const getIcon = () => {
-    if (state === "calling") return <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-    if (state === "error") return <AlertCircle className="w-3.5 h-3.5 text-destructive" />
-    return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+    if (state === "calling") return <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+    if (state === "error") return <AlertCircle className="size-3.5 text-destructive" />
+    return <CheckCircle2 className="size-3.5 text-foreground" />
   }
 
   const formatToolName = (raw: string) => {
@@ -33,9 +33,9 @@ export function ToolCall({
     <div
       data-slot="ai-tool-call"
       className={cn(
-        "inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-all",
-        state === "calling" && "bg-primary/10 border-primary/20 text-primary animate-pulse",
-        state === "result" && "bg-muted/60 border-border text-muted-foreground",
+        "inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-xs font-medium transition-all select-none",
+        state === "calling" && "bg-muted/70 border-border text-foreground animate-pulse",
+        state === "result" && "bg-muted/50 border-border/70 text-muted-foreground",
         state === "error" && "bg-destructive/10 border-destructive/20 text-destructive",
         className
       )}

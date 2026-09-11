@@ -44,6 +44,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -52,9 +53,12 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+
+import { Empty, EmptyContent, EmptyTitle, EmptyDescription } from "@/components/ui/empty"
 
 import OrderDrawer from "@/components/merchant/Orders/OrderDrawer"
 
@@ -380,7 +384,7 @@ export default function OrdersScreen() {
 
   if (orders === null) {
     return (
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <Skeleton className="h-9 w-48 rounded-lg" />
@@ -396,7 +400,7 @@ export default function OrdersScreen() {
             <Skeleton key={i} className="h-24 rounded-xl" />
           ))}
         </div>
-        <Card className="rounded-xl bg-card p-4 space-y-4">
+        <Card className="rounded-xl bg-card p-4 flex flex-col gap-4">
           <div className="flex justify-between">
             <Skeleton className="h-9 w-64 rounded-lg" />
             <div className="flex gap-2">
@@ -404,7 +408,7 @@ export default function OrdersScreen() {
               <Skeleton className="h-9 w-24 rounded-lg" />
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-12 w-full rounded-md" />
             ))}
@@ -415,7 +419,7 @@ export default function OrdersScreen() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {/* Header */}
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
@@ -566,11 +570,15 @@ export default function OrdersScreen() {
             <TableBody>
               {paged.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="py-12 text-center text-sm text-muted-foreground"
-                  >
-                    No orders match your filters.
+                  <TableCell colSpan={8} className="py-12">
+                    <Empty>
+                      <EmptyContent>
+                        <EmptyTitle>No orders found</EmptyTitle>
+                        <EmptyDescription>
+                          No orders match your selected filters.
+                        </EmptyDescription>
+                      </EmptyContent>
+                    </Empty>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -710,31 +718,33 @@ export default function OrdersScreen() {
                                 />
                               }
                             >
-                              <MoreHorizontal className="size-4" />
+                              <MoreHorizontal />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  if (isMobile) {
-                                    openDrawer(order.id)
-                                    setActiveScreen("order_detail")
-                                  } else {
-                                    openDrawer(order.id)
-                                  }
-                                }}
-                              >
-                                View details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  navigator.clipboard
-                                    .writeText(order.id)
-                                    .catch(() => {})
-                                }}
-                              >
-                                Copy ID
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>Refund</DropdownMenuItem>
+                              <DropdownMenuGroup>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    if (isMobile) {
+                                      openDrawer(order.id)
+                                      setActiveScreen("order_detail")
+                                    } else {
+                                      openDrawer(order.id)
+                                    }
+                                  }}
+                                >
+                                  View details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    navigator.clipboard
+                                      .writeText(order.id)
+                                      .catch(() => {})
+                                  }}
+                                >
+                                  Copy ID
+                                </DropdownMenuItem>
+                                <DropdownMenuItem>Refund</DropdownMenuItem>
+                              </DropdownMenuGroup>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -771,9 +781,11 @@ export default function OrdersScreen() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
