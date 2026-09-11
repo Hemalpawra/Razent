@@ -139,10 +139,9 @@
             }
           ]
         },
-        "url": "=https://flsjhsnfurxkzawdimyi.supabase.co/rest/v1/products?select=id,title,price_paise,mrp_paise,category,stock,unit&title=ilike.*{{ $fromAI('query') }}*",
+        "url": "=https://flsjhsnfurxkzawdimyi.supabase.co/rest/v1/products?apikey=sb_publishable_BJfbmQGnWlGSTL22LHJVxA_p3DeEUAi&select=id,title,price_paise,mrp_paise,category,stock,unit&title=ilike.*{{ $fromAI('query') }}*",
         "method": "GET",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
@@ -168,10 +167,9 @@
             }
           ]
         },
-        "url": "=https://flsjhsnfurxkzawdimyi.supabase.co/rest/v1/orders?select=id,external_id,status,shipping_status,total_paise,created_at&external_id=eq.{{ $fromAI('order_id') }}",
+        "url": "=https://flsjhsnfurxkzawdimyi.supabase.co/rest/v1/orders?apikey=sb_publishable_BJfbmQGnWlGSTL22LHJVxA_p3DeEUAi&select=id,external_id,status,shipping_status,total_paise,created_at&external_id=eq.{{ $fromAI('order_id') }}",
         "method": "GET",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",

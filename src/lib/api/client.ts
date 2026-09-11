@@ -30,6 +30,7 @@ import type { Conversation } from "@/lib/types/conversation"
 import { supabase, getUser } from "@/lib/api/supabase"
 import { useError } from "@/state/useError"
 import { productStore } from "@/lib/storage/productStore"
+import { orderStore } from "@/lib/storage/orderStore"
 import {
   verifyAP2Mandate,
   approveAuto,

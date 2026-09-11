@@ -54,6 +54,7 @@ import { InvoiceModal, type InvoiceData } from "./InvoiceModal"
 import { orderStore } from "@/lib/storage/orderStore"
 import { toast } from "sonner"
 import { productStore } from "@/lib/storage/productStore"
+import { mockProducts } from "@/lib/mock/products"
 import { CustomerProfileMenu } from "@/components/customer/auth/CustomerProfileMenu"
 import { AIAssistantWidget } from "@/components/customer/AIAssistant"
 import { useCustomerAuth } from "@/state/useCustomerAuth"
@@ -2467,10 +2468,11 @@ function productFeatures(p: Product) {
 }
 
 function relatedProducts(p: Product) {
+  const all = productStore.list().length > 0 ? productStore.list() : mockProducts
   // Same category, different products
-  const sameCat = mockProducts
+  const sameCat = all
     .filter(
-      (x) =>
+      (x: Product) =>
         x.status === "active" && x.category === p.category && x.id !== p.id,
     )
     .slice(0, 8)
@@ -2478,8 +2480,8 @@ function relatedProducts(p: Product) {
   if (sameCat.length >= 4) return sameCat
 
   // Fallback: other categories
-  return mockProducts
-    .filter((x) => x.status === "active" && x.id !== p.id)
+  return all
+    .filter((x: Product) => x.status === "active" && x.id !== p.id)
     .slice(0, 8)
 }
 
@@ -2763,7 +2765,7 @@ function ProductDetail({
                     </Button>
                   </div>
                   <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-                    {related.map((rp) => (
+                    {related.map((rp: Product) => (
                       <Card key={rp.id} className="overflow-hidden">
                         <button
                           onClick={() => onOpenRelated(rp.id)}
