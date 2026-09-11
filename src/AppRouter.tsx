@@ -87,9 +87,6 @@ function MerchantRoutes() {
 }
 
 function StorefrontRoutes() {
-  const host = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : ""
-  const isProdVercel = host === "razent.vercel.app" || (host.endsWith(".vercel.app") && !host.startsWith("merchant."))
-
   return (
     <Routes>
       <Route path="/" element={<StoreHome />} />
@@ -102,32 +99,21 @@ function StorefrontRoutes() {
       <Route path="/customer/signup/*" element={<Navigate to="/signup" replace />} />
       <Route path="/customer/auth/*" element={<CustomerAuthPage />} />
 
-      {/* Merchant Console: In production, redirect to merchant subdomain */}
-      {isProdVercel ? (
-        <>
-          <Route path="/signin" element={<ExternalRedirect to={getMerchantUrl("/signin")} />} />
-          <Route path="/merchant/*" element={<ExternalRedirect to={getMerchantUrl("/dashboard")} />} />
-          <Route path="/admin/*" element={<ExternalRedirect to={getMerchantUrl("/dashboard")} />} />
-        </>
-      ) : (
-        /* In local dev, support direct /merchant and /signin paths */
-        <>
-          <Route path="/signin" element={<SignInScreen />} />
-          <Route path="/sign-in" element={<Navigate to="/signin" replace />} />
-          <Route path="/merchant" element={<AdminLayout />}>
-            <Route index element={<Navigate to="/merchant/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardScreen />} />
-            <Route path="products" element={<ProductsScreen />} />
-            <Route path="orders" element={<OrdersScreen />} />
-            <Route path="analytics" element={<AnalyticsScreen />} />
-            <Route path="ai_agent" element={<AIAgentScreen />} />
-            <Route path="audit_trail" element={<AuditTrailScreen />} />
-            <Route path="settings" element={<SettingsScreen />} />
-          </Route>
-          <Route path="/admin" element={<Navigate to="/merchant/dashboard" replace />} />
-          <Route path="/admin/*" element={<Navigate to="/merchant/dashboard" replace />} />
-        </>
-      )}
+      {/* Direct Merchant Console Routes */}
+      <Route path="/signin" element={<SignInScreen />} />
+      <Route path="/sign-in" element={<Navigate to="/signin" replace />} />
+      <Route path="/merchant" element={<AdminLayout />}>
+        <Route index element={<Navigate to="/merchant/dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardScreen />} />
+        <Route path="products" element={<ProductsScreen />} />
+        <Route path="orders" element={<OrdersScreen />} />
+        <Route path="analytics" element={<AnalyticsScreen />} />
+        <Route path="ai_agent" element={<AIAgentScreen />} />
+        <Route path="audit_trail" element={<AuditTrailScreen />} />
+        <Route path="settings" element={<SettingsScreen />} />
+      </Route>
+      <Route path="/admin" element={<Navigate to="/merchant/dashboard" replace />} />
+      <Route path="/admin/*" element={<Navigate to="/merchant/dashboard" replace />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
