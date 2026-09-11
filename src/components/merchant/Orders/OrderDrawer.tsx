@@ -34,6 +34,7 @@ import { useMerchant } from "@/state/useMerchant"
 import { useUI } from "@/state/useUI"
 import { toast } from "sonner"
 import { refundOrder } from "@/lib/api/client"
+import InvoiceDialog from "./InvoiceDialog"
 
 interface OrderDrawerProps {
   open: boolean
@@ -63,6 +64,7 @@ export default function OrderDrawer({
   const { role, hasPermission } = useMerchant()
   const canRefund = hasPermission("refund_orders")
   const [isRefunding, setIsRefunding] = useState(false)
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
 
   const handleViewConversation = () => {
     if (role === "view_only") {
@@ -236,7 +238,7 @@ export default function OrderDrawer({
               <Separator />
 
               <section className="px-6 py-4">
-                <Button variant="default" className="w-full">
+                <Button variant="default" className="w-full" onClick={() => setInvoiceOpen(true)}>
                   <FileTextIcon className="size-4" />
                   View Invoice
                 </Button>

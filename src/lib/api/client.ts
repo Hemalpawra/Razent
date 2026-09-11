@@ -25,7 +25,7 @@ import type { AnalyticsData } from "@/lib/types/analytics"
 import type { DashboardData } from "@/lib/types/kpi"
 import type { Order, OrderStatus } from "@/lib/types/order"
 import type { Product, ProductStatus } from "@/lib/types/product"
-import type { AuditEvent, AuditSession } from "@/lib/types/audit"
+import type { AuditEvent, AuditSession, AuditResult } from "@/lib/types/audit"
 import type { Conversation } from "@/lib/types/conversation"
 import { supabase, getUser } from "@/lib/api/supabase"
 import { useError } from "@/state/useError"
@@ -365,6 +365,23 @@ export async function updateOrderStatus(
       console.error("[updateOrderStatus] error:", error)
       return false
     }
+    // Audit merchant order action
+    logAuditEvent({
+      order_id: orderId,
+      customer: "Merchant",
+      actor_label: "Merchant",
+      event: {
+        id: `audit-status-${orderId}-${Date.now()}`,
+        type: status === "refunded" ? "order_refunded" : "order_status_updated",
+        timestamp: new Date().toISOString(),
+        actor: "Merchant",
+        source: "store",
+        result: "Success",
+        reason: `Order ${orderId} status updated to ${status}`,
+        payload_summary: `order_id=${orderId} status=${status}`,
+        status_code: 200,
+      },
+    }).catch(() => {})
     return true
   } catch (err) {
     console.error("[updateOrderStatus] error:", err)
@@ -373,22 +390,7 @@ export async function updateOrderStatus(
 }
 
 export async function refundOrder(orderId: string): Promise<boolean> {
-  const ok = await updateOrderStatus(orderId, "refunded")
-  if (ok) {
-    logAuditEvent({
-      event: {
-        id: `audit-refund-${orderId}-${Date.now()}`,
-        type: "order_refunded",
-        timestamp: new Date().toISOString(),
-        actor: "merchant",
-        source: "store",
-        result: "Success",
-        reason: `Order ${orderId} refunded by admin`,
-        payload_summary: `action=refund order_id=${orderId}`,
-      },
-    }).catch(() => {})
-  }
-  return ok
+  return await updateOrderStatus(orderId, "refunded")
 }
 
 export async function getOrder(id: string): Promise<Order | null> {
@@ -495,6 +497,26 @@ export async function listConversations(): Promise<Conversation[]> {
     throw error
   }
   return (data || []).map(mapDbConversation)
+}
+
+export async function listCustomerConversations(customerEmail: string): Promise<Conversation[]> {
+  if (!customerEmail || !customerEmail.trim()) return []
+  try {
+    const { data, error } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq("customer_email", customerEmail.trim())
+      .order("updated_at", { ascending: false })
+      .limit(50)
+    if (error) {
+      console.warn("[listCustomerConversations] Supabase error:", error.message)
+      return []
+    }
+    return (data || []).map(mapDbConversation)
+  } catch (err) {
+    console.warn("[listCustomerConversations] exception:", err)
+    return []
+  }
 }
 
 export async function getConversation(
@@ -665,25 +687,86 @@ export async function logAuditEvent(
 ): Promise<AuditSession> {
   const merchantId =
     input.merchant_id ?? (await requireMerchantId().catch(() => null))
-  const events = input.events ?? (input.event ? [input.event] : [])
+  const newEvents = input.events ?? (input.event ? [input.event] : [])
   const actorLabel =
     input.actor_label ?? input.event?.actor ?? "User Action"
 
-  // Build session with no external_id; the trigger
-  // (20260309000003_reconcile_schema_drift) auto-fills it.
+  const resultOrder: AuditResult[] = ["Success", "Warning", "Failed", "Critical"]
+  const getWorstResult = (evts: AuditEvent[]): AuditResult => {
+    let highest: AuditResult = "Success"
+    for (const e of evts) {
+      if (resultOrder.indexOf(e.result) > resultOrder.indexOf(highest)) highest = e.result
+    }
+    return highest
+  }
+
+  // 1. If session_id provided, check if session already exists in DB to append events
+  if (input.session_id) {
+    try {
+      const { data: existing } = await supabase
+        .from("audit_sessions")
+        .select("*")
+        .or(`external_id.eq.${input.session_id},id.eq.${input.session_id}`)
+        .maybeSingle()
+
+      if (existing) {
+        const existingEvents = Array.isArray(existing.events) ? existing.events : []
+        const combinedEvents = [...existingEvents, ...newEvents]
+        const lastEvent = combinedEvents[combinedEvents.length - 1]?.type || existing.last_event || "Event Logged"
+        const worst = getWorstResult(combinedEvents)
+
+        const { data: updated, error: updErr } = await supabase
+          .from("audit_sessions")
+          .update({
+            order_id: input.order_id ?? existing.order_id,
+            customer: input.customer || existing.customer,
+            actor_label: actorLabel || existing.actor_label,
+            events: combinedEvents,
+            event_count: combinedEvents.length,
+            last_event: lastEvent,
+            status: worst,
+            severity: worst,
+          })
+          .eq("id", existing.id)
+          .select()
+          .maybeSingle()
+
+        if (!updErr && updated) {
+          return mapDbAuditSession(updated)
+        }
+      }
+    } catch (e) {
+      console.warn("[audit] append to existing session failed, inserting fresh:", e)
+    }
+  }
+
+  // 2. Insert new session if not existing or not found
+  const worst = getWorstResult(newEvents)
+  const lastEvent = newEvents[newEvents.length - 1]?.type || "Session Started"
+
+  const insertPayload: any = {
+    order_id: input.order_id ?? null,
+    customer: input.customer ?? "",
+    actor_label: actorLabel,
+    events: newEvents,
+    event_count: newEvents.length,
+    last_event: lastEvent,
+    status: worst,
+    severity: worst,
+    merchant_id: merchantId,
+  }
+
+  if (input.session_id) {
+    insertPayload.external_id = input.session_id
+  }
+
   const { data, error } = await supabase
     .from("audit_sessions")
-    .insert({
-      order_id: input.order_id ?? null,
-      customer: input.customer ?? "",
-      actor_label: actorLabel,
-      events,
-      merchant_id: merchantId,
-    } as any)
+    .insert(insertPayload)
     .select()
     .maybeSingle()
+
   if (error) {
-    // Audit writes should never block the user — log but don't toast.
     console.warn("[audit] insert failed:", error.message)
     throw error
   }

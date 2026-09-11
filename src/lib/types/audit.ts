@@ -53,7 +53,7 @@ export type AuditEvent = {
   payload_summary?: string
   response_summary?: string
   status_code?: number
-  metadata?: Record<string, string>
+  metadata?: Record<string, any>
   related_product?: string
 }
 
@@ -61,11 +61,13 @@ export type AuditSession = {
   session_id: string
   order_id: string | null
   customer: string
-  actor_label: string // Customer / AI
+  actor_label: string // Customer / AI / Merchant
   event_count: number
   last_event: string
   status: AuditResult
   severity: AuditResult
   events: AuditEvent[]
   created_at: string
+  conversation_id?: string | null
 }
+

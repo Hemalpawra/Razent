@@ -41,6 +41,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 
 import { listAuditSessions } from "@/lib/api/client"
+import { supabase } from "@/lib/api/supabase"
 
 import type { AuditResult, AuditSession, AuditEvent } from "@/lib/types/audit"
 
@@ -109,6 +110,24 @@ export default function AuditTrailScreen() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
+
+    // Live Realtime listener on Supabase audit_sessions
+    const channel = supabase
+      .channel("audit_sessions_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "audit_sessions" },
+        () => {
+          listAuditSessions()
+            .then((data) => setAuditData(data))
+            .catch(() => {})
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const totalSessions = auditData.length
@@ -180,13 +199,23 @@ export default function AuditTrailScreen() {
       toast.info("No audit logs to export")
       return
     }
-    const headers = ["Session ID", "Order ID", "Customer", "Started At", "Status", "Events Count", "Last Event"]
+    const headers = [
+      "Session ID",
+      "Order ID",
+      "Customer / Actor",
+      "Started At",
+      "Status",
+      "Severity",
+      "Events Count",
+      "Last Event",
+    ]
     const rows = filtered.map((s) => [
       s.session_id,
       s.order_id || "—",
       `"${(s.customer || "Customer").replace(/"/g, '""')}"`,
       s.created_at ? new Date(s.created_at).toLocaleString("en-IN") : "—",
       s.status,
+      s.severity || s.status,
       s.event_count,
       `"${(s.last_event || "").replace(/"/g, '""')}"`,
     ])
@@ -377,7 +406,7 @@ export default function AuditTrailScreen() {
               </TableHead>
               <TableHead className="text-xs font-semibold">Order ID</TableHead>
               <TableHead className="text-xs font-semibold">
-                Customer / AI
+                Customer / AI / Merchant
               </TableHead>
               <TableHead className="text-center text-xs font-semibold">
                 Event Count
@@ -386,6 +415,7 @@ export default function AuditTrailScreen() {
                 Last Event
               </TableHead>
               <TableHead className="text-xs font-semibold">Status</TableHead>
+              <TableHead className="text-xs font-semibold">Severity</TableHead>
               <TableHead className="text-right text-xs font-semibold">
                 Actions
               </TableHead>
@@ -445,6 +475,14 @@ export default function AuditTrailScreen() {
                       {s.status}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={variant(s.severity)}
+                      className="rounded-full text-[11px]"
+                    >
+                      {s.severity || s.status}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="outline"
@@ -461,7 +499,7 @@ export default function AuditTrailScreen() {
                 </TableRow>
                 {expanded[s.session_id] ? (
                   <TableRow className="bg-muted/10 hover:bg-muted/10">
-                    <TableCell colSpan={8} className="p-0">
+                    <TableCell colSpan={9} className="p-0">
                       <div className="px-6 py-3 space-y-1">
                         {s.events.map((e) => (
                           <div
@@ -497,7 +535,7 @@ export default function AuditTrailScreen() {
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="py-12 text-center text-sm text-muted-foreground"
                 >
                   No sessions match filters.

@@ -48,8 +48,17 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  const { messages, isLoading, activeToolCall, sendMessage, clearChat, stopGeneration, storeName } =
-    useAIChat(products, conversationId)
+  const {
+    messages,
+    isLoading,
+    activeToolCall,
+    sendMessage,
+    clearChat,
+    stopGeneration,
+    storeName,
+    customerName,
+    customerEmail,
+  } = useAIChat(products, conversationId)
 
   // Detect mobile
   useEffect(() => {
@@ -171,7 +180,13 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
               ) : (
                 <>
                   {messages.map((msg) => (
-                    <AIMessageBubble key={msg.id} message={msg} storeName={storeName} />
+                    <AIMessageBubble
+                      key={msg.id}
+                      message={msg}
+                      storeName={storeName}
+                      customerName={customerName}
+                      customerEmail={customerEmail}
+                    />
                   ))}
 
                   {isLoading && activeToolCall && (
