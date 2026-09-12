@@ -9,7 +9,7 @@ export function PromptInput({ className, children, ...props }: PromptInputProps)
     <form
       data-slot="ai-prompt-input"
       className={cn(
-        "relative flex flex-col gap-2 p-2 rounded-2xl border border-border/80 bg-background/95 backdrop-blur-md shadow-xs focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all",
+        "relative flex flex-col gap-2 p-2 rounded-2xl border border-border/80 bg-background/95 backdrop-blur-md shadow-xs focus-within:border-foreground/30 focus-within:ring-2 focus-within:ring-foreground/10 transition-all",
         className
       )}
       {...props}
@@ -28,7 +28,7 @@ export interface PromptInputTextareaProps
 export const PromptInputTextarea = React.forwardRef<
   HTMLTextAreaElement,
   PromptInputTextareaProps
->(({ className, maxHeight = 160, mobileMaxHeight = 84, value, onChange, onKeyDown, ...props }, ref) => {
+>(({ className, maxHeight = 160, mobileMaxHeight = 80, value, onChange, onKeyDown, ...props }, ref) => {
   const internalRef = React.useRef<HTMLTextAreaElement | null>(null)
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -45,7 +45,11 @@ export const PromptInputTextarea = React.forwardRef<
       const isMobile = typeof window !== "undefined" && window.innerWidth < 640
       const currentMax = isMobile ? mobileMaxHeight : maxHeight
       internalRef.current.style.height = "auto"
-      internalRef.current.style.height = `${Math.min(internalRef.current.scrollHeight, currentMax)}px`
+      if (value) {
+        internalRef.current.style.height = `${Math.min(internalRef.current.scrollHeight, currentMax)}px`
+      } else {
+        internalRef.current.style.height = "auto"
+      }
     }
   }, [value, maxHeight, mobileMaxHeight])
 
@@ -62,7 +66,7 @@ export const PromptInputTextarea = React.forwardRef<
       onChange={handleInput}
       onKeyDown={onKeyDown}
       className={cn(
-        "w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 resize-none px-3 py-1.5 focus:outline-none overflow-y-auto max-h-[84px] sm:max-h-[160px] sm:scrollbar-none",
+        "w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 resize-none px-3 py-1.5 focus:outline-none overflow-y-auto max-h-[80px] sm:max-h-[160px] [scrollbar-width:thin] [scrollbar-color:oklch(0.556_0_0/0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 sm:scrollbar-none",
         className
       )}
       {...props}
@@ -121,7 +125,7 @@ export function PromptInputSubmit({
       data-slot="ai-prompt-input-submit"
       disabled={disabled || isLoading}
       className={cn(
-        "p-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs",
+        "p-2 rounded-xl bg-foreground text-background hover:bg-foreground/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs",
         className
       )}
       title="Send message"

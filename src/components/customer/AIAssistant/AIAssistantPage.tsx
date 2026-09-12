@@ -72,9 +72,36 @@ export default function AIAssistantPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [viewportHeight, setViewportHeight] = useState<number | null>(null)
+  const [viewportTop, setViewportTop] = useState<number>(0)
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Lock document and body scrolling on mount to prevent mobile page rubber-banding
+  useEffect(() => {
+    const originalBodyOverflow = document.body.style.overflow
+    const originalBodyPosition = document.body.style.position
+    const originalBodyWidth = document.body.style.width
+    const originalBodyHeight = document.body.style.height
+    const originalHtmlOverflow = document.documentElement.style.overflow
+    const originalHtmlHeight = document.documentElement.style.height
+
+    document.body.style.overflow = "hidden"
+    document.body.style.position = "fixed"
+    document.body.style.width = "100%"
+    document.body.style.height = "100%"
+    document.documentElement.style.overflow = "hidden"
+    document.documentElement.style.height = "100%"
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow
+      document.body.style.position = originalBodyPosition
+      document.body.style.width = originalBodyWidth
+      document.body.style.height = originalBodyHeight
+      document.documentElement.style.overflow = originalHtmlOverflow
+      document.documentElement.style.height = originalHtmlHeight
+    }
+  }, [])
 
   // Listen to window.visualViewport to keep input perfectly pinned above virtual keyboard on mobile
   useEffect(() => {
@@ -82,9 +109,13 @@ export default function AIAssistantPage() {
 
     const handleViewportChange = () => {
       if (window.visualViewport) {
-        const height = window.visualViewport.height
-        setViewportHeight(height)
-        setIsKeyboardOpen(window.innerHeight - height > 120)
+        const vv = window.visualViewport
+        setViewportHeight(vv.height)
+        setViewportTop(vv.offsetTop)
+        setIsKeyboardOpen(window.innerHeight - vv.height > 100)
+        if (window.scrollY !== 0) {
+          window.scrollTo(0, 0)
+        }
       }
     }
 
@@ -191,14 +222,15 @@ export default function AIAssistantPage() {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 flex flex-col overflow-hidden bg-background"
+      className="fixed inset-x-0 flex flex-col overflow-hidden bg-background touch-none select-none sm:select-auto"
       style={{
+        top: `${viewportTop}px`,
         height: viewportHeight ? `${viewportHeight}px` : "100dvh",
         maxHeight: viewportHeight ? `${viewportHeight}px` : "100dvh",
       }}
     >
       {/* Header - permanently pinned at top */}
-      <header className="relative flex items-center gap-2.5 px-4 py-2.5 border-b border-border/60 bg-background/95 backdrop-blur-sm sticky top-0 z-20 shrink-0">
+      <header className="relative flex items-center gap-2.5 px-4 py-2.5 border-b border-border/60 bg-background/95 backdrop-blur-sm sticky top-0 z-20 shrink-0 touch-none select-none">
         <Button
           variant="ghost"
           size="icon"
@@ -210,7 +242,7 @@ export default function AIAssistantPage() {
         </Button>
 
         {/* Minimalist Monochrome Bot Avatar */}
-        <div className="size-8 rounded-lg bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shrink-0">
+        <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 shadow-xs">
           <Sparkles className="size-4" />
         </div>
 
@@ -251,7 +283,7 @@ export default function AIAssistantPage() {
           >
             <History className="size-4" />
             {conversationsHistory.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary" />
+              <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-foreground" />
             )}
           </Button>
 
@@ -265,7 +297,7 @@ export default function AIAssistantPage() {
           >
             <ShoppingCart className="size-4" />
             {cartCount > 0 && (
-              <Badge className="absolute -top-1 -right-1 size-4 p-0 flex items-center justify-center text-[10px] bg-primary text-primary-foreground rounded-full">
+              <Badge className="absolute -top-1 -right-1 size-4 p-0 flex items-center justify-center text-[10px] bg-foreground text-background rounded-full font-bold">
                 {cartCount}
               </Badge>
             )}
@@ -409,7 +441,7 @@ export default function AIAssistantPage() {
                           className={cn(
                             "text-[9px] px-1.5 py-0 capitalize",
                             conv.status === "active" && "text-emerald-600 border-emerald-500/30",
-                            conv.status === "paid" && "text-blue-600 border-blue-500/30"
+                            conv.status === "paid" && "text-foreground border-border bg-muted/60"
                           )}
                         >
                           {conv.status.replace(/_/g, " ")}
@@ -425,16 +457,16 @@ export default function AIAssistantPage() {
       </Sheet>
 
       {/* Chat body - the ONLY scrollable region */}
-      <Conversation className="flex-1 min-h-0 relative overflow-hidden">
+      <Conversation className="flex-1 min-h-0 relative overflow-hidden touch-pan-y">
         <ConversationContent
           ref={scrollRef}
           onScroll={handleScroll}
-          className="px-4 sm:px-6 max-w-3xl mx-auto w-full h-full overflow-y-auto overscroll-contain"
+          className="px-4 sm:px-6 max-w-3xl mx-auto w-full h-full overflow-y-auto overscroll-contain select-text touch-pan-y"
         >
           {messages.length === 0 ? (
             /* Welcome screen - ChatGPT / assistant-ui style */
             <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 py-8">
-              <div className="size-14 rounded-2xl bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shadow-xs">
+              <div className="size-14 rounded-2xl bg-foreground text-background flex items-center justify-center shadow-xs">
                 <Sparkles className="size-7" />
               </div>
               <div className="text-center flex flex-col gap-1.5">
@@ -502,7 +534,7 @@ export default function AIAssistantPage() {
       {/* Input area - permanently pinned at bottom, directly above virtual keyboard */}
       <div
         className={cn(
-          "shrink-0 border-t border-border/60 bg-background/95 backdrop-blur-sm px-4 pt-3 max-w-3xl mx-auto w-full z-20 transition-all",
+          "shrink-0 border-t border-border/60 bg-background/95 backdrop-blur-sm px-4 pt-2.5 max-w-3xl mx-auto w-full z-20 transition-all select-none touch-none",
           isKeyboardOpen ? "pb-2" : "pb-4"
         )}
       >
@@ -518,41 +550,44 @@ export default function AIAssistantPage() {
           </div>
         )}
 
-        <PromptInput onSubmit={handleSubmit}>
-          <PromptInputTextarea
-            ref={inputRef}
-            id="ai-assistant-input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onFocus={() => {
-              // Ensure conversation is scrolled to bottom when keyboard opens
-              setTimeout(() => {
-                scrollToBottom()
-              }, 150)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault()
-                handleSubmit()
-              }
-            }}
-            placeholder="Ask about products, say 'prepare order', or track delivery..."
-            disabled={isLoading}
-            autoFocus
-          />
-          <PromptInputActions>
-            <p className="text-[10px] text-muted-foreground/60 pl-2">
-              {isN8nAgentEnabled ? "n8n Agentic Workflow" : "Autonomous Commerce"}
-            </p>
-            <PromptInputSubmit
-              isLoading={isLoading}
-              onStop={stopGeneration}
-              disabled={!input.trim() && !isLoading}
+        <div className="touch-auto select-text">
+          <PromptInput onSubmit={handleSubmit}>
+            <PromptInputTextarea
+              ref={inputRef}
+              id="ai-assistant-input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onFocus={() => {
+                // Ensure conversation is scrolled to bottom when keyboard opens
+                setTimeout(() => {
+                  scrollToBottom()
+                }, 150)
+              }}
+              onKeyDown={(e) => {
+                // Safe enter-to-submit avoiding premature send during IME composition
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  handleSubmit()
+                }
+              }}
+              placeholder="Ask about products, say 'prepare order', or track delivery..."
+              disabled={isLoading}
+              autoFocus
             />
-          </PromptInputActions>
-        </PromptInput>
+            <PromptInputActions>
+              <p className="text-[10px] text-muted-foreground/60 pl-2 select-none">
+                {isN8nAgentEnabled ? "n8n Agentic Workflow" : "Autonomous Commerce"}
+              </p>
+              <PromptInputSubmit
+                isLoading={isLoading}
+                onStop={stopGeneration}
+                disabled={!input.trim() && !isLoading}
+              />
+            </PromptInputActions>
+          </PromptInput>
+        </div>
         {!isKeyboardOpen && (
-          <p className="text-center text-[10px] text-muted-foreground/60 mt-2 hidden sm:block">
+          <p className="text-center text-[10px] text-muted-foreground/60 mt-2 hidden sm:block select-none">
             Razent AI Shopping Assistant · Autonomous Commerce with Human Verification
           </p>
         )}

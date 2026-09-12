@@ -108,7 +108,7 @@ export function ProductDetailsDialog({
         {/* Price & Unit */}
         <div className="flex items-baseline justify-between pt-1">
           <div className="flex items-baseline gap-2">
-            <span className="text-xl font-bold text-primary">
+            <span className="text-xl font-bold text-foreground">
               {formatPrice(product.price_paise, product.currency)}
             </span>
             {product.mrp_paise && product.mrp_paise > product.price_paise && (
@@ -128,7 +128,7 @@ export function ProductDetailsDialog({
             {product.tags.slice(0, 4).map((tag, idx) => (
               <span
                 key={idx}
-                className="text-[10px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground"
+                className="text-[10px] px-2 py-0.5 rounded-md bg-muted text-foreground/80 font-medium"
               >
                 #{tag}
               </span>
@@ -141,11 +141,11 @@ export function ProductDetailsDialog({
         {/* Trust Badges */}
         <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-1.5">
-            <PackageCheck className="size-3.5 text-primary" />
+            <PackageCheck className="size-3.5 text-foreground" />
             <span>Instant Dispatch</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <ShieldCheck className="size-3.5 text-primary" />
+            <ShieldCheck className="size-3.5 text-foreground" />
             <span>100% Genuine</span>
           </div>
         </div>
@@ -184,8 +184,8 @@ export function ProductDetailsDialog({
           >
             {isAdded ? (
               <>
-                <Check className="size-3.5 text-emerald-600" />
-                <span>Added!</span>
+                <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-emerald-600 dark:text-emerald-400">Added!</span>
               </>
             ) : (
               <>
@@ -197,7 +197,7 @@ export function ProductDetailsDialog({
 
           <Button
             type="button"
-            className="flex-1 text-xs font-semibold"
+            className="flex-1 text-xs font-semibold bg-foreground text-background hover:bg-foreground/90 shadow-xs"
             onClick={handleBuyNow}
           >
             Order Now

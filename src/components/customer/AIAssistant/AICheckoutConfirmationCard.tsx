@@ -212,11 +212,11 @@ export function AICheckoutConfirmationCard({
   }
 
   return (
-    <Card className="w-full border-primary/30 bg-card/90 shadow-md">
+    <Card className="w-full border-border bg-card shadow-sm">
       <CardHeader className="pb-3 text-left">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-muted text-foreground">
               <Sparkles className="size-4" />
             </div>
             <div>
@@ -228,7 +228,7 @@ export function AICheckoutConfirmationCard({
               </CardDescription>
             </div>
           </div>
-          <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
+          <Badge variant="outline" className="text-[10px] text-foreground border-border">
             Instant Ready
           </Badge>
         </div>
@@ -259,7 +259,7 @@ export function AICheckoutConfirmationCard({
           ))}
           <div className="flex items-center justify-between pt-1 font-semibold text-foreground">
             <span>Total Payable:</span>
-            <span className="text-primary text-sm">{formatPrice(totalPaise)}</span>
+            <span className="text-foreground text-sm font-bold">{formatPrice(totalPaise)}</span>
           </div>
         </div>
 
@@ -267,7 +267,7 @@ export function AICheckoutConfirmationCard({
         <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 font-semibold text-foreground">
-              <User className="size-3.5 text-primary" />
+              <User className="size-3.5 text-foreground" />
               Customer Details
             </span>
             <Badge variant="secondary" className="text-[10px]">Auto-filled</Badge>
@@ -288,13 +288,13 @@ export function AICheckoutConfirmationCard({
         <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 font-semibold text-foreground">
-              <MapPin className="size-3.5 text-primary" />
+              <MapPin className="size-3.5 text-foreground" />
               Delivery Address
             </span>
             <button
               type="button"
               onClick={() => setIsEditingAddress(!isEditingAddress)}
-              className="text-[11px] text-primary hover:underline font-medium"
+              className="text-[11px] text-foreground underline underline-offset-2 font-medium"
             >
               {isEditingAddress ? "Done" : "Change"}
             </button>
@@ -332,7 +332,7 @@ export function AICheckoutConfirmationCard({
         {/* Payment Method Information */}
         <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5 text-xs">
           <div className="flex items-center gap-2">
-            <div className="size-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <div className="size-7 rounded-md bg-muted text-foreground flex items-center justify-center shrink-0">
               <ShieldCheck className="size-4" />
             </div>
             <div>
@@ -374,7 +374,7 @@ export function AICheckoutConfirmationCard({
 
         <Button
           type="button"
-          className="w-full font-semibold gap-2 shadow-sm text-xs h-9"
+          className="w-full font-semibold gap-2 shadow-xs text-xs h-9 bg-foreground text-background hover:bg-foreground/90 disabled:opacity-40"
           disabled={isPlacing || items.length === 0 || !agentPurchaseEnabled}
           onClick={handleConfirmOrder}
         >

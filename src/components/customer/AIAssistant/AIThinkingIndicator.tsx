@@ -46,7 +46,7 @@ export function AIThinkingIndicator({
       )}
     >
       {/* Bot Avatar with subtle rotation */}
-      <div className="size-8 rounded-full bg-foreground text-background dark:bg-primary dark:text-primary-foreground flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+      <div className="size-8 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
         <Sparkles className="size-4 animate-spin [animation-duration:4s]" />
       </div>
 

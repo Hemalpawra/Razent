@@ -201,7 +201,7 @@ function renderMarkdown(text: string) {
               className="flex items-start gap-2 text-sm animate-text-reveal"
               style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
             >
-              <span className="text-primary mt-1.5 shrink-0">•</span>
+              <span className="text-muted-foreground mt-1.5 shrink-0">•</span>
               <span dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
             </li>
           ))}
@@ -286,7 +286,7 @@ function formatInline(text: string) {
   return text
     .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/`(.+?)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">$1</code>')
+    .replace(/`(.+?)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-xs font-mono text-foreground font-medium">$1</code>')
     .replace(/₹(\d[\d,]*)/g, '<span class="font-semibold text-foreground">₹$1</span>')
 }
 
@@ -335,7 +335,7 @@ export function AIMessageBubble({
                 <User className="size-4" />
               </AvatarFallback>
             ) : (
-              <AvatarFallback className="bg-foreground text-background dark:bg-primary dark:text-primary-foreground text-xs font-semibold shadow-xs">
+              <AvatarFallback className="bg-foreground text-background text-xs font-semibold shadow-xs">
                 <Sparkles className="size-4" />
               </AvatarFallback>
             )}
@@ -390,9 +390,9 @@ export function AIMessageBubble({
 
           {/* Proceed to Checkout Action Banner (AP2/ACP Compliant Gated Checkout) */}
           {!isUser && (message.checkoutAction || message.orderCheckout) && (
-            <div className="w-full mt-2.5 p-3 rounded-xl border border-primary/40 bg-card shadow-xs flex items-center justify-between gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+            <div className="w-full mt-2.5 p-3 rounded-xl border border-border/80 bg-card shadow-xs flex items-center justify-between gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <div className="size-8 rounded-lg bg-muted text-foreground flex items-center justify-center shrink-0">
                   <ShoppingCart className="size-4" />
                 </div>
                 <div className="min-w-0 text-left">
@@ -408,7 +408,7 @@ export function AIMessageBubble({
               </div>
               <Button
                 size="sm"
-                className="shrink-0 text-xs font-semibold h-8 gap-1.5 shadow-2xs"
+                className="shrink-0 text-xs font-semibold h-8 gap-1.5 shadow-2xs bg-foreground text-background hover:bg-foreground/90"
                 onClick={() => navigate("/?view=checkout")}
               >
                 <span>Proceed to Checkout</span>

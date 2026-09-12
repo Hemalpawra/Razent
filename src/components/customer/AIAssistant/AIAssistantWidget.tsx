@@ -257,7 +257,7 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
         aria-label={isOpen ? "Close AI Assistant" : "Open AI Assistant"}
         className={cn(
           "fixed bottom-5 right-5 z-50 flex items-center justify-center size-13 rounded-full shadow-lg shadow-black/15 transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer select-none border border-border/60",
-          "bg-foreground text-background dark:bg-primary dark:text-primary-foreground",
+          "bg-foreground text-background",
           isOpen && !isMobile && "rotate-180",
         )}
       >
