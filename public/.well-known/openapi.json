@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.1",
+  "openapi": "3.1.0",
   "info": {
     "title": "Razent Pre-Production Agentic Commerce API (UCP / ACP / AP2)",
     "version": "2026.1.0",
