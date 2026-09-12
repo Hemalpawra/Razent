@@ -22,20 +22,32 @@ export function PromptInput({ className, children, ...props }: PromptInputProps)
 export interface PromptInputTextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   maxHeight?: number
+  mobileMaxHeight?: number
 }
 
 export const PromptInputTextarea = React.forwardRef<
   HTMLTextAreaElement,
   PromptInputTextareaProps
->(({ className, maxHeight = 160, value, onChange, onKeyDown, ...props }, ref) => {
+>(({ className, maxHeight = 160, mobileMaxHeight = 84, value, onChange, onKeyDown, ...props }, ref) => {
   const internalRef = React.useRef<HTMLTextAreaElement | null>(null)
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const target = e.target
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 640
+    const currentMax = isMobile ? mobileMaxHeight : maxHeight
     target.style.height = "auto"
-    target.style.height = `${Math.min(target.scrollHeight, maxHeight)}px`
+    target.style.height = `${Math.min(target.scrollHeight, currentMax)}px`
     onChange?.(e)
   }
+
+  React.useEffect(() => {
+    if (internalRef.current) {
+      const isMobile = typeof window !== "undefined" && window.innerWidth < 640
+      const currentMax = isMobile ? mobileMaxHeight : maxHeight
+      internalRef.current.style.height = "auto"
+      internalRef.current.style.height = `${Math.min(internalRef.current.scrollHeight, currentMax)}px`
+    }
+  }, [value, maxHeight, mobileMaxHeight])
 
   return (
     <textarea
@@ -50,7 +62,7 @@ export const PromptInputTextarea = React.forwardRef<
       onChange={handleInput}
       onKeyDown={onKeyDown}
       className={cn(
-        "w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 resize-none px-3 py-1.5 focus:outline-none scrollbar-none",
+        "w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 resize-none px-3 py-1.5 focus:outline-none overflow-y-auto max-h-[84px] sm:max-h-[160px] sm:scrollbar-none",
         className
       )}
       {...props}

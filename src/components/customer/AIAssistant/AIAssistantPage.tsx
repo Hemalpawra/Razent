@@ -71,8 +71,32 @@ export default function AIAssistantPage() {
   const [input, setInput] = useState("")
   const [historyOpen, setHistoryOpen] = useState(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null)
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Listen to window.visualViewport to keep input perfectly pinned above virtual keyboard on mobile
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return
+
+    const handleViewportChange = () => {
+      if (window.visualViewport) {
+        const height = window.visualViewport.height
+        setViewportHeight(height)
+        setIsKeyboardOpen(window.innerHeight - height > 120)
+      }
+    }
+
+    handleViewportChange()
+    window.visualViewport.addEventListener("resize", handleViewportChange)
+    window.visualViewport.addEventListener("scroll", handleViewportChange)
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", handleViewportChange)
+      window.visualViewport?.removeEventListener("scroll", handleViewportChange)
+    }
+  }, [])
 
   const {
     messages,
@@ -166,8 +190,14 @@ export default function AIAssistantPage() {
   )
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      {/* Header */}
+    <div
+      className="fixed inset-x-0 top-0 flex flex-col overflow-hidden bg-background"
+      style={{
+        height: viewportHeight ? `${viewportHeight}px` : "100dvh",
+        maxHeight: viewportHeight ? `${viewportHeight}px` : "100dvh",
+      }}
+    >
+      {/* Header - permanently pinned at top */}
       <header className="relative flex items-center gap-2.5 px-4 py-2.5 border-b border-border/60 bg-background/95 backdrop-blur-sm sticky top-0 z-20 shrink-0">
         <Button
           variant="ghost"
@@ -394,12 +424,12 @@ export default function AIAssistantPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Chat body */}
-      <Conversation className="flex-1 relative">
+      {/* Chat body - the ONLY scrollable region */}
+      <Conversation className="flex-1 min-h-0 relative overflow-hidden">
         <ConversationContent
           ref={scrollRef}
           onScroll={handleScroll}
-          className="px-4 sm:px-6 max-w-3xl mx-auto w-full"
+          className="px-4 sm:px-6 max-w-3xl mx-auto w-full h-full overflow-y-auto overscroll-contain"
         >
           {messages.length === 0 ? (
             /* Welcome screen - ChatGPT / assistant-ui style */
@@ -469,9 +499,14 @@ export default function AIAssistantPage() {
         <ConversationScrollButton visible={showScrollBtn} onClick={scrollToBottom} />
       </Conversation>
 
-      {/* Input area */}
-      <div className="shrink-0 border-t border-border/60 bg-background/95 backdrop-blur-sm px-4 pb-4 pt-3 max-w-3xl mx-auto w-full">
-        {messages.length > 0 && !isLoading && (
+      {/* Input area - permanently pinned at bottom, directly above virtual keyboard */}
+      <div
+        className={cn(
+          "shrink-0 border-t border-border/60 bg-background/95 backdrop-blur-sm px-4 pt-3 max-w-3xl mx-auto w-full z-20 transition-all",
+          isKeyboardOpen ? "pb-2" : "pb-4"
+        )}
+      >
+        {messages.length > 0 && !isLoading && !isKeyboardOpen && (
           <div className="mb-2">
             <SuggestionList label="">
               {CHAT_SUGGESTIONS.slice(0, 4).map((s) => (
@@ -489,6 +524,12 @@ export default function AIAssistantPage() {
             id="ai-assistant-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onFocus={() => {
+              // Ensure conversation is scrolled to bottom when keyboard opens
+              setTimeout(() => {
+                scrollToBottom()
+              }, 150)
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault()
@@ -510,9 +551,11 @@ export default function AIAssistantPage() {
             />
           </PromptInputActions>
         </PromptInput>
-        <p className="text-center text-[10px] text-muted-foreground/60 mt-2">
-          Razent AI Shopping Assistant · Autonomous Commerce with Human Verification
-        </p>
+        {!isKeyboardOpen && (
+          <p className="text-center text-[10px] text-muted-foreground/60 mt-2 hidden sm:block">
+            Razent AI Shopping Assistant · Autonomous Commerce with Human Verification
+          </p>
+        )}
       </div>
     </div>
   )
