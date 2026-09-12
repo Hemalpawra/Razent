@@ -30,7 +30,7 @@ const SERVER_INFO = {
 }
 
 const INSTRUCTIONS =
-  "You are connected to the Razent Quick Commerce MCP Server (https://razent-merchant.vercel.app). " +
+  "You are connected to the Razent Quick Commerce MCP Server (https://razent.vercel.app). " +
   "Help customers discover products across 10 aisles, prepare checkout sessions with Razorpay payment links, and track deliveries. " +
   "Never charge a customer automatically without consent; always present the secure Razorpay payment link for human verification. " +
   "Format links cleanly as markdown buttons: [Click here to Pay ₹XX via Razorpay](url) and [Click here to Download Tax Invoice](url)."
@@ -267,7 +267,7 @@ async function executeCreateCheckoutSession(args) {
   }
   const address = args.delivery_address ? { ...defaultAddress, ...args.delivery_address } : defaultAddress
 
-  let paymentLink = `https://razent-merchant.vercel.app/checkout?session=${sessionId}`
+  let paymentLink = `https://razent.vercel.app/checkout?session=${sessionId}`
   let razorpayPaymentLinkId = null
 
   try {
@@ -290,7 +290,7 @@ async function executeCreateCheckoutSession(args) {
         },
         notify: { sms: false, email: false },
         reminder_enable: false,
-        callback_url: `https://razent-merchant.vercel.app/checkout/success?session=${sessionId}`,
+        callback_url: `https://razent.vercel.app/checkout/success?session=${sessionId}`,
         callback_method: "get",
       }),
     })
@@ -391,7 +391,7 @@ async function executeGetCheckoutSession(args) {
   if (session.status === "paid" || session.status === "completed") {
     const orderId = session.order_id || `RAZ-${session_id.slice(-8).toUpperCase()}`
     const invoiceUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${orderId}&download=true`
-    const trackingUrl = `https://razent-merchant.vercel.app/?track=${orderId}`
+    const trackingUrl = `https://razent.vercel.app/?track=${orderId}`
     return {
       status: "paid",
       order_id: orderId,
@@ -437,7 +437,7 @@ async function executeTrackOrders(args) {
     count: data.length,
     orders: data.map((o) => {
       const invoiceUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${o.external_id}&download=true`
-      const trackingUrl = `https://razent-merchant.vercel.app/?track=${o.external_id}`
+      const trackingUrl = `https://razent.vercel.app/?track=${o.external_id}`
       return {
         order_id: o.external_id,
         status: o.status,
@@ -481,7 +481,7 @@ async function executeAP2Checkout(args) {
     amount_paid_rupees: (totalPaise / 100).toFixed(2),
     settlement_rail: "NPCI UPI AutoPay via Razorpay Test Rails",
     delivery_eta: "10-15 minutes",
-    tracking_markdown: `[Click here to Track Live Delivery](https://razent-merchant.vercel.app/?track=${orderId})`,
+    tracking_markdown: `[Click here to Track Live Delivery](https://razent.vercel.app/?track=${orderId})`,
   }
 }
 
@@ -766,7 +766,7 @@ if (isHttpMode) {
             supported_versions: SUPPORTED_PROTOCOL_VERSIONS,
             protocols_supported: ["mcp", "ucp", "acp", "ap2"],
             tools: sortedTools.map((t) => ({ name: t.name, description: t.description })),
-            storefront_url: "https://razent-merchant.vercel.app",
+            storefront_url: "https://razent.vercel.app",
           },
           null,
           2

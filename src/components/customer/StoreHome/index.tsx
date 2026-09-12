@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react"
-import { useSearchParams, useNavigate } from "react-router-dom"
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom"
 import { useCart } from "@/state/useCart"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -161,20 +161,35 @@ function productRating(p: { id: string }): number {
 export default function StoreHome() {
   const { storeProfile } = useSettings()
   const [searchParams] = useSearchParams()
+  const location = useLocation()
 
   const [view, setView] = useState<StoreView>("home")
   const [trackPrefill, setTrackPrefill] = useState<{ orderId?: string; mobile?: string; email?: string } | null>(null)
 
-  // URL Query Sync (e.g. ?view=checkout from AI Assistant Buy Now, ?track=ORDER_ID for direct tracking)
+  // URL Query & Path Sync (e.g. /checkout?session=..., /checkout/success?session=..., ?view=checkout, ?track=ORDER_ID)
   const viewParam = searchParams.get("view")
   const productParam = searchParams.get("product")
   const trackParam = searchParams.get("track")
+  const sessionParam = searchParams.get("session")
 
   useEffect(() => {
     if (trackParam) {
       setTrackPrefill({ orderId: trackParam })
       setView("track-order")
-    } else if (viewParam === "checkout") {
+    } else if (
+      location.pathname === "/checkout/success" ||
+      location.pathname.startsWith("/checkout/success") ||
+      viewParam === "payment-success"
+    ) {
+      if (sessionParam) {
+        setLastOrderId(sessionParam)
+      }
+      setView("payment-success")
+    } else if (
+      location.pathname === "/checkout" ||
+      location.pathname.startsWith("/checkout") ||
+      viewParam === "checkout"
+    ) {
       setView("checkout")
     } else if (viewParam === "cart") {
       setView("cart")
@@ -187,7 +202,7 @@ export default function StoreHome() {
       setSelectedId(productParam)
       setView("detail")
     }
-  }, [viewParam, productParam, trackParam])
+  }, [location.pathname, viewParam, productParam, trackParam, sessionParam])
 
   const [activeCat, setActiveCat] = useState<string | null>(null)
 

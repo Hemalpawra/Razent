@@ -10,15 +10,16 @@ Built according to the authoritative **Model Context Protocol (MCP) 2026-07-28 s
 
 | Parameter | Value |
 |---|---|
-| **Public MCP Endpoint** | `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp` |
+| **Public MCP Endpoint (Custom Domain)** | **`https://razent.vercel.app/mcp`** |
+| **Direct Edge Gateway** | `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp` |
 | **Transport** | **Streamable HTTP (JSON-RPC 2.0)** |
 | **Active MCP Specification** | **`2026-07-28` (Latest authoritative)** |
 | **Supported Protocol Versions** | `["2026-07-28", "2025-11-25", "2024-11-05"]` |
 | **State Model** | **Stateless per-request** (`_meta.io.modelcontextprotocol/...`) + `server/discover` RPC |
 | **Auth Required** | None (Public anonymous catalog browsing & checkout session prep) |
-| **Live Storefront** | [https://razent-merchant.vercel.app](https://razent-merchant.vercel.app) |
-| **Well-Known Manifest** | [https://razent-merchant.vercel.app/.well-known/mcp.json](https://razent-merchant.vercel.app/.well-known/mcp.json) |
-| **Agent Manifest** | [https://razent-merchant.vercel.app/.well-known/agent.json](https://razent-merchant.vercel.app/.well-known/agent.json) |
+| **Live Storefront** | [https://razent.vercel.app](https://razent.vercel.app) |
+| **Well-Known Manifest** | [https://razent.vercel.app/.well-known/mcp.json](https://razent.vercel.app/.well-known/mcp.json) |
+| **Agent Manifest** | [https://razent.vercel.app/.well-known/agent.json](https://razent.vercel.app/.well-known/agent.json) |
 
 ---
 
@@ -140,7 +141,7 @@ In the ChatGPT GPT Builder:
 1. Go to **Configure** > **Actions** > **Create new action**.
 2. Click **Import from URL** and enter:
    ```
-   https://razent-merchant.vercel.app/.well-known/openapi.json
+   https://razent.vercel.app/.well-known/openapi.json
    ```
    ChatGPT will import all endpoints (`/catalog`, `/checkout_sessions`, `/orders/track`) automatically.
 

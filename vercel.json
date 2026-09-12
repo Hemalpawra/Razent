@@ -74,6 +74,14 @@
       "destination": "/api/clerk-proxy?path=$1"
     },
     {
+      "source": "/mcp",
+      "destination": "/api/mcp"
+    },
+    {
+      "source": "/mcp/(.*)",
+      "destination": "/api/mcp"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

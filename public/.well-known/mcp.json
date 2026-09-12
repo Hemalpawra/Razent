@@ -8,7 +8,8 @@
   "vendor": "Razent",
   "transport": {
     "type": "streamable-http",
-    "url": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp"
+    "url": "https://razent.vercel.app/mcp",
+    "upstream_url": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp"
   },
   "protocols": [
     "mcp",
@@ -43,5 +44,5 @@
       "description": "Track live order delivery and history by Order ID (e.g. RAZ-A2A-MTY6O735), customer mobile phone, or email. Returns delivery timeline stage, items, address, and downloadable tax invoice link."
     }
   ],
-  "storefront": "https://razent-merchant.vercel.app"
+  "storefront": "https://razent.vercel.app"
 }

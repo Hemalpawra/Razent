@@ -51,6 +51,28 @@ function ExternalRedirect({ to }: { to: string }) {
   )
 }
 
+function StoreRedirect() {
+  const location = useLocation()
+  useEffect(() => {
+    const fullPath = location.pathname + location.search
+    window.location.replace(`https://razent.vercel.app${fullPath}`)
+  }, [location.pathname, location.search])
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <p className="text-sm text-muted-foreground">Redirecting to customer store...</p>
+    </div>
+  )
+}
+
+function MerchantCatchAll() {
+  const location = useLocation()
+  if (location.search.includes("track=") || location.search.includes("session=")) {
+    return <StoreRedirect />
+  }
+  return <Navigate to="/dashboard" replace />
+}
+
 function MerchantRoutes() {
   return (
     <Routes>
@@ -81,11 +103,15 @@ function MerchantRoutes() {
         <Route path="/merchant/settings" element={<Navigate to="/settings" replace />} />
       </Route>
 
+      {/* Safeguard: Redirect checkout visits on merchant domain to storefront */}
+      <Route path="/checkout" element={<StoreRedirect />} />
+      <Route path="/checkout/*" element={<StoreRedirect />} />
+
       {/* Legacy /admin/* redirects */}
       <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
       <Route path="/admin/*" element={<Navigate to="/dashboard" replace />} />
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<MerchantCatchAll />} />
     </Routes>
   )
 }
@@ -115,6 +141,9 @@ function StorefrontRoutes() {
   return (
     <Routes>
       <Route path="/" element={<StoreHome />} />
+      <Route path="/checkout" element={<StoreHome />} />
+      <Route path="/checkout/*" element={<StoreHome />} />
+      <Route path="/checkout/success" element={<StoreHome />} />
       <Route path="/assistant" element={<AIAssistantPage />} />
       <Route path="/wallet" element={<WalletPage />} />
 

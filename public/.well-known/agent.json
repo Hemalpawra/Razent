@@ -13,7 +13,7 @@
     "category": "Quick-Commerce Grocery & Essentials"
   },
   "endpoints": {
-    "mcp_server": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp",
+    "mcp_server": "https://razent.vercel.app/mcp",
     "ucp_discovery": "/.well-known/ucp.json",
     "acp_manifest": "/.well-known/acp.json",
     "ap2_trust": "/.well-known/ap2.json",

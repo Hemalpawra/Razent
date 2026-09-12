@@ -238,7 +238,7 @@ Deno.serve(async (req: Request) => {
         console.error("Exception creating payment link:", err)
       }
 
-      session.payment_link = paymentLink || `https://razent-merchant.vercel.app/checkout?session=${sessionId}`
+      session.payment_link = paymentLink || `https://razent.vercel.app/checkout?session=${sessionId}`
       session.payment_url = session.payment_link
       session.payment_link_id = paymentLinkId
       session.payment_instruction = "CRITICAL: Ask the customer to approve payment. Format the link strictly as an embedded markdown button: [Click here to Pay on Razorpay](" + session.payment_url + "). Never show the raw link."
@@ -346,7 +346,7 @@ Deno.serve(async (req: Request) => {
       const orderId = `RAZ-A2A-${Date.now().toString(36).toUpperCase()}`
 
       const invoiceUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${orderId}&download=true`
-      const trackingUrl = `https://razent-merchant.vercel.app/?track=${orderId}`
+      const trackingUrl = `https://razent.vercel.app/?track=${orderId}`
 
       try {
         const { error: ordErr } = await supabase.from("orders").insert({
@@ -441,7 +441,7 @@ Deno.serve(async (req: Request) => {
       // If already completed, return settled info
       if (session.status === "completed") {
         const invoiceUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${session.order_id}&download=true`
-        const trackingUrl = `https://razent-merchant.vercel.app/?track=${session.order_id}`
+        const trackingUrl = `https://razent.vercel.app/?track=${session.order_id}`
         return new Response(
           JSON.stringify({
             ...session,
@@ -475,7 +475,7 @@ Deno.serve(async (req: Request) => {
               const rzpOrderId = chkData.order_id || chkData.id
               const orderId = `RAZ-A2A-${Date.now().toString(36).toUpperCase()}`
               const invoiceUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${orderId}&download=true`
-              const trackingUrl = `https://razent-merchant.vercel.app/?track=${orderId}`
+              const trackingUrl = `https://razent.vercel.app/?track=${orderId}`
 
               try {
                 await supabase.from("orders").insert({
