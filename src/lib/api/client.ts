@@ -1401,3 +1401,66 @@ export function subscribeToProducts(onUpdate: () => void): () => void {
     supabase.removeChannel(channel)
   }
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Pre-Production Agentic Commerce A2A Real Rails Checkout
+// ─────────────────────────────────────────────────────────────────
+
+export interface A2ACheckoutInput {
+  items: Array<{ id: number | string; quantity: number }>
+  deliveryAddress: {
+    full_name: string
+    phone: string
+    line1: string
+    city: string
+    pincode: string
+  }
+}
+
+export interface A2ACheckoutResult {
+  success: boolean
+  order_id: string
+  razorpay_order_id: string
+  amount_paid_rupees: string
+  delivery_eta: string
+  settlement_rail: string
+}
+
+export async function executeA2ACheckout(input: A2ACheckoutInput): Promise<A2ACheckoutResult> {
+  const base = "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a"
+
+  // 1. Create ACP session
+  const res1 = await fetch(`${base}/checkout_sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      items: input.items.map((i) => ({
+        id: typeof i.id === "string" ? parseInt(i.id, 10) || 1 : i.id,
+        quantity: i.quantity,
+      })),
+      delivery_address: input.deliveryAddress,
+    }),
+  })
+
+  if (!res1.ok) {
+    const errText = await res1.text()
+    throw new Error(`Failed to create A2A checkout session: ${errText}`)
+  }
+
+  const session = await res1.json()
+
+  // 2. Complete ACP session with real Razorpay settlement
+  const res2 = await fetch(`${base}/checkout_sessions/${session.id}/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ payment_handler: "dev.acp.upi_autopay" }),
+  })
+
+  if (!res2.ok) {
+    const errText = await res2.text()
+    throw new Error(`Failed to complete A2A checkout: ${errText}`)
+  }
+
+  return (await res2.json()) as A2ACheckoutResult
+}
+

@@ -19,7 +19,7 @@ import {
 } from "lucide-react"
 import type { Product } from "@/lib/types/product"
 import { formatPrice } from "@/lib/types/product"
-import { createStorefrontOrder } from "@/lib/api/client"
+import { executeA2ACheckout } from "@/lib/api/client"
 import { useCart } from "@/state/useCart"
 import { useAgentPurchase } from "@/state/useAgentPurchase"
 import { toast } from "sonner"
@@ -79,12 +79,26 @@ export function AICheckoutConfirmationCard({
       return
     }
     setIsPlacing(true)
-    const orderId = `RAZ-${Date.now().toString(36).toUpperCase()}`
 
     try {
-      const orderPayload: Order = {
-        id: orderId,
-        razorpay_order_id: `rzp_ai_${Date.now()}`,
+      // Execute live A2A checkout with genuine Razorpay test rails
+      const a2aResult = await executeA2ACheckout({
+        items: items.map((p) => ({
+          id: p.id,
+          quantity: 1,
+        })),
+        deliveryAddress: {
+          full_name: name,
+          phone,
+          line1: addressLine,
+          city,
+          pincode: postalCode,
+        },
+      })
+
+      const placedOrderObj: Order = {
+        id: a2aResult.order_id,
+        razorpay_order_id: a2aResult.razorpay_order_id,
         total_paise: totalPaise,
         shipping_paise: deliveryPaise,
         currency: "INR",
@@ -109,22 +123,23 @@ export function AICheckoutConfirmationCard({
           country: "India",
           phone_verified: true,
         },
-        commerce_protocol: "direct_web",
+        commerce_protocol: "ap2",
         created_at: new Date().toISOString(),
         paid_at: new Date().toISOString(),
-        notes: `Autonomous AI Assistant order (${paymentMethod.toUpperCase()}) for ${name} (${email})`,
+        notes: `Autonomous AI Assistant order via ${a2aResult.settlement_rail}`,
       }
 
-      const saved = await createStorefrontOrder(orderPayload)
-      setPlacedOrder(saved)
+      setPlacedOrder(placedOrderObj)
       clearCart()
-      toast.success(`Order ${orderId} confirmed successfully!`)
+      toast.success(`Order ${a2aResult.order_id} confirmed!`, {
+        description: `Razorpay Reference: ${a2aResult.razorpay_order_id}`,
+      })
       if (onOrderPlaced) {
-        onOrderPlaced(orderId)
+        onOrderPlaced(a2aResult.order_id)
       }
     } catch (err: any) {
-      console.error("[AICheckoutCard] error placing order:", err)
-      toast.error(err?.message || "Failed to place order. Please try again.")
+      console.error("[AICheckoutCard] error placing order via A2A:", err)
+      toast.error(err?.message || "Failed to place order via Agentic Protocol. Please try again.")
     } finally {
       setIsPlacing(false)
     }
@@ -135,12 +150,12 @@ export function AICheckoutConfirmationCard({
       <Card className="w-full border-border bg-card shadow-sm">
         <CardHeader className="pb-3 text-left">
           <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-full bg-foreground text-background">
+            <div className="flex size-7 items-center justify-center rounded-full bg-emerald-600 text-white">
               <CheckCircle2 className="size-4" />
             </div>
             <div>
               <CardTitle className="text-sm font-semibold text-foreground">
-                Order Placed & Confirmed!
+                Order Placed & Settled via Razorpay!
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
                 Order ID: <span className="font-mono font-semibold text-foreground">{placedOrder.id}</span>
@@ -159,12 +174,20 @@ export function AICheckoutConfirmationCard({
               <span className="font-semibold text-foreground">{formatPrice(totalPaise)}</span>
             </div>
             <div className="flex justify-between">
+              <span className="text-muted-foreground">Razorpay Ref:</span>
+              <span className="font-mono font-medium text-foreground">{placedOrder.razorpay_order_id}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Settlement Rail:</span>
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">NPCI UPI AutoPay / Razorpay</span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-muted-foreground">Delivery To:</span>
               <span className="font-medium text-foreground truncate max-w-[200px]">{city}, {postalCode}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Estimated Delivery:</span>
-              <span className="font-medium text-foreground">Within 15-20 mins</span>
+              <span className="font-medium text-foreground">10-15 mins (Express)</span>
             </div>
           </div>
         </CardContent>

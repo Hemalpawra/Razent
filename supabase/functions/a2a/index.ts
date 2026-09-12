@@ -149,15 +149,23 @@ Deno.serve(async (req: Request) => {
       memorySessions.set(sessionId, session)
 
       try {
-        await supabase.from("acp_checkout_sessions").insert({
+        const { error: insErr } = await supabase.from("acp_checkout_sessions").insert({
           id: sessionId,
+          merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
           status: "ready_for_payment",
           currency: "INR",
           line_items: lineItems,
           totals: session.totals,
           capabilities: { supported_handlers: session.supported_handlers },
+          fulfillment_details: session.delivery_address,
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
         })
-      } catch {}
+        if (insErr) {
+          console.error("Error inserting acp_checkout_session:", insErr)
+        }
+      } catch (err) {
+        console.error("Exception inserting acp_checkout_session:", err)
+      }
 
       return new Response(JSON.stringify(session), {
         status: 201,
@@ -180,8 +188,24 @@ Deno.serve(async (req: Request) => {
 
       let session = memorySessions.get(sessionId)
       if (!session) {
-        const { data } = await supabase.from("acp_checkout_sessions").select("*").eq("id", sessionId).maybeSingle()
-        if (data) session = data
+        const { data, error: fetchErr } = await supabase.from("acp_checkout_sessions").select("*").eq("id", sessionId).maybeSingle()
+        if (fetchErr) {
+          console.error("Error fetching acp_checkout_session:", fetchErr)
+        }
+        if (data) {
+          session = {
+            ...data,
+            line_items: data.line_items || [],
+            totals: data.totals || [],
+            delivery_address: data.fulfillment_details || data.delivery_address || {
+              full_name: "Autonomous Agent Customer",
+              phone: "+91 98765 43210",
+              line1: "Indiranagar 100ft Rd",
+              city: "Bengaluru",
+              pincode: "560038",
+            },
+          }
+        }
       }
 
       if (!session) {
@@ -245,7 +269,20 @@ Deno.serve(async (req: Request) => {
           settlement_reference: `settle_${rzpOrder.id}`,
           paid_at: new Date().toISOString(),
         })
-      } catch {}
+      } catch (err) {
+        console.error("Error inserting order into DB:", err)
+      }
+
+      try {
+        await supabase.from("acp_checkout_sessions").update({
+          status: "completed",
+          order_id: orderId,
+          razorpay_order_id: rzpOrder.id,
+          updated_at: new Date().toISOString(),
+        }).eq("id", sessionId)
+      } catch (e) {
+        console.error("Error updating acp_checkout_session:", e)
+      }
 
       session.status = "completed"
       session.order_id = orderId
