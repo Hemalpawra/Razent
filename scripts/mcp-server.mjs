@@ -2,16 +2,12 @@
 /**
  * Razent Model Context Protocol (MCP) Commerce Server
  *
- * Implements standard Model Context Protocol (MCP) specifications (2024-11-05 / 2025+).
- * Compatible with:
- * - Anthropic Claude.ai MCP Connectors (Streamable HTTP)
- * - Anthropic Claude Desktop & Cursor (Stdio & Remote)
- * - OpenAI ChatGPT Plugins / Actions / Connectors
- * - Autonomous AI Commerce Agents (AP2 / ACP / UCP)
+ * Implements authoritative Model Context Protocol (MCP) 2026-07-28 specification
+ * with backward compatibility for 2025-11-25 and 2024-11-05.
  *
- * Usage:
- *   node scripts/mcp-server.mjs                 # Standard JSON-RPC 2.0 over stdio
- *   node scripts/mcp-server.mjs --port 8080      # Streamable HTTP server on port 8080
+ * Dual Mode:
+ *   node scripts/mcp-server.mjs                 # Standard JSON-RPC 2.0 over stdio (Claude Desktop, Cursor)
+ *   node scripts/mcp-server.mjs --port 8080      # Streamable HTTP server (remote agents, curl, tunnels)
  */
 
 import readline from "node:readline"
@@ -23,23 +19,39 @@ const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPA
 const RAZORPAY_KEY_ID = process.env.VITE_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "rzp_test_TXeysTR9U8Fyws"
 const RAZORPAY_KEY_SECRET = process.env.VITE_RAZORPAY_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || "UuzZqB93v2obPdSyg3plRzKd"
 
+const SUPPORTED_PROTOCOL_VERSIONS = ["2026-07-28", "2025-11-25", "2024-11-05"]
+const LATEST_PROTOCOL_VERSION = "2026-07-28"
+
+const SERVER_INFO = {
+  name: "razent-commerce-mcp",
+  version: "2026.7.28",
+  title: "Razent Quick Commerce MCP Server",
+  description: "Official Razent Model Context Protocol (MCP) Server. 10-15 minute delivery across 10 store aisles.",
+}
+
+const INSTRUCTIONS =
+  "You are connected to the Razent Quick Commerce MCP Server (https://razent-merchant.vercel.app). " +
+  "Help customers discover products across 10 aisles, prepare checkout sessions with Razorpay payment links, and track deliveries. " +
+  "Never charge a customer automatically without consent; always present the secure Razorpay payment link for human verification. " +
+  "Format links cleanly as markdown buttons: [Click here to Pay ₹XX via Razorpay](url) and [Click here to Download Tax Invoice](url)."
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 const memorySessions = new Map()
 
-// MCP Tool Definitions
 const TOOLS = [
   {
     name: "search_catalog",
     description:
       "Search products in Razent 10-15 min quick grocery delivery catalog via Universal Commerce Protocol (UCP). " +
-      "Features typo tolerance, category filtering, plural stemming, and price ceilings. Returns matching items with price in rupees, stock, and high-res images.",
+      "Features typo tolerance, category filtering, plural stemming, and price ceilings. Returns matching items with price in rupees, stock, and images.",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string", description: "Search keyword e.g. 'milk', 'peanut butter', 'atta', 'bread', 'chocolate', 'drinks'" },
         category: {
           type: "string",
-          description: "Aisle category: 'Grocery & Staples', 'Beverages', 'Electronics', 'Beauty & Personal Care', 'Home Care', 'Home & Kitchen', 'Decor', 'Kids', 'Kitchen Appliances', 'Office & Stationery'",
+          description:
+            "Aisle category: 'Grocery & Staples', 'Beverages', 'Electronics', 'Beauty & Personal Care', 'Home Care', 'Home & Kitchen', 'Decor', 'Kids', 'Kitchen Appliances', 'Office & Stationery'",
         },
         max_price_paise: { type: "number", description: "Maximum price in paise (e.g. 25000 = ₹250)" },
         in_stock_only: { type: "boolean", description: "Only return items currently in stock (default: true)" },
@@ -124,7 +136,6 @@ const TOOLS = [
   },
 ]
 
-// Tool Implementations
 async function executeSearchCatalog(args) {
   const q = args.query || args.q || ""
   const category = args.category
@@ -140,7 +151,7 @@ async function executeSearchCatalog(args) {
   if (rawQ) {
     const terms = new Set()
     terms.add(rawQ)
-    rawQ.split(/\\s+/).forEach((w) => {
+    rawQ.split(/\s+/).forEach((w) => {
       if (w.length > 2) terms.add(w)
     })
     Array.from(terms).forEach((t) => {
@@ -198,6 +209,8 @@ async function executeSearchCatalog(args) {
   }
 
   return {
+    protocol: "ucp",
+    version: "2026-01-16",
     matches_count: ranked.length,
     products: ranked.slice(0, 10).map((p) => ({
       id: p.id,
@@ -472,39 +485,114 @@ async function executeAP2Checkout(args) {
   }
 }
 
-// Router for JSON-RPC methods
 async function handleRpcRequest(rpc) {
   const { id = null, method, params = {} } = rpc
 
-  if (method === "initialize") {
+  // Protocol version validation per MCP 2026-07-28 (SEP-2575)
+  const meta = params?._meta || rpc?._meta
+  const reqVersion = meta?.["io.modelcontextprotocol/protocolVersion"]
+  if (reqVersion && !SUPPORTED_PROTOCOL_VERSIONS.includes(reqVersion)) {
+    return {
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code: -32022,
+        message: `Unsupported protocol version: ${reqVersion}`,
+        data: { supported: SUPPORTED_PROTOCOL_VERSIONS, requested: reqVersion },
+      },
+    }
+  }
+
+  // 1. Mandatory server/discover RPC (2026-07-28)
+  if (method === "server/discover") {
     return {
       jsonrpc: "2.0",
       id,
       result: {
-        protocolVersion: params.protocolVersion || "2024-11-05",
+        resultType: "complete",
+        supportedVersions: SUPPORTED_PROTOCOL_VERSIONS,
         capabilities: {
           tools: { listChanged: false },
           resources: { listChanged: false },
           prompts: { listChanged: false },
         },
-        serverInfo: { name: "razent-commerce-mcp", version: "1.0.0" },
-        instructions:
-          "You are connected to the Razent Quick Commerce MCP Server (https://razent-merchant.vercel.app). " +
-          "Help customers discover products across 10 aisles, prepare checkout sessions with Razorpay payment links, and track deliveries. " +
-          "Never charge a customer automatically; always present the secure Razorpay payment link for human verification. " +
-          "Format links cleanly as markdown buttons: [Click here to Pay ₹XX via Razorpay](url) and [Click here to Download Tax Invoice](url).",
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+        },
+        instructions: INSTRUCTIONS,
+        ttlMs: 3600000,
+        cacheScope: "public",
+      },
+    }
+  }
+
+  // 2. Backward-compatible initialize (2024-11-05 / 2025-11-25)
+  if (method === "initialize") {
+    return {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        resultType: "complete",
+        protocolVersion: params.protocolVersion || LATEST_PROTOCOL_VERSION,
+        capabilities: {
+          tools: { listChanged: false },
+          resources: { listChanged: false },
+          prompts: { listChanged: false },
+        },
+        serverInfo: SERVER_INFO,
+        instructions: INSTRUCTIONS,
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+        },
       },
     }
   }
 
   if (method === "notifications/initialized" || method === "initialized" || method === "ping") {
-    return id !== null ? { jsonrpc: "2.0", id, result: {} } : null
+    return id !== null
+      ? {
+          jsonrpc: "2.0",
+          id,
+          result: { resultType: "complete", _meta: { "io.modelcontextprotocol/serverInfo": SERVER_INFO } },
+        }
+      : null
   }
 
+  // 3. Subscriptions (2026-07-28)
+  if (method === "subscriptions/listen") {
+    return {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        resultType: "complete",
+        subscribed: params.subscriptions || [],
+        _meta: {
+          "io.modelcontextprotocol/subscriptionId": id,
+          "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+        },
+      },
+    }
+  }
+
+  // 4. tools/list (Deterministic ordering & caching per SEP-2549)
   if (method === "tools/list") {
-    return { jsonrpc: "2.0", id, result: { tools: TOOLS } }
+    const sortedTools = [...TOOLS].sort((a, b) => a.name.localeCompare(b.name))
+    return {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        resultType: "complete",
+        tools: sortedTools,
+        ttlMs: 300000,
+        cacheScope: "public",
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+        },
+      },
+    }
   }
 
+  // 5. tools/call
   if (method === "tools/call") {
     const { name, arguments: toolArgs = {} } = params
     try {
@@ -527,35 +615,111 @@ async function handleRpcRequest(rpc) {
         jsonrpc: "2.0",
         id,
         result: {
+          resultType: "complete",
           content: [{ type: "text", text: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult, null, 2) }],
+          structuredContent: typeof toolResult === "object" ? toolResult : undefined,
           isError: false,
+          _meta: {
+            "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+          },
         },
       }
     } catch (err) {
       return {
         jsonrpc: "2.0",
         id,
-        result: { content: [{ type: "text", text: `Error: ${err?.message || String(err)}` }], isError: true },
+        result: {
+          resultType: "complete",
+          content: [{ type: "text", text: `Error: ${err?.message || String(err)}` }],
+          isError: true,
+          _meta: {
+            "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+          },
+        },
       }
     }
   }
 
+  // 6. prompts/list & prompts/get
   if (method === "prompts/list") {
     return {
       jsonrpc: "2.0",
       id,
       result: {
+        resultType: "complete",
         prompts: [{ name: "shopping_assistant", description: "Razent Quick Commerce Assistant prompt" }],
+        ttlMs: 300000,
+        cacheScope: "public",
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+        },
       },
     }
   }
 
+  if (method === "prompts/get") {
+    return {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        resultType: "complete",
+        description: "Razent Assistant Instructions",
+        messages: [{ role: "user", content: { type: "text", text: INSTRUCTIONS } }],
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+        },
+      },
+    }
+  }
+
+  // 7. resources/list & resources/read
   if (method === "resources/list") {
     return {
       jsonrpc: "2.0",
       id,
       result: {
+        resultType: "complete",
         resources: [{ uri: "razent://store/aisles", name: "Store Aisles", mimeType: "application/json" }],
+        ttlMs: 300000,
+        cacheScope: "public",
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+        },
+      },
+    }
+  }
+
+  if (method === "resources/read") {
+    return {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        resultType: "complete",
+        contents: [
+          {
+            uri: params.uri || "razent://store/aisles",
+            mimeType: "application/json",
+            text: JSON.stringify({
+              aisles: [
+                "Grocery & Staples",
+                "Beverages",
+                "Electronics",
+                "Beauty & Personal Care",
+                "Home Care",
+                "Home & Kitchen",
+                "Decor",
+                "Kids",
+                "Kitchen Appliances",
+                "Office & Stationery",
+              ],
+              store: "Razent Quick Commerce",
+              delivery_sla: "10-15 minutes",
+            }),
+          },
+        ],
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": SERVER_INFO,
+        },
       },
     }
   }
@@ -575,9 +739,11 @@ const port = portArgIndex !== -1 ? parseInt(args[portArgIndex + 1], 10) || 8080 
 
 if (isHttpMode) {
   const server = http.createServer(async (req, res) => {
-    // CORS Headers
     res.setHeader("Access-Control-Allow-Origin", "*")
-    res.setHeader("Access-Control-Allow-Headers", "authorization, x-client-info, apikey, content-type, mcp-session-id, x-acp-signature")
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "authorization, x-client-info, apikey, content-type, mcp-session-id, x-acp-signature, mcp-protocol-version, mcp-method, mcp-name, traceparent, tracestate, baggage"
+    )
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 
     if (req.method === "OPTIONS") {
@@ -587,17 +753,24 @@ if (isHttpMode) {
     }
 
     if (req.method === "GET") {
+      const sortedTools = [...TOOLS].sort((a, b) => a.name.localeCompare(b.name))
       res.writeHead(200, { "Content-Type": "application/json" })
       res.end(
-        JSON.stringify({
-          name: "razent-commerce-mcp",
-          version: "1.0.0",
-          status: "online",
-          transport: "Streamable HTTP (JSON-RPC 2.0)",
-          mcp_version: "2024-11-05",
-          tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
-          storefront_url: "https://razent-merchant.vercel.app",
-        })
+        JSON.stringify(
+          {
+            name: SERVER_INFO.name,
+            version: SERVER_INFO.version,
+            status: "online",
+            transport: "Streamable HTTP (JSON-RPC 2.0)",
+            mcp_specification: LATEST_PROTOCOL_VERSION,
+            supported_versions: SUPPORTED_PROTOCOL_VERSIONS,
+            protocols_supported: ["mcp", "ucp", "acp", "ap2"],
+            tools: sortedTools.map((t) => ({ name: t.name, description: t.description })),
+            storefront_url: "https://razent-merchant.vercel.app",
+          },
+          null,
+          2
+        )
       )
       return
     }
@@ -633,7 +806,7 @@ if (isHttpMode) {
 
   server.listen(port, () => {
     console.log(`[Razent MCP] Streamable HTTP server listening on http://localhost:${port}`)
-    console.log(`[Razent MCP] Protocol: Streamable HTTP (JSON-RPC 2.0)`)
+    console.log(`[Razent MCP] Specification: ${LATEST_PROTOCOL_VERSION}`)
   })
 } else {
   // Stdio Mode

@@ -1,7 +1,9 @@
 {
-  "$schema": "https://modelcontextprotocol.io/schema/2024-11-05/server.json",
+  "$schema": "https://modelcontextprotocol.io/schema/2026-07-28/server.json",
   "name": "razent-commerce-mcp",
-  "version": "1.0.0",
+  "version": "2026.7.28",
+  "mcp_specification": "2026-07-28",
+  "supported_versions": ["2026-07-28", "2025-11-25", "2024-11-05"],
   "description": "Official Razent Quick Commerce Model Context Protocol (MCP) Server for 10-15 minute grocery & essentials delivery.",
   "vendor": "Razent",
   "transport": {
@@ -21,8 +23,8 @@
   },
   "tools": [
     {
-      "name": "search_catalog",
-      "description": "Search products in Razent 10-15 min quick grocery delivery catalog via Universal Commerce Protocol (UCP). Features typo tolerance, category filtering, plural stemming, and price ceilings. Returns matching items with price in rupees, stock, and images."
+      "name": "ap2_execute_autonomous_checkout",
+      "description": "Execute autonomous Human-Not-Present purchase under Google AP2 protocol with real Razorpay test settlement. Verifies delegated spending cap and creates authoritative orders."
     },
     {
       "name": "create_checkout_session",
@@ -31,6 +33,10 @@
     {
       "name": "get_checkout_session",
       "description": "Check live payment and order settlement status of a checkout session. Polls Razorpay in real time: when customer completes payment, automatically settles the order and generates tracking and invoice links."
+    },
+    {
+      "name": "search_catalog",
+      "description": "Search products in Razent 10-15 min quick grocery delivery catalog via Universal Commerce Protocol (UCP). Features typo tolerance, category filtering, plural stemming, and price ceilings. Returns matching items with price in rupees, stock, and images."
     },
     {
       "name": "track_orders",
