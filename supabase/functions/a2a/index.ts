@@ -146,6 +146,45 @@ Deno.serve(async (req: Request) => {
         created_at: new Date().toISOString(),
       }
 
+      let paymentLink = null
+      try {
+        const auth = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)
+        const plinkRes = await fetch("https://api.razorpay.com/v1/payment_links", {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${auth}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            amount: totalPaise,
+            currency: "INR",
+            description: `Razent Order - ${lineItems.map((i) => `${i.quantity}x ${i.title}`).join(", ").slice(0, 80)}`,
+            customer: {
+              name: session.delivery_address.full_name || "Customer",
+              contact: (session.delivery_address.phone || "+919876543210").replace(/\s+/g, ""),
+              email: "customer@example.com",
+            },
+            notify: { sms: false, email: false },
+            notes: {
+              session_id: sessionId,
+              protocol: "acp",
+            },
+          }),
+        })
+        if (plinkRes.ok) {
+          const plinkData = await plinkRes.json()
+          paymentLink = plinkData.short_url
+        } else {
+          console.error("Payment link creation error:", await plinkRes.text())
+        }
+      } catch (err) {
+        console.error("Exception creating payment link:", err)
+      }
+
+      session.payment_link = paymentLink || `https://razent.app/checkout?session=${sessionId}`
+      session.payment_url = session.payment_link
+      session.payment_instruction = "Click payment_url to authenticate and complete payment with UPI or Card."
+
       memorySessions.set(sessionId, session)
 
       try {
@@ -158,6 +197,7 @@ Deno.serve(async (req: Request) => {
           totals: session.totals,
           capabilities: { supported_handlers: session.supported_handlers },
           fulfillment_details: session.delivery_address,
+          payment_link: session.payment_link,
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
         })
         if (insErr) {
@@ -247,8 +287,11 @@ Deno.serve(async (req: Request) => {
       const rzpOrder = await rzpRes.json()
       const orderId = `RAZ-A2A-${Date.now().toString(36).toUpperCase()}`
 
+      const invoiceUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${orderId}`
+      const trackingUrl = `https://razent.app/?track=${orderId}`
+
       try {
-        await supabase.from("orders").insert({
+        const { error: ordErr } = await supabase.from("orders").insert({
           external_id: orderId,
           merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
           razorpay_order_id: rzpOrder.id,
@@ -266,11 +309,15 @@ Deno.serve(async (req: Request) => {
           },
           via_ai: true,
           commerce_protocol: "ap2",
+          payment_link: session.payment_link || null,
           settlement_reference: `settle_${rzpOrder.id}`,
           paid_at: new Date().toISOString(),
         })
+        if (ordErr) {
+          console.error("Error inserting order into DB:", ordErr)
+        }
       } catch (err) {
-        console.error("Error inserting order into DB:", err)
+        console.error("Exception inserting order into DB:", err)
       }
 
       try {
@@ -298,6 +345,8 @@ Deno.serve(async (req: Request) => {
           amount_paid_rupees: (totalPaise / 100).toFixed(2),
           settlement_rail: "NPCI UPI AutoPay via Razorpay Test Rails",
           delivery_eta: "10-15 minutes",
+          invoice_url: invoiceUrl,
+          tracking_url: trackingUrl,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
@@ -343,6 +392,130 @@ Deno.serve(async (req: Request) => {
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. OFFICIAL TAX INVOICE HTML: GET /invoice
+    // ─────────────────────────────────────────────────────────────
+    if (path.startsWith("/invoice") && req.method === "GET") {
+      const orderId = url.searchParams.get("order_id") || url.searchParams.get("id") || path.split("/").pop()
+      const { data: order } = await supabase.from("orders").select("*").eq("external_id", orderId).maybeSingle()
+
+      if (!order) {
+        return new Response(`<h1>Invoice Not Found</h1><p>Order ${orderId} does not exist.</p>`, {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "text/html" },
+        })
+      }
+
+      const totalPaise = order.total_paise || 0
+      const subtotalPaise = Math.round(totalPaise / 1.18)
+      const gstPaise = totalPaise - subtotalPaise
+      const cgstPaise = Math.round(gstPaise / 2)
+      const sgstPaise = gstPaise - cgstPaise
+      const items = Array.isArray(order.items) ? order.items : []
+      const addr = order.shipping_address || {}
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GST Tax Invoice - ${order.external_id}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; color: #0f172a; margin: 0; padding: 24px; }
+    .container { max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
+    .badge { display: inline-block; background: #ecfdf5; color: #059669; padding: 4px 10px; border-radius: 9999px; font-weight: 600; font-size: 12px; }
+    .section { margin-top: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+    th { text-align: left; background: #f8fafc; padding: 10px; border-bottom: 2px solid #cbd5e1; }
+    td { padding: 10px; border-bottom: 1px solid #f1f5f9; }
+    .total-row { font-weight: 700; font-size: 15px; border-top: 2px solid #0f172a; }
+    .btn { display: inline-block; margin-top: 24px; background: #0f172a; color: #ffffff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1 style="margin:0; font-size: 22px;">RAZENT STORE</h1>
+        <p style="margin:4px 0 0; color:#64748b; font-size: 13px;">Official GST Tax Invoice</p>
+      </div>
+      <div style="text-align: right;">
+        <span class="badge">✓ PAID VIA RAZORPAY</span>
+        <p style="margin:6px 0 0; font-family: monospace; font-size: 12px; color: #475569;">${order.external_id}</p>
+      </div>
+    </div>
+
+    <div class="section grid">
+      <div>
+        <strong>Billed To:</strong><br>
+        ${addr.full_name || "Customer"}<br>
+        ${addr.line1 || ""}<br>
+        ${addr.city || ""}, ${addr.pincode || ""}<br>
+        Phone: ${addr.phone || "N/A"}
+      </div>
+      <div style="text-align: right;">
+        <strong>Invoice Details:</strong><br>
+        Invoice No: INV-${order.external_id.replace(/^RAZ-A2A-/, "")}<br>
+        Date: ${new Date(order.paid_at || order.created_at).toLocaleDateString("en-IN")}<br>
+        Razorpay Order ID: <span style="font-family: monospace;">${order.razorpay_order_id || "N/A"}</span><br>
+        Protocol: Google AP2 / ACP
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Item Description</th>
+          <th style="text-align: center;">Qty</th>
+          <th style="text-align: right;">Price</th>
+          <th style="text-align: right;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((i: any) => `
+          <tr>
+            <td><strong>${i.title}</strong></td>
+            <td style="text-align: center;">${i.quantity || i.qty || 1}</td>
+            <td style="text-align: right;">₹${(((i.unit_price_paise || i.price_paise || 0) / 100)).toFixed(2)}</td>
+            <td style="text-align: right;">₹${(((i.line_total_paise || (i.unit_price_paise || 0) * (i.quantity || 1)) / 100)).toFixed(2)}</td>
+          </tr>
+        `).join("")}
+        <tr>
+          <td colspan="3" style="text-align: right; color: #64748b;">Subtotal (Taxable Value):</td>
+          <td style="text-align: right;">₹${(subtotalPaise / 100).toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td colspan="3" style="text-align: right; color: #64748b;">CGST (9%):</td>
+          <td style="text-align: right;">₹${(cgstPaise / 100).toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td colspan="3" style="text-align: right; color: #64748b;">SGST (9%):</td>
+          <td style="text-align: right;">₹${(sgstPaise / 100).toFixed(2)}</td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="3" style="text-align: right;">Grand Total:</td>
+          <td style="text-align: right;">₹${(totalPaise / 100).toFixed(2)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top: 24px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 12px; color: #64748b;">
+      Settlement Reference: ${order.settlement_reference || "N/A"} | Delivery ETA: 10–15 Minutes. This is a computer-generated tax invoice verified under Google Agent Payments Protocol (AP2) rails.
+    </div>
+
+    <div style="text-align: center;">
+      <button class="btn" onclick="window.print()">Print / Download PDF</button>
+    </div>
+  </div>
+</body>
+</html>`
+
+      return new Response(html, {
+        headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
+      })
     }
 
     return new Response(JSON.stringify({ error: `Not Found: ${path}` }), {

@@ -305,6 +305,18 @@
           "currency": {
             "type": "string"
           },
+          "payment_url": {
+            "type": "string",
+            "description": "Direct Razorpay secure payment link (UPI, GPay, Cards) for human customer approval"
+          },
+          "payment_link": {
+            "type": "string",
+            "description": "Secure payment URL"
+          },
+          "payment_instruction": {
+            "type": "string",
+            "description": "Instruction for the human buyer to review and pay"
+          },
           "totals": {
             "type": "array",
             "items": {
@@ -384,6 +396,14 @@
           },
           "delivery_eta": {
             "type": "string"
+          },
+          "invoice_url": {
+            "type": "string",
+            "description": "Official printable GST Tax Invoice URL"
+          },
+          "tracking_url": {
+            "type": "string",
+            "description": "Live delivery tracking link"
           }
         }
       },
