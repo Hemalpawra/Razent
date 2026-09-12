@@ -64,10 +64,11 @@ Deno.serve(async (req: Request) => {
           if (w.length > 2) terms.add(w)
         })
 
-        // Stemming plurals
+        // Stemming plurals (milks -> milk, chocolates -> chocolate, berries -> berry, etc.)
         Array.from(terms).forEach((t) => {
-          if (t.endsWith("s") && t.length > 3) terms.add(t.slice(0, -1))
+          if (t.endsWith("ies") && t.length > 4) terms.add(t.slice(0, -3) + "y")
           if (t.endsWith("es") && t.length > 4) terms.add(t.slice(0, -2))
+          if (t.endsWith("s") && t.length > 3) terms.add(t.slice(0, -1))
         })
 
         // Synonym expansion
