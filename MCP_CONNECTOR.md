@@ -105,7 +105,7 @@ Add to `.cursor/mcp.json` in your workspace:
 {
   "mcpServers": {
     "razent-commerce": {
-      "url": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp"
+      "url": "https://razent.vercel.app/mcp"
     }
   }
 }
@@ -122,7 +122,7 @@ from google.antigravity import Agent, LocalAgentConfig, types
 mcp_servers = [
     types.McpStreamableHttpServer(
         name="razent_commerce",
-        url="https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp",
+        url="https://razent.vercel.app/mcp",
     )
 ]
 
