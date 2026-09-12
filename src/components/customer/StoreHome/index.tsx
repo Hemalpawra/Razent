@@ -43,6 +43,7 @@ import { supabase } from "@/lib/api/supabase"
 import { useClerkCustomerProfile } from "@/state/useClerkCustomerProfile"
 import {
   trackOrder,
+  trackOrdersFlexible,
   executeAgentCheckout,
   executeStorefrontPayment,
   createStorefrontOrder,
@@ -162,13 +163,18 @@ export default function StoreHome() {
   const [searchParams] = useSearchParams()
 
   const [view, setView] = useState<StoreView>("home")
+  const [trackPrefill, setTrackPrefill] = useState<{ orderId?: string; mobile?: string; email?: string } | null>(null)
 
-  // URL Query Sync (e.g. ?view=checkout from AI Assistant Buy Now)
+  // URL Query Sync (e.g. ?view=checkout from AI Assistant Buy Now, ?track=ORDER_ID for direct tracking)
   const viewParam = searchParams.get("view")
   const productParam = searchParams.get("product")
+  const trackParam = searchParams.get("track")
 
   useEffect(() => {
-    if (viewParam === "checkout") {
+    if (trackParam) {
+      setTrackPrefill({ orderId: trackParam })
+      setView("track-order")
+    } else if (viewParam === "checkout") {
       setView("checkout")
     } else if (viewParam === "cart") {
       setView("cart")
@@ -181,7 +187,7 @@ export default function StoreHome() {
       setSelectedId(productParam)
       setView("detail")
     }
-  }, [viewParam, productParam])
+  }, [viewParam, productParam, trackParam])
 
   const [activeCat, setActiveCat] = useState<string | null>(null)
 
@@ -239,7 +245,6 @@ export default function StoreHome() {
   const [lastPaymentId, setLastPaymentId] = useState<string | null>(null)
   const [lastOrderId, setLastOrderId] = useState<string | null>(null)
   const [convExternalId] = useState<string>(() => `conv_${Date.now()}`)
-  const [trackPrefill, setTrackPrefill] = useState<{ orderId?: string; mobile?: string; email?: string } | null>(null)
 
   const [lastInvoiceNo, setLastInvoiceNo] = useState<string | null>(null)
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false)
@@ -3069,6 +3074,10 @@ interface OrderData {
   attemptTime: string
 
   paymentReason?: string
+  items?: any[]
+  phone?: string
+  email?: string
+  address?: string
 }
 
 function TrackOrderSkeleton() {
@@ -3212,6 +3221,50 @@ function OrderTimeline({ currentStage }: { currentStage: TrackStageKey }) {
   )
 }
 
+function mapOrderToOrderData(result: Order): OrderData {
+  const primaryItem = result.items?.[0]
+  const extraCount = (result.items?.length || 0) - 1
+  const productName = primaryItem
+    ? `${primaryItem.title}${extraCount > 0 ? ` +${extraCount} more` : ""}`
+    : "Order Item"
+  const shipping = result.shipping_address || {}
+
+  return {
+    orderId: result.id,
+    customerName: shipping.full_name ?? (shipping.email || "Customer").split("@")[0],
+    productName,
+    amount: result.total_paise,
+    paymentMethod: result.via_ai ? "UPI (Agentic NCPI UAP)" : (result.commerce_protocol === "ap2" ? "AP2 Protocol" : "Card / Gateway"),
+    orderStatus: result.shipping_status === "delivered"
+      ? "delivered"
+      : result.shipping_status === "shipped"
+        ? "shipped"
+        : result.shipping_status === "out_for_delivery"
+          ? "out-for-delivery"
+          : result.status === "failed"
+            ? "cancelled"
+            : "processing",
+    paymentStatus: result.status === "paid" ? "paid" : (result.status === "failed" ? "failed" : "pending"),
+    invoiceNumber: result.notes?.includes("INV-") ? (result.notes.match(/INV-\d{4}-\d+/)?.[0] ?? `INV-${result.id.slice(-6)}`) : `INV-${result.id.slice(-6)}`,
+    invoiceDate: new Date(result.created_at ?? Date.now()).toLocaleDateString("en-IN"),
+    trackingStage: result.shipping_status === "delivered"
+      ? "delivered"
+      : result.shipping_status === "out_for_delivery"
+        ? "out-for-delivery"
+        : result.shipping_status === "shipped"
+          ? "shipped"
+          : result.shipping_status === "packed"
+            ? "packed"
+            : "preparing",
+    attemptTime: new Date(result.created_at ?? Date.now()).toLocaleString("en-IN"),
+    paymentReason: result.status === "failed" ? (result.notes || "Transaction declined by bank or gateway") : undefined,
+    items: result.items,
+    phone: shipping.phone || "",
+    email: shipping.email || "",
+    address: [shipping.line1, shipping.city, shipping.pincode].filter(Boolean).join(", "),
+  }
+}
+
 function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }: TrackOrderProps) {
   const { storeProfile } = useSettings()
 
@@ -3223,16 +3276,20 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [orderData, setOrderData] = useState<OrderData | null>(null)
+  const [ordersList, setOrdersList] = useState<Order[]>([])
+  const [activeOrder, setActiveOrder] = useState<Order | null>(null)
 
-  const doTrack = async (targetOrderId: string, targetMobile: string, targetEmail: string) => {
-    const cleanOid = targetOrderId.trim().toUpperCase()
-    const cleanMob = targetMobile.replace(/\D/g, "")
-    const cleanEm = targetEmail.trim().toLowerCase()
+  const doTrack = async (targetOrderId?: string, targetMobile?: string, targetEmail?: string) => {
+    const cleanOid = (targetOrderId || "").trim().toUpperCase()
+    const cleanMob = (targetMobile || "").replace(/\D/g, "")
+    const cleanEm = (targetEmail || "").trim().toLowerCase()
 
-    if (!cleanOid || cleanMob.length < 10 || !cleanEm.includes("@")) {
-      setError("Please provide a valid Order ID, 10-digit mobile number, and email address.")
+    if (!cleanOid && cleanMob.length < 10 && !cleanEm.includes("@")) {
+      setError("Please provide at least one search factor: Order ID, 10-digit mobile number, or email address.")
       setSubmitted(true)
       setOrderData(null)
+      setOrdersList([])
+      setActiveOrder(null)
       return
     }
 
@@ -3241,57 +3298,37 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
     setLoading(true)
 
     try {
-      // Strict 3-factor verification: order_id + mobile + email
-      const result = await trackOrder({
+      const result = await trackOrdersFlexible({
         orderId: cleanOid,
         mobile: cleanMob,
         email: cleanEm,
       })
-      if (result) {
-        const primaryItem = result.items?.[0]
-        const data: OrderData = {
-          orderId: result.id,
-          customerName: result.shipping_address?.full_name ?? (result.shipping_address?.email || "Customer").split("@")[0],
-          productName: primaryItem?.title ?? "Order Item",
-          amount: result.total_paise,
-          paymentMethod: result.via_ai ? "UPI (Agentic NCPI UAP)" : (result.commerce_protocol === "ap2" ? "AP2 Protocol" : "Card / Gateway"),
-          orderStatus: result.shipping_status === "delivered"
-            ? "delivered"
-            : result.shipping_status === "shipped"
-              ? "shipped"
-              : result.status === "failed"
-                ? "cancelled"
-                : "processing",
-          paymentStatus: result.status === "paid" ? "paid" : (result.status === "failed" ? "failed" : "pending"),
-          invoiceNumber: result.notes?.includes("INV-") ? (result.notes.match(/INV-\d{4}-\d+/)?.[0] ?? `INV-${result.id.slice(-6)}`) : `INV-${result.id.slice(-6)}`,
-          invoiceDate: new Date(result.created_at ?? Date.now()).toLocaleDateString("en-IN"),
-          trackingStage: result.shipping_status === "delivered"
-            ? "delivered"
-            : result.shipping_status === "out_for_delivery"
-              ? "out-for-delivery"
-              : result.shipping_status === "shipped"
-                ? "shipped"
-                : result.shipping_status === "packed"
-                  ? "packed"
-                  : "preparing",
-          attemptTime: new Date(result.created_at ?? Date.now()).toLocaleString("en-IN"),
-          paymentReason: result.status === "failed" ? (result.notes || "Transaction declined by bank or gateway") : undefined,
-        }
-        setOrderData(data)
+
+      if (result.latestOrder) {
+        setOrdersList(result.orders)
+        setActiveOrder(result.latestOrder)
+        setOrderData(mapOrderToOrderData(result.latestOrder))
       } else {
+        setOrdersList([])
+        setActiveOrder(null)
         setOrderData(null)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed")
+      setOrdersList([])
+      setActiveOrder(null)
       setOrderData(null)
     } finally {
       setLoading(false)
     }
   }
 
-  // Auto-verify if all 3 factors are passed via props (e.g. from checkout success or chat card)
+  // Auto-verify if ANY factor is passed via props (e.g. ?track=ORDER_ID or from checkout success)
   useEffect(() => {
-    if (initialValues?.orderId && initialValues?.mobile && initialValues?.email) {
+    if (initialValues?.orderId || initialValues?.mobile || initialValues?.email) {
+      if (initialValues.orderId) setOrderId(initialValues.orderId)
+      if (initialValues.mobile) setMobile(initialValues.mobile)
+      if (initialValues.email) setEmail(initialValues.email)
       doTrack(initialValues.orderId, initialValues.mobile, initialValues.email)
     }
   }, [initialValues?.orderId, initialValues?.mobile, initialValues?.email])
@@ -3328,13 +3365,15 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
   }
 
   if (!submitted) {
+    const hasAnyInput = Boolean(orderId.trim() || mobile.replace(/\D/g, "").length >= 10 || email.includes("@"))
+
     return (
       <section className="px-4 py-6">
         <div className="mx-auto max-w-[600px] space-y-6">
           <div className="text-center">
             <h1 className="font-heading text-2xl font-semibold">Track Order</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Strict 3-factor verification: Enter your Order ID, registered mobile number, and email address to securely access order tracking and invoices.
+              Flexible order tracking: Enter your Order ID, registered mobile number, OR email address to access your order tracking and invoices.
             </p>
           </div>
 
@@ -3344,39 +3383,49 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
                 <div className="space-y-1.5">
                   <Label htmlFor="orderId" className="flex items-center justify-between">
                     <span>Order ID</span>
-                    <span className="text-[11px] text-muted-foreground">Required</span>
+                    <span className="text-[11px] text-muted-foreground">Individual order lookup</span>
                   </Label>
                   <Input
                     id="orderId"
                     value={orderId}
                     onChange={(e) => setOrderId(e.target.value)}
-                    placeholder="e.g. ORD-2026-123456"
-                    required
+                    placeholder="e.g. RAZ-A2A-MTY3FQ2D or ORD-2026-..."
                     className="h-10 font-mono text-sm"
                   />
+                </div>
+
+                <div className="flex items-center gap-3 my-1 text-xs text-muted-foreground">
+                  <Separator className="flex-1" />
+                  <span>OR</span>
+                  <Separator className="flex-1" />
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="mobile" className="flex items-center justify-between">
                     <span>Mobile Number</span>
-                    <span className="text-[11px] text-muted-foreground">Required (10 digits)</span>
+                    <span className="text-[11px] text-muted-foreground">Shows complete order history</span>
                   </Label>
                   <Input
                     id="mobile"
                     type="tel"
                     value={mobile}
                     onChange={(e) => setMobile(e.target.value)}
-                    placeholder="e.g. 9876543210"
-                    required
+                    placeholder="e.g. 9177306217"
                     className="h-10 text-sm"
                     inputMode="tel"
                   />
                 </div>
 
+                <div className="flex items-center gap-3 my-1 text-xs text-muted-foreground">
+                  <Separator className="flex-1" />
+                  <span>OR</span>
+                  <Separator className="flex-1" />
+                </div>
+
                 <div className="space-y-1.5">
                   <Label htmlFor="email" className="flex items-center justify-between">
                     <span>Email Address</span>
-                    <span className="text-[11px] text-muted-foreground">Required</span>
+                    <span className="text-[11px] text-muted-foreground">Shows complete order history</span>
                   </Label>
                   <Input
                     id="email"
@@ -3384,25 +3433,24 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="e.g. customer@example.com"
-                    required
                     className="h-10 text-sm"
                   />
                 </div>
 
                 <p className="text-[11px] text-muted-foreground">
-                  Security note: For customer data privacy, guest order lookups require exact matching of all 3 factors.
+                  💡 Tip: Searching by phone number or email ID displays your latest order first, along with cards to inspect all your previous orders.
                 </p>
 
                 <Button
                   type="submit"
                   className="w-full"
                   size="lg"
-                  disabled={loading || !orderId.trim() || !mobile.trim() || !email.trim()}
+                  disabled={loading || !hasAnyInput}
                 >
                   {loading ? (
                     <Loader2 className="size-4 mr-2 animate-spin" />
                   ) : (
-                    "Verify & Track Order"
+                    "Verify & Track Orders"
                   )}
                 </Button>
               </form>
@@ -3613,7 +3661,7 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
           </CardContent>
         </Card>
 
-        {/* Dummy tracking card */}
+        {/* Delivery tracking card */}
         <Card>
           <CardHeader>
             <CardTitle>Delivery Tracking</CardTitle>
@@ -3622,6 +3670,83 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
             <OrderTimeline currentStage={trackingStage} />
           </CardContent>
         </Card>
+
+        {/* Previous / Other Orders Section */}
+        {ordersList.length > 1 && (
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <h3 className="font-heading font-semibold text-lg flex items-center gap-2">
+                <Clock className="size-5 text-primary" /> Previous Orders ({ordersList.length - 1} other {ordersList.length - 1 === 1 ? "order" : "orders"})
+              </h3>
+              <span className="text-xs text-muted-foreground">Click any card to inspect full details</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {ordersList.map((ord) => {
+                const isSelected = (activeOrder?.id || orderData.orderId) === ord.id
+                const primaryItem = ord.items?.[0]
+                const extraCount = (ord.items?.length || 0) - 1
+                const itemSummary = primaryItem
+                  ? `${primaryItem.title}${extraCount > 0 ? ` +${extraCount} more` : ""}`
+                  : "Order item"
+                const orderDate = new Date(ord.created_at || Date.now()).toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+
+                return (
+                  <Card
+                    key={ord.id}
+                    className={`cursor-pointer transition-all hover:border-primary/70 hover:shadow-sm ${
+                      isSelected
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                        : "border-border/80 bg-card"
+                    }`}
+                    onClick={() => {
+                      setActiveOrder(ord)
+                      setOrderData(mapOrderToOrderData(ord))
+                      window.scrollTo({ top: 0, behavior: "smooth" })
+                    }}
+                  >
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-semibold text-foreground">
+                          {ord.id}
+                        </span>
+                        <Badge
+                          variant={ord.status === "paid" ? "default" : "secondary"}
+                          className="capitalize text-[11px]"
+                        >
+                          {ord.shipping_status || ord.status}
+                        </Badge>
+                      </div>
+                      <div className="text-sm font-medium text-foreground line-clamp-1">
+                        {itemSummary}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                        <span>{orderDate}</span>
+                        <span className="font-semibold text-foreground">
+                          {formatPrice(ord.total_paise)}
+                        </span>
+                      </div>
+                      {isSelected ? (
+                        <div className="text-[11px] font-medium text-primary flex items-center gap-1 pt-0.5">
+                          <Check className="size-3" /> Currently viewing
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1 pt-0.5 hover:text-primary">
+                          <Eye className="size-3" /> Click to view details
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Support card */}
         <Card className="border-primary/20 bg-primary/5">
@@ -3647,8 +3772,20 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
           </CardContent>
         </Card>
 
-        {/* Back button */}
-        <div className="text-center">
+        {/* Navigation buttons */}
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSubmitted(false)
+              setError(null)
+              setOrderData(null)
+              setOrdersList([])
+              setActiveOrder(null)
+            }}
+          >
+            <Search className="size-4 mr-1.5" /> Track Another Order
+          </Button>
           <Button variant="ghost" onClick={onClose}>
             <ArrowRight className="size-4 mr-1" /> Back to Home
           </Button>

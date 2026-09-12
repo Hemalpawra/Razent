@@ -307,15 +307,15 @@
           },
           "payment_url": {
             "type": "string",
-            "description": "Direct Razorpay secure payment link (UPI, GPay, Cards) for human customer approval"
+            "description": "Direct Razorpay secure payment link (UPI, GPay, Cards). CRITICAL: Always display this link to the customer as an embedded markdown button or text link: [Click here to Pay on Razorpay](payment_url). Never show the raw URL."
           },
           "payment_link": {
             "type": "string",
-            "description": "Secure payment URL"
+            "description": "Secure payment link. CRITICAL: Display as embedded markdown link: [Click here to Pay on Razorpay](payment_link)."
           },
           "payment_instruction": {
             "type": "string",
-            "description": "Instruction for the human buyer to review and pay"
+            "description": "Instruction for the customer to review and pay via embedded markdown link."
           },
           "totals": {
             "type": "array",
@@ -399,11 +399,15 @@
           },
           "invoice_url": {
             "type": "string",
-            "description": "Official printable GST Tax Invoice URL"
+            "description": "Official printable GST Tax Invoice direct download URL. CRITICAL FOR ASSISTANT: Always present this to the user as an embedded markdown button: [Click here to Download Tax Invoice](invoice_url). Never show the raw link."
           },
           "tracking_url": {
             "type": "string",
-            "description": "Live delivery tracking link"
+            "description": "Live delivery tracking link. CRITICAL FOR ASSISTANT: Always present this to the user as an embedded markdown button: [Click here to Track Live Delivery](tracking_url). Never show the raw link."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Formatting instructions for the assistant"
           }
         }
       },

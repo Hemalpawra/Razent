@@ -436,65 +436,100 @@ export async function getOrder(id: string): Promise<Order | null> {
 }
 
 export type TrackOrderArgs = {
-  orderId: string
-  mobile: string
-  email: string
+  orderId?: string
+  mobile?: string
+  email?: string
+}
+
+export type TrackOrdersResult = {
+  latestOrder: Order | null
+  orders: Order[]
 }
 
 /**
- * Public customer-side order tracking verification.
- * Strictly verifies ALL THREE factors against the authoritative DB order:
- *  1. orderId matches external_id
- *  2. mobile matches shipping_address->>phone
- *  3. email matches shipping_address->>email
- * Returns null on any mismatch, never revealing which field was incorrect.
- * Never falls back to mock or synthetic data.
+ * Flexible customer-side order tracking verification.
+ * Allows tracking by ANY ONE factor (Order ID, Mobile, or Email).
+ * - When Order ID is provided: returns that specific order.
+ * - When Mobile or Email is provided: returns all matching orders, sorted latest first.
  */
-export async function trackOrder(args: TrackOrderArgs | string): Promise<Order | null> {
-  if (!args || typeof args === "string") {
-    return null
+export async function trackOrdersFlexible(
+  args: TrackOrderArgs | string,
+): Promise<TrackOrdersResult> {
+  const emptyResult: TrackOrdersResult = { latestOrder: null, orders: [] }
+  if (!args) return emptyResult
+
+  const orderId = typeof args === "string" ? args.trim() : (args.orderId || "").trim()
+  const mobile = typeof args === "string" ? "" : (args.mobile || "").replace(/\D/g, "")
+  const email = typeof args === "string" ? "" : (args.email || "").trim().toLowerCase()
+
+  // Must provide at least one factor
+  if (!orderId && !mobile && !email) {
+    return emptyResult
   }
-
-  const rawOrderId = (args.orderId || "").trim().toUpperCase()
-  const rawMobile = (args.mobile || "").replace(/\D/g, "")
-  const rawEmail = (args.email || "").trim().toLowerCase()
-
-  // Strict 3-factor validation: all 3 must be provided
-  if (!rawOrderId || rawMobile.length < 10 || !rawEmail.includes("@")) {
-    return null
-  }
-
-  const last10Mobile = rawMobile.slice(-10)
 
   try {
-    const { data, error } = await supabase
-      .from("orders")
-      .select("*")
-      .or(`external_id.ilike.${rawOrderId},id.eq.${rawOrderId}`)
-      .maybeSingle()
+    // 1. If Order ID is supplied, search directly by Order ID
+    if (orderId) {
+      let query = supabase.from("orders").select("*")
+      const isDigitsOnly = /^\d+$/.test(orderId)
+      if (isDigitsOnly) {
+        query = query.or(`external_id.ilike.${orderId},id.eq.${orderId}`)
+      } else {
+        query = query.ilike("external_id", orderId)
+      }
 
-    if (error || !data) {
-      return null
+      const { data, error } = await query.maybeSingle()
+      if (error) {
+        console.warn("[trackOrdersFlexible] orderId search error:", error)
+      }
+
+      if (data) {
+        const order = mapDbOrder(data)
+        return {
+          latestOrder: order,
+          orders: [order],
+        }
+      }
+      return emptyResult
     }
 
-    const shipping = (data.shipping_address as any) || {}
-    const storedPhone = (shipping.phone || "").replace(/\D/g, "")
-    const storedEmail = (shipping.email || "").trim().toLowerCase()
+    // 2. If phone number or email is supplied (without orderId)
+    let query = supabase.from("orders").select("*").order("created_at", { ascending: false })
 
-    const phoneMatches = storedPhone.endsWith(last10Mobile)
-    const emailMatches = storedEmail === rawEmail
-
-    // Must match BOTH phone AND email in addition to orderId
-    if (phoneMatches && emailMatches) {
-      return mapDbOrder(data)
+    if (mobile && email) {
+      const last10 = mobile.slice(-10)
+      query = query.or(`shipping_address->>phone.ilike.%${last10}%,shipping_address->>email.ilike.%${email}%`)
+    } else if (mobile) {
+      const last10 = mobile.slice(-10)
+      query = query.filter("shipping_address->>phone", "ilike", `%${last10}%`)
+    } else if (email) {
+      query = query.filter("shipping_address->>email", "ilike", `%${email}%`)
     }
 
-    // Mismatch in phone or email -> generic failure
-    return null
+    const { data, error } = await query
+    if (error) {
+      console.warn("[trackOrdersFlexible] search error:", error)
+      return emptyResult
+    }
+
+    const orders = (data || []).map(mapDbOrder)
+    return {
+      latestOrder: orders.length > 0 ? orders[0] : null,
+      orders,
+    }
   } catch (err) {
-    console.warn("[trackOrder] search error:", err)
-    return null
+    console.warn("[trackOrdersFlexible] error:", err)
+    return emptyResult
   }
+}
+
+/**
+ * Backwards-compatible single order tracker.
+ * Delegates to trackOrdersFlexible and returns the latest / matched order.
+ */
+export async function trackOrder(args: TrackOrderArgs | string): Promise<Order | null> {
+  const res = await trackOrdersFlexible(args)
+  return res.latestOrder
 }
 
 // ─────────────────────────────────────────────────────────────────
