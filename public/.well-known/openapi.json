@@ -1,5 +1,5 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.1",
   "info": {
     "title": "Razent Pre-Production Agentic Commerce API (UCP / ACP / AP2)",
     "version": "2026.1.0",
@@ -7,19 +7,73 @@
   },
   "servers": [
     {
-      "url": "https://ragent.local/api/a2a",
-      "description": "Local Agent Gateway"
-    },
-    {
       "url": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1",
-      "description": "Supabase Edge Gateway"
+      "description": "Supabase Gateway"
     }
   ],
   "paths": {
+    "/ucp/catalog": {
+      "get": {
+        "operationId": "searchUCPCatalog",
+        "summary": "Search UCP Catalog",
+        "description": "Federated catalog discovery and product search supporting natural language, category filtering, and price caps.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search keyword or phrase e.g. milk, apple, oil",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Product category e.g. Dairy & Eggs, Pantry, Fresh Produce",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "max_price_paise",
+            "in": "query",
+            "description": "Maximum price limit in paise (e.g. 50000 = 500 INR)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "in_stock_only",
+            "in": "query",
+            "description": "Filter only available items in stock",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catalog matching products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UCPCatalogResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/acp/checkout_sessions": {
       "post": {
+        "operationId": "createACPCheckoutSession",
         "summary": "Create ACP Checkout Session",
-        "description": "Initiates an ACP checkout session, negotiating capabilities and generating an authoritative Razorpay order ID.",
+        "description": "Initiates an ACP checkout session, negotiating capabilities and generating an authoritative order reference.",
         "requestBody": {
           "required": true,
           "content": {
@@ -42,20 +96,25 @@
             }
           },
           "400": {
-            "description": "Validation error or invalid item payload"
+            "description": "Validation error"
           }
         }
       }
     },
     "/acp/checkout_sessions/{id}": {
       "get": {
-        "summary": "Retrieve ACP Checkout Session",
+        "operationId": "getACPCheckoutSession",
+        "summary": "Get ACP Checkout Session",
+        "description": "Retrieves current status, items, totals, and payment readiness of a checkout session.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "description": "Unique ACP checkout session ID",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -69,19 +128,26 @@
               }
             }
           },
-          "404": { "description": "Session not found" }
+          "404": {
+            "description": "Session not found"
+          }
         }
       }
     },
     "/acp/checkout_sessions/{id}/complete": {
       "post": {
+        "operationId": "completeACPCheckoutSession",
         "summary": "Complete ACP Checkout Session",
+        "description": "Completes checkout session, creates authoritative Razorpay order, and binds mandate chain.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "description": "Unique ACP checkout session ID",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -96,65 +162,114 @@
         },
         "responses": {
           "200": {
-            "description": "Checkout session completed and order settled"
+            "description": "Checkout completed and order settled"
           },
           "400": {
-            "description": "Settlement failed or mandate verification rejected"
+            "description": "Settlement failed or invalid mandate"
           }
-        }
-      }
-    },
-    "/ucp/catalog": {
-      "get": {
-        "summary": "UCP Federated Catalog Search",
-        "parameters": [
-          { "name": "q", "in": "query", "schema": { "type": "string" } },
-          { "name": "category", "in": "query", "schema": { "type": "string" } },
-          { "name": "max_price_paise", "in": "query", "schema": { "type": "integer" } },
-          { "name": "in_stock_only", "in": "query", "schema": { "type": "boolean" } }
-        ],
-        "responses": {
-          "200": { "description": "Catalog matching products" }
         }
       }
     },
     "/ap2/mandate": {
       "post": {
+        "operationId": "createAP2CartMandate",
         "summary": "Create AP2 Cart Mandate",
-        "description": "Produces an RFC 8785 canonical SHA-256 hash and WebCrypto ES256 digital signature of requested items.",
+        "description": "Generates RFC 8785 canonical SHA-256 hash and WebCrypto ES256 digital signature of requested items.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AP2CartMandateRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Authorized Cart Mandate" }
+          "200": {
+            "description": "Authorized Cart Mandate with merchant signature"
+          }
         }
       }
     }
   },
   "components": {
     "schemas": {
-      "ACPCheckoutSessionCreateRequest": {
+      "UCPCatalogResponse": {
         "type": "object",
-        "required": ["line_items", "capabilities"],
         "properties": {
-          "line_items": {
+          "protocol": {
+            "type": "string"
+          },
+          "matches_count": {
+            "type": "integer"
+          },
+          "products": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["item_id", "quantity"],
               "properties": {
-                "item_id": { "type": "string" },
-                "quantity": { "type": "integer", "minimum": 1 }
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "price_paise": {
+                  "type": "integer"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "stock": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ACPCheckoutSessionCreateRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "quantity"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Product ID"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1
+                }
               }
             }
           },
-          "capabilities": {
+          "delivery_address": {
             "type": "object",
             "properties": {
-              "supported_interventions": {
-                "type": "array",
-                "items": { "type": "string" }
+              "full_name": {
+                "type": "string"
               },
-              "supported_handlers": {
-                "type": "array",
-                "items": { "type": "string" }
+              "phone": {
+                "type": "string"
+              },
+              "line1": {
+                "type": "string"
+              },
+              "city": {
+                "type": "string"
+              },
+              "pincode": {
+                "type": "string"
               }
             }
           }
@@ -162,21 +277,28 @@
       },
       "ACPCheckoutSession": {
         "type": "object",
-        "required": ["id", "status", "line_items", "totals"],
+        "required": ["id", "status"],
         "properties": {
-          "id": { "type": "string" },
-          "status": {
-            "type": "string",
-            "enum": ["open", "processing", "completed", "canceled", "expired"]
+          "id": {
+            "type": "string"
           },
-          "currency": { "type": "string", "example": "INR" },
+          "status": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
           "totals": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "type": { "type": "string" },
-                "amount": { "type": "integer" }
+                "type": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "integer"
+                }
               }
             }
           }
@@ -186,10 +308,38 @@
         "type": "object",
         "required": ["payment_handler"],
         "properties": {
-          "payment_handler": { "type": "string" },
-          "mandate_id": { "type": "string" },
-          "razorpay_payment_id": { "type": "string" },
-          "razorpay_signature": { "type": "string" }
+          "payment_handler": {
+            "type": "string",
+            "example": "dev.acp.upi_autopay"
+          },
+          "mandate_id": {
+            "type": "string"
+          },
+          "upi_vpa": {
+            "type": "string",
+            "example": "customer@okhdfcbank"
+          }
+        }
+      },
+      "AP2CartMandateRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "quantity"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
         }
       }
     }
