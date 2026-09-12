@@ -3,7 +3,7 @@
   "name": "Razent Universal Commerce Agent",
   "description": "Agent-to-Agent instant retail commerce endpoint supporting UCP discovery, OpenAI ACP checkout sessions, Google AP2 cryptographic trust mandates, and NPCI/RBI multi-payment guardrails.",
   "version": "1.0.0",
-  "protocols_supported": ["ucp", "acp", "ap2", "ncpi_uap", "x402"],
+  "protocols_supported": ["mcp", "ucp", "acp", "ap2", "ncpi_uap", "x402"],
   "merchant": {
     "merchant_id": "b57fec42-c785-466e-b225-3f7a27edcccb",
     "business_name": "Razent Instant Retail",
@@ -13,6 +13,7 @@
     "category": "Quick-Commerce Grocery & Essentials"
   },
   "endpoints": {
+    "mcp_server": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp",
     "ucp_discovery": "/.well-known/ucp.json",
     "acp_manifest": "/.well-known/acp.json",
     "ap2_trust": "/.well-known/ap2.json",

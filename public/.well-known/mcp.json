@@ -1,0 +1,41 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schema/2024-11-05/server.json",
+  "name": "razent-commerce-mcp",
+  "version": "1.0.0",
+  "description": "Official Razent Quick Commerce Model Context Protocol (MCP) Server for 10-15 minute grocery & essentials delivery.",
+  "vendor": "Razent",
+  "transport": {
+    "type": "streamable-http",
+    "url": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp"
+  },
+  "protocols": [
+    "mcp",
+    "ucp",
+    "acp",
+    "ap2"
+  ],
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true
+  },
+  "tools": [
+    {
+      "name": "search_catalog",
+      "description": "Search products in Razent 10-15 min quick grocery delivery catalog via Universal Commerce Protocol (UCP). Features typo tolerance, category filtering, plural stemming, and price ceilings. Returns matching items with price in rupees, stock, and images."
+    },
+    {
+      "name": "create_checkout_session",
+      "description": "Create an Agentic Commerce Protocol (ACP) checkout session and generate a verified Razorpay payment link. Human-in-the-loop: Present the payment link to the customer for authorization. Never charge automatically."
+    },
+    {
+      "name": "get_checkout_session",
+      "description": "Check live payment and order settlement status of a checkout session. Polls Razorpay in real time: when customer completes payment, automatically settles the order and generates tracking and invoice links."
+    },
+    {
+      "name": "track_orders",
+      "description": "Track live order delivery and history by Order ID (e.g. RAZ-A2A-MTY6O735), customer mobile phone, or email. Returns delivery timeline stage, items, address, and downloadable tax invoice link."
+    }
+  ],
+  "storefront": "https://razent-merchant.vercel.app"
+}

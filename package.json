@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:acceptance": "node scripts/run_acceptance_suite.mjs",
+    "mcp": "node scripts/mcp-server.mjs",
+    "mcp:http": "node scripts/mcp-server.mjs --port 8080",
     "format": "oxfmt"
   },
   "dependencies": {
