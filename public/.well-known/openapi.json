@@ -7,12 +7,12 @@
   },
   "servers": [
     {
-      "url": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1",
-      "description": "Supabase Gateway"
+      "url": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a",
+      "description": "Live Supabase A2A Gateway"
     }
   ],
   "paths": {
-    "/ucp/catalog": {
+    "/catalog": {
       "get": {
         "operationId": "searchUCPCatalog",
         "summary": "Search UCP Catalog",
@@ -69,7 +69,7 @@
         }
       }
     },
-    "/acp/checkout_sessions": {
+    "/checkout_sessions": {
       "post": {
         "operationId": "createACPCheckoutSession",
         "summary": "Create ACP Checkout Session",
@@ -101,7 +101,7 @@
         }
       }
     },
-    "/acp/checkout_sessions/{id}": {
+    "/checkout_sessions/{id}": {
       "get": {
         "operationId": "getACPCheckoutSession",
         "summary": "Get ACP Checkout Session",
@@ -134,7 +134,7 @@
         }
       }
     },
-    "/acp/checkout_sessions/{id}/complete": {
+    "/checkout_sessions/{id}/complete": {
       "post": {
         "operationId": "completeACPCheckoutSession",
         "summary": "Complete ACP Checkout Session",
@@ -162,7 +162,14 @@
         },
         "responses": {
           "200": {
-            "description": "Checkout completed and order settled"
+            "description": "Checkout completed and order settled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           },
           "400": {
             "description": "Settlement failed or invalid mandate"
@@ -170,7 +177,7 @@
         }
       }
     },
-    "/ap2/mandate": {
+    "/mandate": {
       "post": {
         "operationId": "createAP2CartMandate",
         "summary": "Create AP2 Cart Mandate",
@@ -210,7 +217,7 @@
               "type": "object",
               "properties": {
                 "id": {
-                  "type": "string"
+                  "type": "integer"
                 },
                 "title": {
                   "type": "string"
@@ -220,6 +227,9 @@
                 },
                 "price_paise": {
                   "type": "integer"
+                },
+                "price_rupees": {
+                  "type": "string"
                 },
                 "currency": {
                   "type": "string"
@@ -243,7 +253,7 @@
               "required": ["id", "quantity"],
               "properties": {
                 "id": {
-                  "type": "string",
+                  "type": "integer",
                   "description": "Product ID"
                 },
                 "quantity": {
@@ -306,7 +316,6 @@
       },
       "ACPCheckoutSessionCompleteRequest": {
         "type": "object",
-        "required": ["payment_handler"],
         "properties": {
           "payment_handler": {
             "type": "string",
@@ -332,7 +341,7 @@
               "required": ["id", "quantity"],
               "properties": {
                 "id": {
-                  "type": "string"
+                  "type": "integer"
                 },
                 "quantity": {
                   "type": "integer"
