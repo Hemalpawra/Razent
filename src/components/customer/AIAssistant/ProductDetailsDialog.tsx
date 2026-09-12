@@ -30,6 +30,7 @@ export function ProductDetailsDialog({
 }: ProductDetailsDialogProps) {
   const [qty, setQty] = useState(1)
   const [isAdded, setIsAdded] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const addToCart = useCart((s) => s.addToCart)
 
   if (!product) return null
@@ -82,14 +83,18 @@ export function ProductDetailsDialog({
 
         {/* Product Image */}
         <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted/50 border border-border/50 flex items-center justify-center">
-          {product.image_url ? (
+          {!imgError && product.image_url ? (
             <img
               src={product.image_url}
               alt={product.title}
               className="h-full w-full object-contain p-2"
+              onError={() => setImgError(true)}
             />
           ) : (
-            <ShoppingCart className="size-12 text-muted-foreground/40" />
+            <div className="flex flex-col items-center justify-center text-muted-foreground gap-1.5">
+              <ShoppingCart className="size-10 text-muted-foreground/40" />
+              <span className="text-xs font-medium">{product.category || "Verified Product"}</span>
+            </div>
           )}
           {discountPercent && (
             <div className="absolute top-2.5 right-2.5">

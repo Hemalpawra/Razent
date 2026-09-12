@@ -16,12 +16,15 @@ import {
   Sparkles,
   User,
   ShoppingCart,
+  ShoppingBag,
+  Package,
   Check,
   Copy,
   CheckCheck,
   RotateCw,
   Zap,
   ArrowRight,
+  Plus,
 } from "lucide-react"
 import type { ChatMessage } from "./useAIChat"
 import type { Product } from "@/lib/types/product"
@@ -52,7 +55,13 @@ function ProductCard({
   onBuyNow: (p: Product) => void
 }) {
   const [added, setAdded] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const addToCart = useCart((s) => s.addToCart)
+
+  const discountPercent =
+    product.mrp_paise && product.mrp_paise > product.price_paise
+      ? Math.round(((product.mrp_paise - product.price_paise) / product.mrp_paise) * 100)
+      : null
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -68,41 +77,65 @@ function ProductCard({
   }
 
   return (
-    <Card
+    <div
       style={{
         animationDelay: `${index * 60}ms`,
         animationFillMode: "both",
       }}
-      className="flex items-center gap-3 p-2.5 rounded-xl border border-border/70 bg-card hover:border-foreground/20 hover:bg-accent/10 transition-all text-left shadow-2xs group animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200"
+      className="group/pcard flex flex-row items-center gap-3 p-2.5 sm:p-3 rounded-xl border border-border/75 bg-card/95 hover:bg-accent/15 hover:border-foreground/20 transition-all text-left shadow-2xs w-full animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
     >
-      {/* Product Image - Click opens Details */}
+      {/* Product Image Thumbnail with robust fallback */}
       <div
         onClick={() => onOpenDetails(product)}
-        className="size-13 sm:size-14 rounded-lg overflow-hidden shrink-0 bg-muted border border-border/40 cursor-pointer flex items-center justify-center relative group-hover:opacity-95 transition-opacity"
+        className="relative size-14 sm:size-16 rounded-lg overflow-hidden shrink-0 bg-muted/60 border border-border/40 cursor-pointer flex items-center justify-center transition-all group-hover/pcard:border-foreground/20"
+        title="Click to view details"
       >
-        {product.image_url ? (
+        {!imgError && product.image_url ? (
           <img
             src={product.image_url}
             alt={product.title}
-            className="size-full object-cover group-hover:scale-105 transition-transform duration-200"
+            className="size-full object-cover group-hover/pcard:scale-105 transition-transform duration-200"
             loading="lazy"
+            onError={() => setImgError(true)}
           />
         ) : (
-          <ShoppingCart className="size-5 text-muted-foreground" />
+          <div className="size-full flex flex-col items-center justify-center bg-muted text-muted-foreground p-1 text-center select-none">
+            <ShoppingBag className="size-5 text-muted-foreground/60" />
+            <span className="text-[8px] font-medium leading-tight mt-0.5 text-muted-foreground/70 truncate max-w-full">
+              {product.category?.split(" ")[0] || "Item"}
+            </span>
+          </div>
         )}
+        {discountPercent && discountPercent > 0 ? (
+          <span className="absolute top-1 left-1 bg-emerald-600/90 text-white text-[8px] font-bold px-1 py-0.2 rounded leading-none shadow-2xs">
+            {discountPercent}% OFF
+          </span>
+        ) : null}
       </div>
 
-      {/* Product Title & Price - Click title opens Details */}
-      <div className="flex-1 min-w-0 pr-1">
+      {/* Structured Product Information: Category pill, Title, Price */}
+      <div className="flex-1 min-w-0 pr-1 flex flex-col justify-center gap-0.5">
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span className="font-semibold uppercase tracking-wider text-muted-foreground/80 truncate">
+            {product.category || "Grocery & Staples"}
+          </span>
+          {product.stock > 0 ? (
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium">· In Stock</span>
+          ) : (
+            <span className="text-destructive font-medium">· Out of Stock</span>
+          )}
+        </div>
+
         <h4
           onClick={() => onOpenDetails(product)}
-          className="text-xs font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors leading-tight"
+          className="text-xs sm:text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors leading-snug"
           title={product.title}
         >
           {product.title}
         </h4>
-        <div className="flex items-baseline gap-1.5 mt-1">
-          <span className="text-xs font-bold text-foreground">
+
+        <div className="flex items-baseline gap-1.5 mt-0.5">
+          <span className="text-xs sm:text-sm font-bold text-foreground">
             {formatPrice(product.price_paise, product.currency)}
           </span>
           {product.mrp_paise && product.mrp_paise > product.price_paise && (
@@ -110,10 +143,15 @@ function ProductCard({
               {formatPrice(product.mrp_paise, product.currency)}
             </span>
           )}
+          {product.unit && (
+            <span className="text-[10px] text-muted-foreground">
+              / {product.unit}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Compact Action Buttons: Add to Cart + Buy Now */}
+      {/* Compact Action Buttons */}
       <div className="flex items-center gap-1.5 shrink-0">
         <Button
           size="sm"
@@ -129,22 +167,22 @@ function ProductCard({
             </>
           ) : (
             <>
-              <ShoppingCart className="size-3 mr-1" />
+              <Plus className="size-3 mr-1" />
               <span>Add</span>
             </>
           )}
         </Button>
         <Button
           size="sm"
-          className="h-7 px-2.5 text-[11px] font-semibold transition-all shadow-2xs"
+          className="h-7 px-2.5 text-[11px] font-semibold transition-all shadow-2xs gap-1"
           onClick={handleBuyNow}
-          title="Buy Now - Proceed to Checkout"
+          title="Buy Now - Instant Checkout"
         >
-          <Zap className="size-3 mr-1" />
+          <Zap className="size-3 fill-current" />
           <span>Buy Now</span>
         </Button>
       </div>
-    </Card>
+    </div>
   )
 }
 
