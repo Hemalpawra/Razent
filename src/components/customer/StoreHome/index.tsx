@@ -2615,8 +2615,161 @@ function ProductDetail({
       : []),
   ]
 
+  const productSummaryCard = (
+    <Card>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            {(product as any).brand && (
+              <span className="text-xs font-bold uppercase tracking-wider text-primary block mb-1">
+                {(product as any).brand}
+              </span>
+            )}
+            <Badge variant="outline">{product.category}</Badge>
+            <h1 className="mt-2 font-heading text-lg font-semibold leading-tight">
+              {product.title}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+              {desc}
+            </p>
+            {product.tags && product.tags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {product.tags.map((t) => (
+                  <Badge
+                    key={t}
+                    variant="secondary"
+                    className="text-[10px] font-mono text-muted-foreground"
+                  >
+                    #{t.replace(/^brand:/, "")}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+          <Button variant="ghost" size="icon" className="shrink-0">
+            <Heart className="size-4" />
+          </Button>
+        </div>
+
+        <div className="flex items-baseline gap-3">
+          <span className="text-2xl font-semibold">
+            {formatPrice(product.price_paise)}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            inclusive of all taxes
+          </span>
+        </div>
+
+        {(() => {
+          const threshold = (product as any).stock_threshold ?? 10
+          if (product.stock === 0) {
+            return (
+              <Badge className="bg-red-600 text-white hover:bg-red-600 border-none text-xs font-semibold px-2.5 py-1">
+                Out of stock · 0 available
+              </Badge>
+            )
+          }
+          if (product.stock <= threshold) {
+            return (
+              <Badge className="bg-amber-500 text-white hover:bg-amber-500 border-none text-xs font-semibold px-2.5 py-1">
+                Low stock · Only {product.stock} left (Alert: ≤{threshold})
+              </Badge>
+            )
+          }
+          return (
+            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 border-none text-xs font-semibold px-2.5 py-1">
+              In stock · {product.stock} available
+            </Badge>
+          )
+        })()}
+
+        <Separator />
+
+        {/* Qty selector */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">
+            Quantity
+          </label>
+          <div className="mt-1 flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setQty((v) => Math.max(1, v - 1))}
+              disabled={qty <= 1}
+            >
+              <Minus className="size-4" />
+            </Button>
+            <Input
+              type="number"
+              value={qty}
+              onChange={(e) =>
+                setQty(Math.max(1, parseInt(e.target.value) || 1))
+              }
+              className="w-16 text-center"
+              min={1}
+              max={product.stock}
+              inputMode="numeric"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() =>
+                setQty((v) => Math.min(product.stock, v + 1))
+              }
+              disabled={qty >= product.stock}
+            >
+              <Plus className="size-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground ml-2">
+              Max {product.stock}
+            </span>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Action buttons */}
+        <div className="space-y-2">
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={() => onAddToCart(product.id)}
+            disabled={product.stock === 0}
+          >
+            <ShoppingCart className="size-4 mr-2" /> Add to cart
+          </Button>
+          <Button
+            variant="default"
+            size="lg"
+            className="w-full bg-primary"
+            onClick={() => onBuyNow(product.id)}
+            disabled={product.stock === 0}
+          >
+            <Zap className="size-4 mr-2" /> Buy now
+          </Button>
+        </div>
+
+        <Separator />
+
+        {/* Share */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Share:</span>
+          <Button variant="ghost" size="icon" className="size-8">
+            <Share2 className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="size-8">
+            <ImageIcon className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="size-8">
+            <GalleryThumbnails className="size-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   return (
-    <section className="px-4 pb-12">
+    <section className="px-4 pb-20 lg:pb-12">
       {/* Breadcrumb handled by parent */}
 
       {/* Main content grid */}
@@ -2671,6 +2824,11 @@ function ProductDetail({
                 </div>
               )}
             </Card>
+
+            {/* Mobile Only: Product Summary immediately below Image Gallery */}
+            <div className="block lg:hidden">
+              {productSummaryCard}
+            </div>
 
             {/* Key Highlights */}
             <Card>
@@ -2833,159 +2991,9 @@ function ProductDetail({
             )}
           </div>
 
-          {/* RIGHT: Summary Panel — sticky */}
-          <div className="block lg:sticky lg:top-24 lg:self-start space-y-4">
-            <Card>
-              <CardContent className="p-5 space-y-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    {(product as any).brand && (
-                      <span className="text-xs font-bold uppercase tracking-wider text-primary block mb-1">
-                        {(product as any).brand}
-                      </span>
-                    )}
-                    <Badge variant="outline">{product.category}</Badge>
-                    <h1 className="mt-2 font-heading text-lg font-semibold leading-tight">
-                      {product.title}
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                      {desc}
-                    </p>
-                    {product.tags && product.tags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {product.tags.map((t) => (
-                          <Badge
-                            key={t}
-                            variant="secondary"
-                            className="text-[10px] font-mono text-muted-foreground"
-                          >
-                            #{t.replace(/^brand:/, "")}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <Button variant="ghost" size="icon" className="shrink-0">
-                    <Heart className="size-4" />
-                  </Button>
-                </div>
-
-
-                <div className="flex items-baseline gap-3">
-                  <span className="text-2xl font-semibold">
-                    {formatPrice(product.price_paise)}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    inclusive of all taxes
-                  </span>
-                </div>
-
-                {(() => {
-                  const threshold = (product as any).stock_threshold ?? 10
-                  if (product.stock === 0) {
-                    return (
-                      <Badge className="bg-red-600 text-white hover:bg-red-600 border-none text-xs font-semibold px-2.5 py-1">
-                        Out of stock · 0 available
-                      </Badge>
-                    )
-                  }
-                  if (product.stock <= threshold) {
-                    return (
-                      <Badge className="bg-amber-500 text-white hover:bg-amber-500 border-none text-xs font-semibold px-2.5 py-1">
-                        Low stock · Only {product.stock} left (Alert: ≤{threshold})
-                      </Badge>
-                    )
-                  }
-                  return (
-                    <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 border-none text-xs font-semibold px-2.5 py-1">
-                      In stock · {product.stock} available
-                    </Badge>
-                  )
-                })()}
-
-                <Separator />
-
-                {/* Qty selector */}
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">
-                    Quantity
-                  </label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setQty((v) => Math.max(1, v - 1))}
-                      disabled={qty <= 1}
-                    >
-                      <Minus className="size-4" />
-                    </Button>
-                    <Input
-                      type="number"
-                      value={qty}
-                      onChange={(e) =>
-                        setQty(Math.max(1, parseInt(e.target.value) || 1))
-                      }
-                      className="w-16 text-center"
-                      min={1}
-                      max={product.stock}
-                      inputMode="numeric"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() =>
-                        setQty((v) => Math.min(product.stock, v + 1))
-                      }
-                      disabled={qty >= product.stock}
-                    >
-                      <Plus className="size-4" />
-                    </Button>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      Max {product.stock}
-                    </span>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Action buttons */}
-                <div className="space-y-2">
-                  <Button
-                    size="lg"
-                    className="w-full"
-                    onClick={() => onAddToCart(product.id)}
-                    disabled={product.stock === 0}
-                  >
-                    <ShoppingCart className="size-4 mr-2" /> Add to cart
-                  </Button>
-                  <Button
-                    variant="default"
-                    size="lg"
-                    className="w-full bg-primary"
-                    onClick={() => onBuyNow(product.id)}
-                    disabled={product.stock === 0}
-                  >
-                    <Zap className="size-4 mr-2" /> Buy now
-                  </Button>
-                </div>
-
-                <Separator />
-
-                {/* Share */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Share:</span>
-                  <Button variant="ghost" size="icon" className="size-8">
-                    <Share2 className="size-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="size-8">
-                    <ImageIcon className="size-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="size-8">
-                    <GalleryThumbnails className="size-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          {/* RIGHT: Summary Panel — sticky on desktop */}
+          <div className="hidden lg:block lg:sticky lg:top-24 lg:self-start space-y-4">
+            {productSummaryCard}
 
             {/* Trust badges sticky card */}
             <Card>
@@ -3028,6 +3036,37 @@ function ProductDetail({
               </CardContent>
             </Card>
           </div>
+        </div>
+      </div>
+
+      {/* Sticky Mobile Purchase Bar in Thumb Zone */}
+      <div className="fixed bottom-0 left-0 right-0 p-3 bg-background/95 backdrop-blur border-t border-border flex items-center justify-between gap-3 lg:hidden z-30 shadow-lg">
+        <div className="min-w-0">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">Total Price</span>
+          <div className="text-base font-bold text-foreground truncate">
+            {formatPrice(product.price_paise * qty)}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onAddToCart(product.id)}
+            disabled={product.stock === 0}
+            className="gap-1.5 text-xs h-9 px-3"
+          >
+            <ShoppingCart className="size-3.5" />
+            <span>Add</span>
+          </Button>
+          <Button
+            size="sm"
+            className="bg-primary gap-1.5 text-xs font-semibold h-9 px-3.5 shadow-sm"
+            onClick={() => onBuyNow(product.id)}
+            disabled={product.stock === 0}
+          >
+            <Zap className="size-3.5" />
+            <span>Buy Now</span>
+          </Button>
         </div>
       </div>
     </section>
@@ -4278,22 +4317,11 @@ function CheckoutView({
   const [newAddr, setNewAddr] = useState<Partial<Address>>({})
   const [paying, setPaying] = useState(false)
 
-  const [paymentType, setPaymentType] = useState<"upi" | "card" | "razorpay" | "cod">(() => {
+  const [paymentType, setPaymentType] = useState<"razorpay" | "cod">(() => {
     const saved = getActivePaymentSelection()
-    if (saved.type === "card") return "card"
     if (saved.type === "cod") return "cod"
-    if (saved.type === "netbanking" || saved.type === "razorpay") return "razorpay"
-    return "upi"
+    return "razorpay"
   })
-  const [upiId, setUpiId] = useState<string>(() => {
-    const saved = getActivePaymentSelection()
-    return saved.upiVpa || "success@razorpay"
-  })
-  const [selectedCardId, setSelectedCardId] = useState<string>(() => {
-    const saved = getActivePaymentSelection()
-    return saved.cardId || "card_test_visa"
-  })
-  const testCards = useMemo(() => getSavedTestCards(), [])
 
   const [addrError, setAddrError] = useState<string | null>(null)
 
@@ -4387,71 +4415,7 @@ function CheckoutView({
       return
     }
 
-    // 1. UPI Payment Flow (deterministic test clearance via executeStorefrontPayment)
-    if (paymentType === "upi") {
-      setPaying(true)
-      try {
-        const res = await executeStorefrontPayment({
-          order,
-          paymentType: "upi",
-          upiId: upiId.trim(),
-          conversationId,
-        })
-        if (res.success) {
-          onPaymentSuccess(
-            res.order.id,
-            res.paymentId || `pay_upi_${Date.now()}`,
-            res.invoiceNo || `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
-            shippingAddress,
-          )
-        } else {
-          onPaymentFailed(
-            res.order.id,
-            res.order.total_paise,
-            res.errorReason || "UPI payment was declined or timed out.",
-          )
-        }
-      } catch (err: any) {
-        onPaymentFailed(order.id, total, err?.message || "UPI payment failed.")
-      } finally {
-        setPaying(false)
-      }
-      return
-    }
-
-    // 2. Saved Test Card Flow (RBI Tokenized test card via executeStorefrontPayment)
-    if (paymentType === "card") {
-      setPaying(true)
-      try {
-        const res = await executeStorefrontPayment({
-          order,
-          paymentType: "card",
-          cardId: selectedCardId,
-          conversationId,
-        })
-        if (res.success) {
-          onPaymentSuccess(
-            res.order.id,
-            res.paymentId || `pay_tok_${Date.now()}`,
-            res.invoiceNo || `INV-${new Date().getFullYear()}-${orderId.slice(-6)}`,
-            shippingAddress,
-          )
-        } else {
-          onPaymentFailed(
-            res.order.id,
-            res.order.total_paise,
-            res.errorReason || "Card payment was declined.",
-          )
-        }
-      } catch (err: any) {
-        onPaymentFailed(order.id, total, err?.message || "Card payment failed.")
-      } finally {
-        setPaying(false)
-      }
-      return
-    }
-
-    // 3. Razorpay Gateway Modal Flow
+    // Razorpay Gateway Modal Flow (Direct checkout popup for UPI, Cards, NetBanking, and Wallets)
     setPaying(true)
     const razorpayKey =
       (import.meta as any).env?.VITE_RAZORPAY_KEY_ID || "rzp_test_TXeysTR9U8Fyws"
@@ -4872,183 +4836,87 @@ function CheckoutView({
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Payment method</CardTitle>
+                  <CardTitle className="text-base">Payment Method</CardTitle>
                   <Badge variant="outline" className="text-[11px] font-mono">
-                    NPCI & RBI Sandbox
+                    Direct Razorpay Modal
                   </Badge>
                 </div>
+                <CardDescription className="text-xs">
+                  Choose your payment preference. You will select and enter your exact payment details securely in the Razorpay gateway popup.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Method Selector Tabs */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentType("upi")
-                      saveActivePaymentSelection({ type: "upi", upiVpa: upiId })
-                    }}
-                    className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                      paymentType === "upi"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border hover:bg-muted/40 text-muted-foreground"
-                    }`}
-                  >
-                    <Zap className="size-3.5" />
-                    UPI (Test)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentType("card")
-                      saveActivePaymentSelection({ type: "card", cardId: selectedCardId })
-                    }}
-                    className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                      paymentType === "card"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border hover:bg-muted/40 text-muted-foreground"
-                    }`}
-                  >
-                    <CreditCard className="size-3.5" />
-                    Test Cards
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentType("razorpay")
-                      saveActivePaymentSelection({ type: "razorpay" })
-                    }}
-                    className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                {/* Method Option Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label
+                    className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
                       paymentType === "razorpay"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border hover:bg-muted/40 text-muted-foreground"
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/40 shadow-2xs"
+                        : "border-border hover:bg-muted/30"
                     }`}
                   >
-                    <ShieldCheck className="size-3.5" />
-                    Razorpay
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentType("cod")
-                      saveActivePaymentSelection({ type: "cod" })
-                    }}
-                    className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                    <input
+                      type="radio"
+                      name="paymentMethodSelect"
+                      checked={paymentType === "razorpay"}
+                      onChange={() => {
+                        setPaymentType("razorpay")
+                        saveActivePaymentSelection({ type: "razorpay" })
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="size-4 text-primary" />
+                        <span className="text-sm font-semibold text-foreground">Razorpay Secure Checkout</span>
+                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                          Recommended
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Pay with UPI (GPay, PhonePe, Paytm), Credit/Debit Cards, NetBanking, or Wallets directly in the secure payment window.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
                       paymentType === "cod"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border hover:bg-muted/40 text-muted-foreground"
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/40 shadow-2xs"
+                        : "border-border hover:bg-muted/30"
                     }`}
                   >
-                    <Banknote className="size-3.5" />
-                    Cash on Delivery
-                  </button>
+                    <input
+                      type="radio"
+                      name="paymentMethodSelect"
+                      checked={paymentType === "cod"}
+                      onChange={() => {
+                        setPaymentType("cod")
+                        saveActivePaymentSelection({ type: "cod" })
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Banknote className="size-4 text-primary" />
+                        <span className="text-sm font-semibold text-foreground">Cash on Delivery</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Pay with cash or scan delivery partner UPI QR upon receipt of items at your doorstep.
+                      </p>
+                    </div>
+                  </label>
                 </div>
 
-                {/* Sub-view: UPI */}
-                {paymentType === "upi" && (
-                  <div className="space-y-3 pt-1">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">UPI Virtual Payment Address (VPA)</Label>
-                      <Input
-                        placeholder="e.g. success@razorpay"
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                        className="font-mono text-xs"
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setUpiId("success@razorpay")}
-                        className={`px-2.5 py-1 rounded-md border text-xs font-mono transition-all ${
-                          upiId === "success@razorpay"
-                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold"
-                            : "border-border hover:bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        ✓ success@razorpay (Success Flow)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setUpiId("failure@razorpay")}
-                        className={`px-2.5 py-1 rounded-md border text-xs font-mono transition-all ${
-                          upiId === "failure@razorpay"
-                            ? "border-destructive bg-destructive/10 text-destructive font-semibold"
-                            : "border-border hover:bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        ✗ failure@razorpay (Failure Flow)
-                      </button>
-                    </div>
-
-                    {/* Watch Out Warning Box */}
-                    <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
-                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-semibold block text-amber-700 dark:text-amber-300">Watch Out!</span>
-                        <span className="leading-relaxed">
-                          In test mode, payment cancellation will result in a successful payment. Use live mode to test payment cancellation on UPI.
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Sub-view: Test Cards */}
-                {paymentType === "card" && (
-                  <div className="space-y-2.5 pt-1 max-h-56 overflow-y-auto pr-1">
-                    <p className="text-xs text-muted-foreground">Select which test card to use (RBI Network Tokenized):</p>
-                    {testCards.map((c) => (
-                      <label
-                        key={c.id}
-                        className={`flex cursor-pointer items-center justify-between rounded-lg border p-2.5 transition-all text-xs ${
-                          selectedCardId === c.id
-                            ? "border-primary bg-primary/5 ring-1 ring-primary"
-                            : "border-border hover:bg-muted/40"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <input
-                            type="radio"
-                            name="checkoutCard"
-                            checked={selectedCardId === c.id}
-                            onChange={() => setSelectedCardId(c.id)}
-                          />
-                          <div>
-                            <div className="font-semibold text-foreground flex items-center gap-1.5">
-                              <span>{c.network}</span>
-                              <Badge variant="outline" className="text-[10px] py-0">
-                                {c.cardType} · {c.cardSubType}
-                              </Badge>
-                            </div>
-                            <div className="font-mono text-muted-foreground text-[11px] mt-0.5">
-                              {c.cardNumber} · Exp {c.expiry} · CVV {c.cvv}
-                            </div>
-                          </div>
-                        </div>
-                        <Badge variant={selectedCardId === c.id ? "default" : "secondary"} className="text-[10px]">
-                          {selectedCardId === c.id ? "Selected" : "Use"}
-                        </Badge>
-                      </label>
-                    ))}
-                  </div>
-                )}
-
-                {/* Sub-view: Razorpay Modal */}
                 {paymentType === "razorpay" && (
-                  <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs text-muted-foreground space-y-1">
-                    <p className="font-medium text-foreground">Standard Razorpay Gateway Modal</p>
-                    <p>Opens the Razorpay checkout overlay supporting NetBanking, Wallets, Cards, and UPI Intent.</p>
-                  </div>
-                )}
-
-                {/* Sub-view: Cash on Delivery */}
-                {paymentType === "cod" && (
-                  <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs text-muted-foreground space-y-1">
-                    <p className="font-medium text-foreground flex items-center gap-1.5">
-                      <Banknote className="size-4 text-primary" /> Cash on Delivery (Doorstep Settlement)
-                    </p>
-                    <p>No prepayment needed. Pay with cash or scan delivery partner UPI QR code upon receipt of your items.</p>
+                  <div className="p-3 rounded-lg border border-border/70 bg-muted/30 flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <Lock className="size-3.5 text-primary" />
+                      <span>256-bit SSL encrypted · Manual entry in Razorpay modal</span>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] font-mono">
+                      PCI-DSS Level 1
+                    </Badge>
                   </div>
                 )}
               </CardContent>

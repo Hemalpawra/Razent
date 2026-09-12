@@ -57,7 +57,7 @@ export function ProductDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-w-[92vw] p-5 gap-4">
+      <DialogContent className="sm:max-w-md max-w-[92vw] max-h-[90dvh] overflow-y-auto p-5 gap-4">
         <DialogHeader className="gap-1.5 text-left">
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="text-[11px] uppercase tracking-wider">

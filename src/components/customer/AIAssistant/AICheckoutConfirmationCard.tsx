@@ -329,47 +329,24 @@ export function AICheckoutConfirmationCard({
           )}
         </div>
 
-        {/* Payment Method Selector */}
-        <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
-          <span className="flex items-center gap-1.5 font-semibold text-foreground">
-            <CreditCard className="size-3.5 text-primary" />
-            Payment Method
-          </span>
-          <div className="grid grid-cols-3 gap-1.5">
-            <button
-              type="button"
-              onClick={() => setPaymentMethod("upi")}
-              className={`flex items-center justify-center gap-1 p-1.5 rounded-md border text-center transition-colors ${
-                paymentMethod === "upi"
-                  ? "border-primary bg-primary/10 text-primary font-semibold"
-                  : "border-border/60 text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              UPI (Instant)
-            </button>
-            <button
-              type="button"
-              onClick={() => setPaymentMethod("card")}
-              className={`flex items-center justify-center gap-1 p-1.5 rounded-md border text-center transition-colors ${
-                paymentMethod === "card"
-                  ? "border-primary bg-primary/10 text-primary font-semibold"
-                  : "border-border/60 text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              Card / NetBanking
-            </button>
-            <button
-              type="button"
-              onClick={() => setPaymentMethod("cod")}
-              className={`flex items-center justify-center gap-1 p-1.5 rounded-md border text-center transition-colors ${
-                paymentMethod === "cod"
-                  ? "border-primary bg-primary/10 text-primary font-semibold"
-                  : "border-border/60 text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              Cash on Delivery
-            </button>
+        {/* Payment Method Information */}
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="size-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <ShieldCheck className="size-4" />
+            </div>
+            <div>
+              <span className="font-semibold text-foreground block text-[11px]">
+                Razorpay Secure Checkout
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                UPI, Cards & NetBanking manual selection in modal
+              </span>
+            </div>
           </div>
+          <Badge variant="outline" className="text-[9px] py-0 px-1.5 text-muted-foreground border-border">
+            PCI-DSS Verified
+          </Badge>
         </div>
       </CardContent>
 
