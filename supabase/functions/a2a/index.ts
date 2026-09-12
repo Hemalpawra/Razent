@@ -53,10 +53,41 @@ Deno.serve(async (req: Request) => {
       if (category && category !== "All") {
         dbQuery = dbQuery.eq("category", category)
       }
-      if (q.trim()) {
-        const term = q.trim()
-        dbQuery = dbQuery.or(`title.ilike.%${term}%,description.ilike.%${term}%,category.ilike.%${term}%`)
+
+      const rawQ = q.trim().toLowerCase()
+      if (rawQ) {
+        const terms = new Set<string>()
+        terms.add(rawQ)
+
+        // Split multi-word queries
+        rawQ.split(/\s+/).forEach((w) => {
+          if (w.length > 2) terms.add(w)
+        })
+
+        // Stemming plurals
+        Array.from(terms).forEach((t) => {
+          if (t.endsWith("s") && t.length > 3) terms.add(t.slice(0, -1))
+          if (t.endsWith("es") && t.length > 4) terms.add(t.slice(0, -2))
+        })
+
+        // Synonym expansion
+        if (rawQ.includes("drink") || rawQ.includes("beverage")) {
+          ["drink", "beverage", "juice", "water", "cola", "soda", "tea", "coffee"].forEach((w) => terms.add(w))
+        }
+        if (rawQ.includes("juic") || rawQ.includes("jiuc") || rawQ.includes("juce")) {
+          ["juice", "fruit", "orange", "apple", "beverage", "drink"].forEach((w) => terms.add(w))
+        }
+        if (rawQ.includes("milk") || rawQ.includes("dairy")) {
+          ["milk", "dairy", "taaza", "amul", "butter", "curd"].forEach((w) => terms.add(w))
+        }
+
+        const orClauses: string[] = []
+        for (const t of Array.from(terms).slice(0, 10)) {
+          orClauses.push(`title.ilike.%${t}%`, `description.ilike.%${t}%`, `category.ilike.%${t}%`)
+        }
+        dbQuery = dbQuery.or(orClauses.join(","))
       }
+
       if (maxPricePaise) {
         dbQuery = dbQuery.lte("price_paise", parseInt(maxPricePaise, 10))
       }
@@ -64,10 +95,33 @@ Deno.serve(async (req: Request) => {
         dbQuery = dbQuery.gt("stock", 0)
       }
 
-      const { data, error } = await dbQuery.order("created_at", { ascending: false }).limit(20)
+      const { data, error } = await dbQuery.order("created_at", { ascending: false }).limit(30)
       if (error) throw error
 
-      const products = (data || []).map((p) => ({
+      // Rank results intelligently
+      let ranked = data || []
+      if (rawQ) {
+        const isJuiceQuery = rawQ.includes("juic") || rawQ.includes("jiuc") || rawQ.includes("juce")
+        const isDrinkQuery = rawQ.includes("drink") || rawQ.includes("beverage") || isJuiceQuery
+
+        ranked.sort((a, b) => {
+          if (isJuiceQuery) {
+            const aJuice = (a.title + " " + (a.description || "")).toLowerCase().includes("juice") ? 1 : 0
+            const bJuice = (b.title + " " + (b.description || "")).toLowerCase().includes("juice") ? 1 : 0
+            if (aJuice !== bJuice) return bJuice - aJuice
+          }
+          if (isDrinkQuery) {
+            const aIsBev = a.category === "Beverages" || a.category === "Dairy & Bakery" ? 1 : 0
+            const bIsBev = b.category === "Beverages" || b.category === "Dairy & Bakery" ? 1 : 0
+            if (aIsBev !== bIsBev) return bIsBev - aIsBev
+          }
+          const aTitleMatch = a.title.toLowerCase().includes(rawQ) ? 1 : 0
+          const bTitleMatch = b.title.toLowerCase().includes(rawQ) ? 1 : 0
+          return bTitleMatch - aTitleMatch
+        })
+      }
+
+      const products = ranked.slice(0, 20).map((p) => ({
         id: p.id,
         title: p.title,
         description: p.description || "",
