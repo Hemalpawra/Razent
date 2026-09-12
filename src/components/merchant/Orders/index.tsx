@@ -587,16 +587,21 @@ export default function OrdersScreen() {
 
                   const SourceIcon = source.icon
 
-                  const primaryItem = order.items[0]
+                  const primaryItem = order.items?.[0] || {
+                    product_id: "default",
+                    title: "Store Item",
+                    qty: 1,
+                    image_url: "https://images.unsplash.com/photo-1546470427-227df1ed3a1d?w=480&q=80&auto=format&fit=crop",
+                  }
 
-                  const totalQty = order.items.reduce(
-                    (sum, it) => sum + it.qty,
+                  const totalQty = (order.items || []).reduce(
+                    (sum, it) => sum + (it?.qty || it?.quantity || 1),
                     0,
                   )
 
                   const qtyLine =
-                    order.items.length === 1
-                      ? `Qty: ${primaryItem.qty}`
+                    (order.items?.length || 0) <= 1
+                      ? `Qty: ${primaryItem.qty || 1}`
                       : `Qty: ${totalQty} · ${order.items.length} items`
 
                   const date = new Date(order.created_at)
@@ -646,8 +651,8 @@ export default function OrdersScreen() {
                       <TableCell className="px-3 py-3">
                         <div className="flex items-center gap-3">
                           <img
-                            src={primaryItem.image_url}
-                            alt={primaryItem.title}
+                            src={primaryItem.image_url || "https://images.unsplash.com/photo-1546470427-227df1ed3a1d?w=480&q=80&auto=format&fit=crop"}
+                            alt={primaryItem.title || "Item"}
                             className="size-9 shrink-0 rounded-full object-cover ring-1 ring-border/40"
                             loading="lazy"
                           />

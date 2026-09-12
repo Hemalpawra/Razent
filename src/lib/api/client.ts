@@ -87,6 +87,30 @@ function mapDbProduct(row: any): Product {
 }
 
 function mapDbOrder(row: any): Order {
+  const rawItems = Array.isArray(row.items) ? row.items : []
+  const items = rawItems.map((it: any) => ({
+    product_id: String(it.product_id || it.id || "item"),
+    id: it.id || it.product_id || 1,
+    title: it.title || "Store Item",
+    image_url: it.image_url || it.image || "https://images.unsplash.com/photo-1546470427-227df1ed3a1d?w=480&q=80&auto=format&fit=crop",
+    qty: Number(it.qty || it.quantity || 1),
+    quantity: Number(it.quantity || it.qty || 1),
+    unit_price_paise: Number(it.unit_price_paise || it.price_paise || 0),
+    line_total_paise: Number(it.line_total_paise || (it.unit_price_paise || it.price_paise || 0) * (it.qty || it.quantity || 1)),
+  }))
+  if (items.length === 0) {
+    items.push({
+      product_id: "item_default",
+      id: 1,
+      title: "Store Item",
+      image_url: "https://images.unsplash.com/photo-1546470427-227df1ed3a1d?w=480&q=80&auto=format&fit=crop",
+      qty: 1,
+      quantity: 1,
+      unit_price_paise: Number(row.total_paise || 0),
+      line_total_paise: Number(row.total_paise || 0),
+    })
+  }
+
   return {
     id: row.external_id || String(row.id),
     razorpay_order_id: row.razorpay_order_id ?? "",
@@ -97,7 +121,7 @@ function mapDbOrder(row: any): Order {
     currency: row.currency || "INR",
     total_paise: Number(row.total_paise),
     shipping_paise: Number(row.shipping_paise ?? 0),
-    items: (row.items as Order["items"]) ?? [],
+    items,
     shipping_address: row.shipping_address ?? {},
     billing_address: row.billing_address ?? undefined,
     via_ai: !!row.via_ai,

@@ -170,8 +170,8 @@ export default function OrderDetailScreen() {
                     className="flex items-center gap-3"
                   >
                     <img
-                      src={item.image_url}
-                      alt={item.title}
+                      src={item.image_url || "https://images.unsplash.com/photo-1546470427-227df1ed3a1d?w=480&q=80&auto=format&fit=crop"}
+                      alt={item.title || "Item"}
                       className="size-12 rounded-full object-cover ring-1 ring-border/40 shrink-0"
                       loading="lazy"
                     />
