@@ -166,7 +166,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ACPCheckoutSessionCompleteResponse"
                 }
               }
             }
@@ -194,7 +194,14 @@
         },
         "responses": {
           "200": {
-            "description": "Authorized Cart Mandate with merchant signature"
+            "description": "Authorized Cart Mandate with merchant signature",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AP2CartMandateResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -348,6 +355,58 @@
                 }
               }
             }
+          }
+        }
+      },
+      "ACPCheckoutSessionCompleteResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "order_id": {
+            "type": "string"
+          },
+          "razorpay_order_id": {
+            "type": "string"
+          },
+          "amount_paid_rupees": {
+            "type": "string"
+          },
+          "settlement_rail": {
+            "type": "string"
+          },
+          "delivery_eta": {
+            "type": "string"
+          }
+        }
+      },
+      "AP2CartMandateResponse": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "mandate_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "algorithm": {
+            "type": "string"
+          },
+          "hash_algorithm": {
+            "type": "string"
           }
         }
       }
