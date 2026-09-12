@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
+import { StorefrontProductCard, ProductCardSkeleton } from "@/components/customer/ProductCard"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
@@ -923,27 +924,16 @@ export default function StoreHome() {
                 <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {loading ? (
                     Array.from({ length: 4 }).map((_, i) => (
-                      <Card key={i} className="flex flex-col overflow-hidden rounded-2xl p-2.5">
-                        <Skeleton className="h-36 sm:h-40 w-full rounded-xl" />
-                        <div className="p-2 space-y-2 mt-2">
-                          <Skeleton className="h-3 w-1/3" />
-                          <Skeleton className="h-4 w-3/4" />
-                          <Skeleton className="h-3 w-1/2" />
-                          <div className="flex justify-between items-center pt-2">
-                            <Skeleton className="h-5 w-16" />
-                            <Skeleton className="h-8 w-24 rounded-lg" />
-                          </div>
-                        </div>
-                      </Card>
+                      <ProductCardSkeleton key={i} variant="storefront" />
                     ))
                   ) : (
                     featuredProducts.map((p) => (
-                      <ProductCard
+                      <StorefrontProductCard
                         key={p.id}
-                        p={p}
-                        onOpen={() => openProduct(p.id)}
-                        onAdd={() => addToCart(p.id)}
-                        onBuy={() => {
+                        product={p}
+                        onOpenDetails={() => openProduct(p.id)}
+                        onAddToCart={() => addToCart(p.id)}
+                        onBuyNow={() => {
                           addToCart(p.id)
                           setView("checkout")
                         }}
@@ -1306,12 +1296,12 @@ export default function StoreHome() {
                   ) : layout === "grid" ? (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                       {filtered.map((p) => (
-                        <ProductCard
+                        <StorefrontProductCard
                           key={p.id}
-                          p={p}
-                          onOpen={() => openProduct(p.id)}
-                          onAdd={() => addToCart(p.id)}
-                          onBuy={() => {
+                          product={p}
+                          onOpenDetails={() => openProduct(p.id)}
+                          onAddToCart={() => addToCart(p.id)}
+                          onBuyNow={() => {
                             addToCart(p.id)
                             setView("checkout")
                           }}
@@ -1903,130 +1893,8 @@ function FilterGroup({
 /*                                Product UI                                  */
 
 /* -------------------------------------------------------------------------- */
-
-function ProductCard({
-  p,
-  onOpen,
-  onAdd,
-  onBuy,
-}: {
-  p: Product
-  onOpen: () => void
-  onAdd: () => void
-  onBuy: () => void
-}) {
-  const r = productRating(p)
-  const isOutOfStock = p.stock === 0
-  const isLowStock = !isOutOfStock && p.stock <= ((p as any).stock_threshold ?? 10)
-  const brand = (p as any).brand || p.tags?.find((t: string) => t.startsWith("brand:"))?.replace(/^brand:/, "")
-
-  return (
-    <Card
-      onClick={onOpen}
-      className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border/70 bg-card p-2.5 transition-all duration-200 hover:border-primary/40 hover:shadow-md cursor-pointer select-none"
-    >
-      <div>
-        {/* Compact Bounded Image Area (Blinkit/Zepto style) */}
-        <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-xl bg-muted/25 p-2 sm:h-40">
-          <img
-            src={p.image_url}
-            alt={p.title}
-            loading="lazy"
-            className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
-          />
-          {/* Subtle Stock Status Pill */}
-          <div className="absolute left-2 top-2 pointer-events-none">
-            {isOutOfStock ? (
-              <Badge className="border-none bg-red-600/90 text-white font-medium text-[10px] px-2 py-0.5 rounded-full shadow-xs">
-                Out of stock
-              </Badge>
-            ) : isLowStock ? (
-              <Badge className="border-none bg-amber-500/90 text-white font-medium text-[10px] px-2 py-0.5 rounded-full shadow-xs">
-                Low stock
-              </Badge>
-            ) : (
-              <Badge className="border-none bg-emerald-600/90 text-white font-medium text-[10px] px-2 py-0.5 rounded-full shadow-xs">
-                In stock
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        {/* Content Area */}
-        <div className="pt-2.5 space-y-1">
-          {/* Brand or Category Pill */}
-          <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-primary">
-            <span className="truncate">{brand || p.category}</span>
-          </div>
-
-          {/* Product Name (2-line clamp) */}
-          <h3 className="line-clamp-2 text-xs font-semibold leading-snug text-foreground group-hover:text-primary transition-colors sm:text-sm min-h-[2.25rem]">
-            {p.title}
-          </h3>
-
-          {/* Small Single-Line Description */}
-          {p.description && (
-            <p className="line-clamp-1 text-[11px] leading-tight text-muted-foreground">
-              {p.description}
-            </p>
-          )}
-
-          {/* Review Rating (Compact, no stock count clutter) */}
-          <div className="flex items-center gap-1.5 pt-0.5 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-0.5 font-medium text-foreground text-[11px]">
-              <Star className="size-3 fill-amber-400 text-amber-400" />
-              {r.toFixed(1)}
-            </span>
-            <span className="text-[11px] text-muted-foreground/75">
-              ({Math.floor(p.id.length * 13) + 24})
-            </span>
-            <span className="text-[10px] text-muted-foreground/50">·</span>
-            <span className="text-[10px] text-muted-foreground truncate">{p.category}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Area: Price + Dual CTAs */}
-      <div className="mt-2 pt-2 border-t border-border/40 space-y-2">
-        {/* Price Row (Bigger Font) */}
-        <div className="flex items-baseline justify-between">
-          <div className="text-base sm:text-lg font-bold font-mono tracking-tight text-foreground">
-            {formatPrice(p.price_paise)}
-          </div>
-        </div>
-
-        {/* Dual CTAs: Buy Now (Primary) + Add to Cart (Secondary) */}
-        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={isOutOfStock}
-            onClick={(e) => {
-              e.stopPropagation()
-              onAdd()
-            }}
-            className="h-8 rounded-lg text-xs font-medium border-border hover:bg-secondary active:scale-[0.97] transition-all px-2"
-          >
-            Add to cart
-          </Button>
-
-          <Button
-            size="sm"
-            variant="default"
-            disabled={isOutOfStock}
-            onClick={(e) => {
-              e.stopPropagation()
-              onBuy()
-            }}
-            className="h-8 rounded-lg text-xs font-semibold bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 active:scale-[0.97] transition-all px-2"
-          >
-            {isOutOfStock ? "Out of stock" : "Buy now"}
-          </Button>
-        </div>
-      </div>
-    </Card>
-  )
-}
+/*                                Product UI                                  */
+/* -------------------------------------------------------------------------- */
 
 function ListRow({
   p,
@@ -2947,43 +2815,15 @@ function ProductDetail({
                       View all
                     </Button>
                   </div>
-                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
                     {related.map((rp: Product) => (
-                      <Card key={rp.id} className="overflow-hidden">
-                        <button
-                          onClick={() => onOpenRelated(rp.id)}
-                          className="block overflow-hidden"
-                        >
-                          <img
-                            src={rp.image_url}
-                            alt={rp.title}
-                            className="aspect-[4/3] w-full object-cover transition hover:scale-[1.02]"
-                          />
-                        </button>
-                        <CardContent className="p-3 space-y-2">
-                          <div className="truncate text-sm font-medium">
-                            {rp.title}
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold">
-                              {formatPrice(rp.price_paise)}
-                            </span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {rp.category}
-                            </Badge>
-                          </div>
-                          <Button
-                            size="sm"
-                            className="w-full"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onAddToCart(rp.id)
-                            }}
-                          >
-                            Add to cart
-                          </Button>
-                        </CardContent>
-                      </Card>
+                      <StorefrontProductCard
+                        key={rp.id}
+                        product={rp}
+                        onOpenDetails={() => onOpenRelated(rp.id)}
+                        onAddToCart={() => onAddToCart(rp.id)}
+                        onBuyNow={() => onBuyNow(rp.id)}
+                      />
                     ))}
                   </div>
                 </CardContent>

@@ -32,6 +32,7 @@ import { formatPrice } from "@/lib/types/product"
 import { useCart } from "@/state/useCart"
 import { toast } from "sonner"
 import { ProductDetailsDialog } from "./ProductDetailsDialog"
+import { AIAssistantProductCard } from "@/components/customer/ProductCard"
 
 interface AIMessageBubbleProps {
   message: ChatMessage
@@ -41,149 +42,6 @@ interface AIMessageBubbleProps {
   customerPhone?: string | null
   onOpenTrackOrder?: (orderId: string) => void
   onRetry?: () => void
-}
-
-function ProductCard({
-  product,
-  index = 0,
-  onOpenDetails,
-  onBuyNow,
-}: {
-  product: Product
-  index?: number
-  onOpenDetails: (p: Product) => void
-  onBuyNow: (p: Product) => void
-}) {
-  const [added, setAdded] = useState(false)
-  const [imgError, setImgError] = useState(false)
-  const addToCart = useCart((s) => s.addToCart)
-
-  const discountPercent =
-    product.mrp_paise && product.mrp_paise > product.price_paise
-      ? Math.round(((product.mrp_paise - product.price_paise) / product.mrp_paise) * 100)
-      : null
-
-  const handleAdd = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    addToCart(product, 1)
-    setAdded(true)
-    toast.success(`Added ${product.title} to cart`)
-    setTimeout(() => setAdded(false), 1800)
-  }
-
-  const handleBuyNow = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onBuyNow(product)
-  }
-
-  return (
-    <div
-      style={{
-        animationDelay: `${index * 60}ms`,
-        animationFillMode: "both",
-      }}
-      className="group/pcard flex flex-row items-center gap-3 p-2.5 sm:p-3 rounded-xl border border-border/75 bg-card/95 hover:bg-accent/15 hover:border-foreground/20 transition-all text-left shadow-2xs w-full animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
-    >
-      {/* Product Image Thumbnail with robust fallback */}
-      <div
-        onClick={() => onOpenDetails(product)}
-        className="relative size-14 sm:size-16 rounded-lg overflow-hidden shrink-0 bg-muted/60 border border-border/40 cursor-pointer flex items-center justify-center transition-all group-hover/pcard:border-foreground/20"
-        title="Click to view details"
-      >
-        {!imgError && product.image_url ? (
-          <img
-            src={product.image_url}
-            alt={product.title}
-            className="size-full object-cover group-hover/pcard:scale-105 transition-transform duration-200"
-            loading="lazy"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className="size-full flex flex-col items-center justify-center bg-muted text-muted-foreground p-1 text-center select-none">
-            <ShoppingBag className="size-5 text-muted-foreground/60" />
-            <span className="text-[8px] font-medium leading-tight mt-0.5 text-muted-foreground/70 truncate max-w-full">
-              {product.category?.split(" ")[0] || "Item"}
-            </span>
-          </div>
-        )}
-        {discountPercent && discountPercent > 0 ? (
-          <span className="absolute top-1 left-1 bg-emerald-600/90 text-white text-[8px] font-bold px-1 py-0.2 rounded leading-none shadow-2xs">
-            {discountPercent}% OFF
-          </span>
-        ) : null}
-      </div>
-
-      {/* Structured Product Information: Category pill, Title, Price */}
-      <div className="flex-1 min-w-0 pr-1 flex flex-col justify-center gap-0.5">
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span className="font-semibold uppercase tracking-wider text-muted-foreground/80 truncate">
-            {product.category || "Grocery & Staples"}
-          </span>
-          {product.stock > 0 ? (
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">· In Stock</span>
-          ) : (
-            <span className="text-destructive font-medium">· Out of Stock</span>
-          )}
-        </div>
-
-        <h4
-          onClick={() => onOpenDetails(product)}
-          className="text-xs sm:text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors leading-snug"
-          title={product.title}
-        >
-          {product.title}
-        </h4>
-
-        <div className="flex items-baseline gap-1.5 mt-0.5">
-          <span className="text-xs sm:text-sm font-bold text-foreground">
-            {formatPrice(product.price_paise, product.currency)}
-          </span>
-          {product.mrp_paise && product.mrp_paise > product.price_paise && (
-            <span className="text-[10px] text-muted-foreground line-through">
-              {formatPrice(product.mrp_paise, product.currency)}
-            </span>
-          )}
-          {product.unit && (
-            <span className="text-[10px] text-muted-foreground">
-              / {product.unit}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Compact Action Buttons */}
-      <div className="flex items-center gap-1.5 shrink-0">
-        <Button
-          size="sm"
-          variant={added ? "secondary" : "outline"}
-          className="h-7 px-2 text-[11px] font-medium transition-all"
-          onClick={handleAdd}
-          title="Add to Cart"
-        >
-          {added ? (
-            <>
-              <Check className="size-3 text-emerald-600 dark:text-emerald-400 mr-1" />
-              <span className="text-emerald-600 dark:text-emerald-400">Added</span>
-            </>
-          ) : (
-            <>
-              <Plus className="size-3 mr-1" />
-              <span>Add</span>
-            </>
-          )}
-        </Button>
-        <Button
-          size="sm"
-          className="h-7 px-2.5 text-[11px] font-semibold transition-all shadow-2xs gap-1"
-          onClick={handleBuyNow}
-          title="Buy Now - Instant Checkout"
-        >
-          <Zap className="size-3 fill-current" />
-          <span>Buy Now</span>
-        </Button>
-      </div>
-    </div>
-  )
 }
 
 function renderMarkdown(text: string) {
@@ -377,11 +235,12 @@ export function AIMessageBubble({
           {!isUser && message.products && message.products.length > 0 && (
             <div className="w-full flex flex-col gap-2 mt-2">
               {message.products.slice(0, 4).map((product, index) => (
-                <ProductCard
+                <AIAssistantProductCard
                   key={product.id}
                   product={product}
                   index={index}
                   onOpenDetails={handleOpenDetails}
+                  onAddToCart={(p) => addToCart(p, 1)}
                   onBuyNow={handleBuyNow}
                 />
               ))}
