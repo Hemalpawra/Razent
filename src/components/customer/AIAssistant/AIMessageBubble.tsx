@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -19,6 +20,8 @@ import {
   Copy,
   CheckCheck,
   RotateCw,
+  Zap,
+  ArrowRight,
 } from "lucide-react"
 import type { ChatMessage } from "./useAIChat"
 import type { Product } from "@/lib/types/product"
@@ -26,7 +29,6 @@ import { formatPrice } from "@/lib/types/product"
 import { useCart } from "@/state/useCart"
 import { toast } from "sonner"
 import { ProductDetailsDialog } from "./ProductDetailsDialog"
-import { AICheckoutConfirmationCard } from "./AICheckoutConfirmationCard"
 
 interface AIMessageBubbleProps {
   message: ChatMessage
@@ -42,10 +44,12 @@ function ProductCard({
   product,
   index = 0,
   onOpenDetails,
+  onBuyNow,
 }: {
   product: Product
   index?: number
   onOpenDetails: (p: Product) => void
+  onBuyNow: (p: Product) => void
 }) {
   const [added, setAdded] = useState(false)
   const addToCart = useCart((s) => s.addToCart)
@@ -58,35 +62,46 @@ function ProductCard({
     setTimeout(() => setAdded(false), 1800)
   }
 
+  const handleBuyNow = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onBuyNow(product)
+  }
+
   return (
     <Card
-      onClick={() => onOpenDetails(product)}
       style={{
-        animationDelay: `${index * 70}ms`,
+        animationDelay: `${index * 60}ms`,
         animationFillMode: "both",
       }}
-      className="flex items-center gap-3 p-3 rounded-xl border border-border/70 bg-card hover:border-foreground/30 hover:bg-accent/20 hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group text-left shadow-xs animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-300 ease-out"
+      className="flex items-center gap-3 p-2.5 rounded-xl border border-border/70 bg-card hover:border-foreground/20 hover:bg-accent/10 transition-all text-left shadow-2xs group animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200"
     >
-      {product.image_url ? (
-        <img
-          src={product.image_url}
-          alt={product.title}
-          className="size-12 object-cover rounded-lg shrink-0 bg-muted border border-border/40 group-hover:scale-105 transition-transform"
-          loading="lazy"
-        />
-      ) : (
-        <div className="size-12 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/40">
+      {/* Product Image - Click opens Details */}
+      <div
+        onClick={() => onOpenDetails(product)}
+        className="size-13 sm:size-14 rounded-lg overflow-hidden shrink-0 bg-muted border border-border/40 cursor-pointer flex items-center justify-center relative group-hover:opacity-95 transition-opacity"
+      >
+        {product.image_url ? (
+          <img
+            src={product.image_url}
+            alt={product.title}
+            className="size-full object-cover group-hover:scale-105 transition-transform duration-200"
+            loading="lazy"
+          />
+        ) : (
           <ShoppingCart className="size-5 text-muted-foreground" />
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+        )}
+      </div>
+
+      {/* Product Title & Price - Click title opens Details */}
+      <div className="flex-1 min-w-0 pr-1">
+        <h4
+          onClick={() => onOpenDetails(product)}
+          className="text-xs font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors leading-tight"
+          title={product.title}
+        >
           {product.title}
-        </p>
-        <p className="text-[11px] text-muted-foreground truncate">
-          {product.category || "General"}
-        </p>
-        <div className="flex items-baseline gap-2 mt-0.5">
+        </h4>
+        <div className="flex items-baseline gap-1.5 mt-1">
           <span className="text-xs font-bold text-foreground">
             {formatPrice(product.price_paise, product.currency)}
           </span>
@@ -97,24 +112,38 @@ function ProductCard({
           )}
         </div>
       </div>
-      <Button
-        size="sm"
-        variant={added ? "secondary" : "outline"}
-        className="shrink-0 text-xs h-8 px-2.5 transition-all"
-        onClick={handleAdd}
-      >
-        {added ? (
-          <>
-            <Check data-icon="inline-start" className="text-emerald-600 dark:text-emerald-400" />
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Added</span>
-          </>
-        ) : (
-          <>
-            <ShoppingCart data-icon="inline-start" />
-            <span>Add</span>
-          </>
-        )}
-      </Button>
+
+      {/* Compact Action Buttons: Add to Cart + Buy Now */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <Button
+          size="sm"
+          variant={added ? "secondary" : "outline"}
+          className="h-7 px-2 text-[11px] font-medium transition-all"
+          onClick={handleAdd}
+          title="Add to Cart"
+        >
+          {added ? (
+            <>
+              <Check className="size-3 text-emerald-600 dark:text-emerald-400 mr-1" />
+              <span className="text-emerald-600 dark:text-emerald-400">Added</span>
+            </>
+          ) : (
+            <>
+              <ShoppingCart className="size-3 mr-1" />
+              <span>Add</span>
+            </>
+          )}
+        </Button>
+        <Button
+          size="sm"
+          className="h-7 px-2.5 text-[11px] font-semibold transition-all shadow-2xs"
+          onClick={handleBuyNow}
+          title="Buy Now - Proceed to Checkout"
+        >
+          <Zap className="size-3 mr-1" />
+          <span>Buy Now</span>
+        </Button>
+      </div>
     </Card>
   )
 }
@@ -231,14 +260,22 @@ export function AIMessageBubble({
   onOpenTrackOrder,
   onRetry,
 }: AIMessageBubbleProps) {
+  const navigate = useNavigate()
   const isUser = message.role === "user"
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const prepareCheckout = useCart((s) => s.prepareCheckout)
 
   const handleOpenDetails = (product: Product) => {
     setSelectedProduct(product)
     setDialogOpen(true)
+  }
+
+  const handleBuyNow = (product: Product) => {
+    prepareCheckout(product, 1)
+    toast.success(`Prepared checkout for ${product.title}`)
+    navigate("/?view=checkout")
   }
 
   const handleCopy = () => {
@@ -307,21 +344,38 @@ export function AIMessageBubble({
                   product={product}
                   index={index}
                   onOpenDetails={handleOpenDetails}
+                  onBuyNow={handleBuyNow}
                 />
               ))}
             </div>
           )}
 
-          {/* Autonomous Checkout / Order Confirmation Card */}
-          {!isUser && message.orderCheckout && message.orderCheckout.products.length > 0 && (
-            <div className="w-full mt-2 animate-in fade-in-0 zoom-in-98 slide-in-from-bottom-2 duration-300 ease-out">
-              <AICheckoutConfirmationCard
-                products={message.orderCheckout.products}
-                customerName={customerName}
-                customerEmail={customerEmail}
-                customerPhone={customerPhone}
-                onOpenTrackOrder={onOpenTrackOrder}
-              />
+          {/* Proceed to Checkout Action Banner (AP2/ACP Compliant Gated Checkout) */}
+          {!isUser && (message.checkoutAction || message.orderCheckout) && (
+            <div className="w-full mt-2.5 p-3 rounded-xl border border-primary/40 bg-card shadow-xs flex items-center justify-between gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <ShoppingCart className="size-4" />
+                </div>
+                <div className="min-w-0 text-left">
+                  <p className="text-xs font-semibold text-foreground truncate">
+                    Ready to complete your order?
+                  </p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {message.orderCheckout?.products
+                      ? `${message.orderCheckout.products.length} item(s) prepared · Secure gated checkout`
+                      : "Review items and address on the checkout screen"}
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="shrink-0 text-xs font-semibold h-8 gap-1.5 shadow-2xs"
+                onClick={() => navigate("/?view=checkout")}
+              >
+                <span>Proceed to Checkout</span>
+                <ArrowRight className="size-3.5" />
+              </Button>
             </div>
           )}
 

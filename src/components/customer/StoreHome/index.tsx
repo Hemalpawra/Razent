@@ -60,10 +60,15 @@ import { AIAssistantWidget } from "@/components/customer/AIAssistant"
 import { useCustomerAuth } from "@/state/useCustomerAuth"
 
 import { formatPrice, type Product } from "@/lib/types/product"
-import { getSavedTestCards } from "@/lib/protocol/regulatoryWrapper"
+import {
+  getSavedTestCards,
+  getActivePaymentSelection,
+  saveActivePaymentSelection,
+} from "@/lib/protocol/regulatoryWrapper"
 
 import {
   Search,
+  Banknote,
   ShoppingCart,
   User,
   Menu,
@@ -4121,9 +4126,21 @@ function CheckoutView({
   const [newAddr, setNewAddr] = useState<Partial<Address>>({})
   const [paying, setPaying] = useState(false)
 
-  const [paymentType, setPaymentType] = useState<"upi" | "card" | "razorpay">("upi")
-  const [upiId, setUpiId] = useState<string>("success@razorpay")
-  const [selectedCardId, setSelectedCardId] = useState<string>("card_test_visa")
+  const [paymentType, setPaymentType] = useState<"upi" | "card" | "razorpay" | "cod">(() => {
+    const saved = getActivePaymentSelection()
+    if (saved.type === "card") return "card"
+    if (saved.type === "cod") return "cod"
+    if (saved.type === "netbanking" || saved.type === "razorpay") return "razorpay"
+    return "upi"
+  })
+  const [upiId, setUpiId] = useState<string>(() => {
+    const saved = getActivePaymentSelection()
+    return saved.upiVpa || "success@razorpay"
+  })
+  const [selectedCardId, setSelectedCardId] = useState<string>(() => {
+    const saved = getActivePaymentSelection()
+    return saved.cardId || "card_test_visa"
+  })
   const testCards = useMemo(() => getSavedTestCards(), [])
 
   const [addrError, setAddrError] = useState<string | null>(null)
@@ -4191,6 +4208,31 @@ function CheckoutView({
       commerce_protocol: "direct_web",
       notes: "Created via storefront checkout with Razorpay",
       created_at: new Date().toISOString(),
+    }
+
+    // 0. Cash on Delivery (COD) Flow
+    if (paymentType === "cod") {
+      setPaying(true)
+      try {
+        const codOrder = {
+          ...order,
+          status: "paid" as const,
+          commerce_protocol: "direct_web" as const,
+          notes: "Created via storefront checkout with Cash on Delivery (COD)",
+        }
+        await createStorefrontOrder(codOrder)
+        onPaymentSuccess(
+          codOrder.id,
+          "cod_" + Date.now(),
+          "INV-" + new Date().getFullYear() + "-" + orderId.slice(-6),
+          shippingAddress,
+        )
+      } catch (err: any) {
+        onPaymentFailed(order.id, total, err?.message || "Cash on Delivery order failed.")
+      } finally {
+        setPaying(false)
+      }
+      return
     }
 
     // 1. UPI Payment Flow (deterministic test clearance via executeStorefrontPayment)
@@ -4686,10 +4728,13 @@ function CheckoutView({
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Method Selector Tabs */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <button
                     type="button"
-                    onClick={() => setPaymentType("upi")}
+                    onClick={() => {
+                      setPaymentType("upi")
+                      saveActivePaymentSelection({ type: "upi", upiVpa: upiId })
+                    }}
                     className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                       paymentType === "upi"
                         ? "border-primary bg-primary/10 text-primary"
@@ -4701,7 +4746,10 @@ function CheckoutView({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPaymentType("card")}
+                    onClick={() => {
+                      setPaymentType("card")
+                      saveActivePaymentSelection({ type: "card", cardId: selectedCardId })
+                    }}
                     className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                       paymentType === "card"
                         ? "border-primary bg-primary/10 text-primary"
@@ -4713,7 +4761,10 @@ function CheckoutView({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPaymentType("razorpay")}
+                    onClick={() => {
+                      setPaymentType("razorpay")
+                      saveActivePaymentSelection({ type: "razorpay" })
+                    }}
                     className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                       paymentType === "razorpay"
                         ? "border-primary bg-primary/10 text-primary"
@@ -4722,6 +4773,21 @@ function CheckoutView({
                   >
                     <ShieldCheck className="size-3.5" />
                     Razorpay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentType("cod")
+                      saveActivePaymentSelection({ type: "cod" })
+                    }}
+                    className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      paymentType === "cod"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border hover:bg-muted/40 text-muted-foreground"
+                    }`}
+                  >
+                    <Banknote className="size-3.5" />
+                    Cash on Delivery
                   </button>
                 </div>
 
@@ -4821,6 +4887,16 @@ function CheckoutView({
                   <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs text-muted-foreground space-y-1">
                     <p className="font-medium text-foreground">Standard Razorpay Gateway Modal</p>
                     <p>Opens the Razorpay checkout overlay supporting NetBanking, Wallets, Cards, and UPI Intent.</p>
+                  </div>
+                )}
+
+                {/* Sub-view: Cash on Delivery */}
+                {paymentType === "cod" && (
+                  <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs text-muted-foreground space-y-1">
+                    <p className="font-medium text-foreground flex items-center gap-1.5">
+                      <Banknote className="size-4 text-primary" /> Cash on Delivery (Doorstep Settlement)
+                    </p>
+                    <p>No prepayment needed. Pay with cash or scan delivery partner UPI QR code upon receipt of your items.</p>
                   </div>
                 )}
               </CardContent>

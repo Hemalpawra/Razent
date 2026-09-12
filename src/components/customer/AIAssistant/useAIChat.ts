@@ -19,6 +19,7 @@ import { useSettings } from "@/state/useSettings"
 import type { Product } from "@/lib/types/product"
 import type { Conversation } from "@/lib/types/conversation"
 import { useCart } from "@/state/useCart"
+import { toast } from "sonner"
 
 export type ChatRole = "user" | "assistant" | "system"
 
@@ -62,6 +63,72 @@ export const CHAT_SUGGESTIONS = [
 
 const CHECKOUT_INTENT_REGEX =
   /\b(checkout|place order|prepare order|buy this|order now|proceed to checkout|take my order)\b/i
+
+function syncCartFromUserIntent(
+  text: string,
+  recentProducts: Product[],
+  catalog: Product[]
+): { added: { product: Product; qty: number }[] } {
+  const trimmed = text.trim()
+  const lower = trimmed.toLowerCase()
+
+  const isAddToCartPhrase =
+    /\b(add\s+(?:it|this|them|both|all)?\s*to\s*(?:my\s*)?cart|add\s+(?:both|all|them)|put\s+(?:it|this|them|both|all)?\s*in\s*(?:my\s*)?cart|add\s+to\s+cart)\b/i.test(
+      lower
+    ) || /^add\s+/i.test(lower)
+
+  if (!isAddToCartPhrase) return { added: [] }
+
+  // Extract optional quantity (e.g. "add 2", "2 packs of", etc.)
+  const qtyMatch = lower.match(/\b(?:add\s+)?(\d+)\s*(?:x|units?|packs?|of\s+)?/i)
+  const qty = qtyMatch ? Math.max(1, parseInt(qtyMatch[1], 10)) : 1
+
+  const added: { product: Product; qty: number }[] = []
+
+  // Check if referring to "both" or "all"
+  if (/\b(both|all|them|everything)\b/i.test(lower)) {
+    if (recentProducts.length > 0) {
+      recentProducts.forEach((p) => {
+        useCart.getState().addToCart(p, qty)
+        added.push({ product: p, qty })
+      })
+      return { added }
+    }
+  }
+
+  // Check if a specific product title or brand was mentioned in the user's text
+  const pool = [...recentProducts, ...catalog]
+  const matched = pool.find((p) => {
+    const title = p.title.toLowerCase()
+    const cleanTitle = title.replace(/\(.*?\)/g, "").trim().toLowerCase()
+    return (
+      lower.includes(cleanTitle) ||
+      cleanTitle.split(/\s+/).every((w) => w.length > 2 && lower.includes(w))
+    )
+  })
+
+  if (matched) {
+    useCart.getState().addToCart(matched, qty)
+    added.push({ product: matched, qty })
+    return { added }
+  }
+
+  // If no specific product mentioned but recent products exist and user said "add to cart" / "add this"
+  if (recentProducts.length > 0) {
+    if (recentProducts.length === 1) {
+      useCart.getState().addToCart(recentProducts[0], qty)
+      added.push({ product: recentProducts[0], qty })
+    } else {
+      recentProducts.forEach((p) => {
+        useCart.getState().addToCart(p, qty)
+        added.push({ product: p, qty })
+      })
+    }
+    return { added }
+  }
+
+  return { added }
+}
 
 export function useAIChat(products: Product[] = [], initialConversationId?: string) {
   const { user: clerkUser } = useUser()
@@ -200,6 +267,20 @@ export function useAIChat(products: Product[] = [], initialConversationId?: stri
       const trimmedText = text.trim()
       const isCheckoutIntent = CHECKOUT_INTENT_REGEX.test(trimmedText)
 
+      // Find the most recent assistant message with recommended products
+      const lastAssistantWithProducts = [...messages]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.products && m.products.length > 0)
+      const recentProducts = lastAssistantWithProducts?.products || []
+
+      // In-chat cart synchronization: Add items immediately when requested
+      const { added } = syncCartFromUserIntent(trimmedText, recentProducts, products)
+      if (added.length === 1) {
+        toast.success(`Added ${added[0].qty > 1 ? `${added[0].qty}× ` : ""}${added[0].product.title} to cart!`)
+      } else if (added.length > 1) {
+        toast.success(`Added ${added.length} items to your cart!`)
+      }
+
       const userMsg: ChatMessage = {
         id: genId(),
         role: "user",
@@ -230,22 +311,36 @@ export function useAIChat(products: Product[] = [], initialConversationId?: stri
 
         if (abortRef.current) return
 
+        // If assistant triggered a checkoutAction product, ensure it's in the cart
+        if (result.checkoutAction?.product) {
+          const chkProduct = result.checkoutAction.product
+          const alreadyInCart = useCart.getState().items.some((i) => i.product.id === chkProduct.id)
+          if (!alreadyInCart) {
+            useCart.getState().addToCart(chkProduct, 1)
+          }
+        }
+
         // Check if order checkout card should be attached
         let orderCheckout: ChatMessage["orderCheckout"] = undefined
-        const candidateProducts =
-          result.products && result.products.length > 0
-            ? result.products
-            : cartItems.map((ci) => ci.product)
+        const currentCart = useCart.getState().items
 
         if (
           isCheckoutIntent ||
           result.checkoutAction ||
           /order summary|proceed to checkout|prepared your order/i.test(result.text)
         ) {
-          if (candidateProducts.length > 0) {
+          if (currentCart.length > 0) {
             orderCheckout = {
-              products: candidateProducts.slice(0, 4),
-              totalPaise: candidateProducts.reduce((sum, p) => sum + (p.price_paise || 0), 0),
+              products: currentCart.map((ci) => ci.product),
+              totalPaise: currentCart.reduce((sum, ci) => sum + (ci.product.price_paise || 0) * ci.qty, 0),
+            }
+          } else if (result.products && result.products.length > 0) {
+            // If the cart was empty but the AI prepared an order for recommended items, add them to cart
+            result.products.forEach((p) => useCart.getState().addToCart(p, 1))
+            const freshCart = useCart.getState().items
+            orderCheckout = {
+              products: freshCart.map((ci) => ci.product),
+              totalPaise: freshCart.reduce((sum, ci) => sum + (ci.product.price_paise || 0) * ci.qty, 0),
             }
           }
         }
@@ -313,7 +408,7 @@ export function useAIChat(products: Product[] = [], initialConversationId?: stri
               actor: "AI Assistant",
               source: "AI Agent",
               result: "Success",
-              reason: `Checkout review card presented for ${candidateProducts.length} items`,
+              reason: `Checkout review card presented for ${orderCheckout.products.length} items`,
               payload_summary: `Estimated: ₹${((orderCheckout.totalPaise || 0) / 100).toFixed(2)}`,
               status_code: 200,
             },

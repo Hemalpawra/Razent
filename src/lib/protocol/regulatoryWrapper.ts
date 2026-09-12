@@ -105,10 +105,13 @@ export const DEFAULT_TEST_UPI_METHODS: SavedUPICredential[] = [
 const STORED_CARDS_KEY = "razent_saved_cards"
 const STORED_ACTIVE_PAYMENT_KEY = "razent_active_payment_method"
 
+export const ACTIVE_PAYMENT_EVENT = "razent-active-payment-change"
+
 export interface ActivePaymentSelection {
-  type: "upi" | "card"
+  type: "upi" | "card" | "netbanking" | "cod" | "razorpay"
   cardId?: string
   upiVpa?: string
+  bankCode?: string
 }
 
 export function getSavedTestCards(): SavedPaymentCard[] {
@@ -147,6 +150,9 @@ export function saveActivePaymentSelection(sel: ActivePaymentSelection): void {
   if (typeof window === "undefined") return
   try {
     localStorage.setItem(STORED_ACTIVE_PAYMENT_KEY, JSON.stringify(sel))
+    window.dispatchEvent(
+      new CustomEvent(ACTIVE_PAYMENT_EVENT, { detail: sel })
+    )
   } catch {}
 }
 

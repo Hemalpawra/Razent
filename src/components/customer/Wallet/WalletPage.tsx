@@ -34,8 +34,11 @@ import {
   DEFAULT_TEST_UPI_METHODS,
   getActivePaymentSelection,
   saveActivePaymentSelection,
+  ACTIVE_PAYMENT_EVENT,
   type ActivePaymentSelection,
 } from "@/lib/protocol/regulatoryWrapper"
+import { formatPrice } from "@/lib/types/product"
+import { Input } from "@/components/ui/input"
 import {
   ArrowLeft,
   Bot,
@@ -52,17 +55,28 @@ import {
   Building2,
   Info,
   ExternalLink,
+  Banknote,
+  Sliders,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
+const SPEND_LIMIT_PRESETS = [
+  { label: "₹500", value: 50000 },
+  { label: "₹1,000", value: 100000 },
+  { label: "₹2,000", value: 200000, recommended: true, note: "NPCI Cap" },
+  { label: "₹5,000", value: 500000 },
+  { label: "₹10,000", value: 1000000 },
+]
+
 export default function WalletPage() {
   const navigate = useNavigate()
-  const { agentPurchaseEnabled, toggle } = useAgentPurchase()
+  const { agentPurchaseEnabled, spendLimitPaise, setSpendLimitPaise, toggle } = useAgentPurchase()
   const [activePayment, setActivePayment] = useState<ActivePaymentSelection>(() =>
     getActivePaymentSelection()
   )
   const [revealedCvvs, setRevealedCvvs] = useState<Record<string, boolean>>({})
+  const [customLimit, setCustomLimit] = useState("")
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
@@ -79,11 +93,27 @@ export default function WalletPage() {
   const handleSelectPayment = (sel: ActivePaymentSelection) => {
     setActivePayment(sel)
     saveActivePaymentSelection(sel)
-    toast.success(
+    const label =
       sel.type === "card"
-        ? "Card set as primary for AI assistant"
-        : "UPI set as primary for AI assistant"
-    )
+        ? "Card set as primary payment method"
+        : sel.type === "upi"
+        ? "UPI set as primary payment method"
+        : sel.type === "netbanking"
+        ? `NetBanking (${sel.bankCode || "Bank"}) set as primary payment method`
+        : "Cash on Delivery set as primary payment method"
+    toast.success(label)
+  }
+
+  const handleSetCustomLimit = () => {
+    const num = parseFloat(customLimit)
+    if (isNaN(num) || num <= 0) {
+      toast.error("Please enter a valid amount in ₹")
+      return
+    }
+    const paise = Math.round(num * 100)
+    setSpendLimitPaise(paise)
+    setCustomLimit("")
+    toast.success(`AI Assistant spend limit set to ${formatPrice(paise)}`)
   }
 
   return (
@@ -249,6 +279,113 @@ export default function WalletPage() {
           </CardFooter>
         </Card>
 
+        {/* FUND SETTINGS CARD: AI Assistant Auto-Spend Limit */}
+        <Card className="border border-border/80 bg-card shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Sliders className="size-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-base font-bold">
+                      AI Assistant Auto-Spend Limit & Fund Cap
+                    </CardTitle>
+                    <Badge variant="secondary" className="font-semibold text-[11px] text-primary bg-primary/10">
+                      Cap: {formatPrice(spendLimitPaise)}
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-xs mt-1">
+                    Maximum order value the AI Shopping Assistant can automatically approve and settle. Orders above this threshold require manual 2FA / OTP step-up.
+                  </CardDescription>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-0 flex flex-col gap-3.5 text-xs">
+            {/* Presets */}
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Quick Limit Presets
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {SPEND_LIMIT_PRESETS.map((preset) => {
+                  const isSelected = spendLimitPaise === preset.value
+                  return (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => {
+                        setSpendLimitPaise(preset.value)
+                        toast.success(`AI spend limit set to ${preset.label}`)
+                      }}
+                      className={cn(
+                        "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                        isSelected
+                          ? "border-primary bg-primary/10 text-primary font-bold shadow-2xs ring-1 ring-primary/40"
+                          : "border-border/70 bg-card hover:border-border hover:bg-accent/30 text-foreground"
+                      )}
+                    >
+                      <span className="text-sm font-semibold">{preset.label}</span>
+                      {preset.note && (
+                        <span className="text-[10px] text-muted-foreground font-normal">
+                          {preset.note}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Custom Limit Input */}
+            <div className="pt-2 border-t border-border/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex-1">
+                <p className="text-xs font-medium text-foreground">Custom Spending Limit</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Set any maximum spend ceiling in INR for autonomous shopping turns.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-36">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+                    ₹
+                  </span>
+                  <Input
+                    type="number"
+                    min="1"
+                    step="50"
+                    value={customLimit}
+                    onChange={(e) => setCustomLimit(e.target.value)}
+                    placeholder={(spendLimitPaise / 100).toString()}
+                    className="h-8 pl-6 text-xs"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleSetCustomLimit()
+                      }
+                    }}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 text-xs font-medium shrink-0"
+                  onClick={handleSetCustomLimit}
+                >
+                  Save Limit
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg border border-border bg-muted/30 flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Orders ≤ {formatPrice(spendLimitPaise)}: Instant Auto-Debit</span>
+              <span className="text-foreground font-medium">Orders &gt; {formatPrice(spendLimitPaise)}: Human Approval Required</span>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Credentials Tabs */}
         <Tabs defaultValue="cards" className="w-full">
           <TabsList className="w-full justify-start overflow-x-auto">
@@ -263,6 +400,10 @@ export default function WalletPage() {
             <TabsTrigger value="netbanking" className="gap-1.5">
               <Building2 className="size-3.5" />
               NetBanking
+            </TabsTrigger>
+            <TabsTrigger value="cod" className="gap-1.5">
+              <Banknote className="size-3.5" />
+              Cash on Delivery
             </TabsTrigger>
             <TabsTrigger value="rules" className="gap-1.5">
               <Info className="size-3.5" />
@@ -471,29 +612,105 @@ export default function WalletPage() {
             <div>
               <h3 className="text-sm font-semibold">NetBanking Sandbox</h3>
               <p className="text-xs text-muted-foreground">
-                Supported sandbox banks for direct account debit testing.
+                Supported sandbox banks for direct account debit testing. Click "Set Default" to use as primary.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { name: "HDFC Bank", code: "HDFC", status: "Operational" },
                 { name: "ICICI Bank", code: "ICIC", status: "Operational" },
                 { name: "State Bank of India", code: "SBIN", status: "Operational" },
                 { name: "Axis Bank", code: "UTIB", status: "Operational" },
-              ].map((bank) => (
-                <div
-                  key={bank.code}
-                  className="p-3.5 rounded-xl border border-border/70 bg-card flex flex-col gap-1.5"
-                >
-                  <Building2 className="size-5 text-muted-foreground" />
-                  <p className="text-xs font-semibold text-foreground">{bank.name}</p>
-                  <p className="font-mono text-[10px] text-muted-foreground">Code: {bank.code}</p>
-                  <Badge variant="secondary" className="text-[9px] w-fit mt-1">
-                    {bank.status}
-                  </Badge>
+              ].map((bank) => {
+                const isSelected =
+                  activePayment.type === "netbanking" && activePayment.bankCode === bank.code
+
+                return (
+                  <div
+                    key={bank.code}
+                    className={cn(
+                      "p-3.5 rounded-xl border bg-card flex flex-col justify-between gap-2.5 transition-all shadow-2xs",
+                      isSelected
+                        ? "border-primary ring-1 ring-primary/40 bg-accent/20"
+                        : "border-border/70 hover:border-border"
+                    )}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <Building2 className="size-5 text-muted-foreground" />
+                        {isSelected ? (
+                          <Badge
+                            variant="outline"
+                            className="border-primary text-primary text-[10px] gap-1"
+                          >
+                            <Check className="size-2.5" /> Default
+                          </Badge>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSelectPayment({ type: "netbanking", bankCode: bank.code })
+                            }
+                            className="text-[11px] text-muted-foreground hover:text-foreground font-medium cursor-pointer"
+                          >
+                            Set Default
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs font-semibold text-foreground mt-2">{bank.name}</p>
+                      <p className="font-mono text-[10px] text-muted-foreground">Code: {bank.code}</p>
+                    </div>
+                    <Badge variant="secondary" className="text-[9px] w-fit">
+                      {bank.status}
+                    </Badge>
+                  </div>
+                )
+              })}
+            </div>
+          </TabsContent>
+
+          {/* CASH ON DELIVERY TAB */}
+          <TabsContent value="cod" className="mt-4 flex flex-col gap-4">
+            <div>
+              <h3 className="text-sm font-semibold">Cash on Delivery (COD)</h3>
+              <p className="text-xs text-muted-foreground">
+                Pay in cash or UPI at the doorstep upon order delivery.
+              </p>
+            </div>
+
+            <div className="max-w-md">
+              <div
+                className={cn(
+                  "p-4 rounded-xl border bg-card flex flex-col gap-3 transition-all shadow-2xs",
+                  activePayment.type === "cod"
+                    ? "border-primary ring-1 ring-primary/40 bg-accent/20"
+                    : "border-border/70 hover:border-border"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Banknote className="size-5 text-primary" />
+                    <span className="text-sm font-semibold text-foreground">Cash on Delivery</span>
+                  </div>
+                  {activePayment.type === "cod" ? (
+                    <Badge variant="outline" className="border-primary text-primary text-[10px] gap-1">
+                      <Check className="size-2.5" /> Default
+                    </Badge>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPayment({ type: "cod" })}
+                      className="text-[11px] text-primary hover:underline font-medium cursor-pointer"
+                    >
+                      Set as Default
+                    </button>
+                  )}
                 </div>
-              ))}
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  No pre-payment required. When selected, the AI Assistant and Storefront will place orders with COD settlement verification.
+                </p>
+              </div>
             </div>
           </TabsContent>
 
