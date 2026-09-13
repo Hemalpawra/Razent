@@ -136,20 +136,49 @@ const TOOLS = [
   },
 ]
 
+function cleanSearchQuery(q) {
+  return q
+    .replace(/(?:search\s+for|search\s+product|find\s+me|find|show\s+me|show|get\s+me|get|i\s+need|i\s+want|buy|order)\s+/gi, "")
+    .trim()
+}
+
 async function executeSearchCatalog(args) {
-  const q = args.query || args.q || ""
+  const rawInput = args.query || args.q || ""
   const category = args.category
   const maxPricePaise = args.max_price_paise
   const inStockOnly = args.in_stock_only !== false
+
+  const cleanQ = cleanSearchQuery(rawInput)
+  const rawQ = cleanQ.trim().toLowerCase()
 
   let dbQuery = supabase.from("products").select("*").eq("status", "active")
   if (category && category !== "All") {
     dbQuery = dbQuery.eq("category", category)
   }
 
-  const rawQ = q.trim().toLowerCase()
+  const isBroadCategorySearch = [
+    "dairy",
+    "dairy & bakery",
+    "beverage",
+    "beverages",
+    "drinks",
+    "drink",
+    "grocery",
+    "grocery & staples",
+    "electronics",
+    "beauty",
+    "beauty & personal care",
+    "home care",
+    "decor",
+    "kids",
+    "snacks",
+    "snacks & munchies",
+    "fruits",
+    "vegetables",
+  ].includes(rawQ)
+
+  const terms = new Set()
   if (rawQ) {
-    const terms = new Set()
     terms.add(rawQ)
     rawQ.split(/\s+/).forEach((w) => {
       if (w.length > 2) terms.add(w)
@@ -159,19 +188,34 @@ async function executeSearchCatalog(args) {
       if (t.endsWith("es") && t.length > 4) terms.add(t.slice(0, -2))
       if (t.endsWith("s") && t.length > 3) terms.add(t.slice(0, -1))
     })
-    if (rawQ.includes("drink") || rawQ.includes("beverage")) {
+
+    // Targeted high-precision synonyms (never cross-pollinate unrelated grocery items)
+    if (rawQ.includes("milk")) {
+      ;["milk", "taaza", "toned milk"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("curd") || rawQ.includes("dahi")) {
+      ;["curd", "dahi", "yogurt"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("butter") && !rawQ.includes("peanut")) {
+      ;["butter", "makhan"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("peanut butter")) {
+      ;["peanut butter", "alpino"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("egg")) {
+      ;["egg", "eggs", "anda"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("bread")) {
+      ;["bread", "pav", "loaf"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("tea") || rawQ.includes("chai")) {
+      ;["tea", "chai"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("coffee")) {
+      ;["coffee", "nescafe"].forEach((w) => terms.add(w))
+    } else if (rawQ === "drink" || rawQ === "drinks" || rawQ.includes("beverage")) {
       ;["drink", "beverage", "juice", "water", "cola", "soda", "tea", "coffee"].forEach((w) => terms.add(w))
-    }
-    if (rawQ.includes("juic") || rawQ.includes("jiuc") || rawQ.includes("juce")) {
-      ;["juice", "fruit", "orange", "apple", "beverage", "drink"].forEach((w) => terms.add(w))
-    }
-    if (rawQ.includes("milk") || rawQ.includes("dairy")) {
-      ;["milk", "dairy", "taaza", "amul", "butter", "curd"].forEach((w) => terms.add(w))
     }
 
     const orClauses = []
-    for (const t of Array.from(terms).slice(0, 10)) {
-      orClauses.push(`title.ilike.%${t}%`, `description.ilike.%${t}%`, `category.ilike.%${t}%`)
+    for (const t of Array.from(terms).slice(0, 8)) {
+      orClauses.push(`title.ilike.%${t}%`, `description.ilike.%${t}%`)
+      if (isBroadCategorySearch) {
+        orClauses.push(`category.ilike.%${t}%`)
+      }
     }
     dbQuery = dbQuery.or(orClauses.join(","))
   }
@@ -183,36 +227,69 @@ async function executeSearchCatalog(args) {
     dbQuery = dbQuery.gt("stock", 0)
   }
 
-  const { data, error } = await dbQuery.order("created_at", { ascending: false }).limit(20)
+  const { data, error } = await dbQuery.order("created_at", { ascending: false }).limit(40)
   if (error) throw error
 
-  let ranked = data || []
-  if (rawQ) {
-    const isJuiceQuery = rawQ.includes("juic") || rawQ.includes("jiuc") || rawQ.includes("juce")
-    const isDrinkQuery = rawQ.includes("drink") || rawQ.includes("beverage") || isJuiceQuery
+  const isBeverageQuery = ["drink", "drinks", "beverage", "beverages", "juice", "cola", "soda"].some((t) => rawQ.includes(t))
 
-    ranked.sort((a, b) => {
-      if (isJuiceQuery) {
-        const aJuice = (a.title + " " + (a.description || "")).toLowerCase().includes("juice") ? 1 : 0
-        const bJuice = (b.title + " " + (b.description || "")).toLowerCase().includes("juice") ? 1 : 0
-        if (aJuice !== bJuice) return bJuice - aJuice
+  // Semantic scoring & precision ranking
+  const scored = (data || []).map((p) => {
+    let score = 0
+    const titleLower = p.title.toLowerCase()
+    const descLower = (p.description || "").toLowerCase()
+    const brandLower = (p.brand || "").toLowerCase()
+    const tagsLower = (p.tags || []).join(" ").toLowerCase()
+
+    for (const term of terms) {
+      const regex = new RegExp(`\\b${term}\\b`, "i")
+      if (regex.test(titleLower)) score += 100
+      else if (titleLower.includes(term)) score += 50
+
+      if (brandLower.includes(term)) score += 40
+      if (regex.test(descLower)) score += 20
+      else if (descLower.includes(term)) score += 10
+      if (tagsLower.includes(term)) score += 15
+    }
+
+    // Beverage safety: do not match skincare or stationery water products
+    if (isBeverageQuery) {
+      if (p.category === "Beverages") score += 100
+      else if (["Beauty & Personal Care", "Kids", "Home & Kitchen", "Home Care", "Decor"].includes(p.category)) {
+        score -= 200
       }
-      if (isDrinkQuery) {
-        const aIsBev = a.category === "Beverages" ? 1 : 0
-        const bIsBev = b.category === "Beverages" ? 1 : 0
-        if (aIsBev !== bIsBev) return bIsBev - aIsBev
-      }
-      const aTitleMatch = a.title.toLowerCase().includes(rawQ) ? 1 : 0
-      const bTitleMatch = b.title.toLowerCase().includes(rawQ) ? 1 : 0
-      return bTitleMatch - aTitleMatch
-    })
+    }
+
+    const hasTitleMatch = Array.from(terms).some((t) => titleLower.includes(t))
+    return { product: p, score, hasTitleMatch }
+  }).filter((item) => item.score > 0)
+
+  // When direct title matches exist, prune items with 0 title match to avoid noise
+  const titleMatches = scored.filter((s) => s.hasTitleMatch)
+  const candidates = titleMatches.length > 0 ? titleMatches : scored
+
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    return b.product.stock - a.product.stock
+  })
+
+  // Deduplicate near-identical products
+  const seenTitles = new Set()
+  const deduped = []
+  for (const item of candidates) {
+    const norm = item.product.title.toLowerCase().replace(/\s*\([^)]*\)/g, "").trim()
+    const unit = (item.product.unit || "").trim().toLowerCase()
+    const key = `${norm}__${unit}`
+    if (!seenTitles.has(key)) {
+      seenTitles.add(key)
+      deduped.push(item.product)
+    }
   }
 
   return {
     protocol: "ucp",
     version: "2026-01-16",
-    matches_count: ranked.length,
-    products: ranked.slice(0, 10).map((p) => ({
+    matches_count: deduped.length,
+    products: deduped.slice(0, 10).map((p) => ({
       id: p.id,
       title: p.title,
       price: "₹" + (p.price_paise / 100).toFixed(2),
@@ -278,14 +355,14 @@ async function executeCreateCheckoutSession(args) {
   }
 
   const sessionId = `acp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
-  const defaultAddress = {
-    full_name: "Customer (via MCP)",
-    phone: "+91 98765 43210",
-    line1: "Indiranagar 100ft Rd",
-    city: "Bengaluru",
-    pincode: "560038",
+  const fallbackAddress = {
+    full_name: args.delivery_address?.full_name || "Customer",
+    phone: args.delivery_address?.phone || "",
+    line1: args.delivery_address?.line1 || "",
+    city: args.delivery_address?.city || "",
+    pincode: args.delivery_address?.pincode || "",
   }
-  const address = args.delivery_address ? { ...defaultAddress, ...args.delivery_address } : defaultAddress
+  const address = args.delivery_address ? { ...fallbackAddress, ...args.delivery_address } : fallbackAddress
 
   let paymentLink = `https://razent.vercel.app/checkout?session=${sessionId}`
   let razorpayPaymentLinkId = null
