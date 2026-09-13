@@ -89,7 +89,7 @@ export function ProductCardPrice({
           "font-bold text-foreground tracking-tight font-mono",
           size === "sm" && "text-[18px] sm:text-[20px]",
           size === "md" && "text-[20px] sm:text-[24px]",
-          size === "lg" && "text-[24px]"
+          size === "lg" && "text-[21px] sm:text-[25px] lg:text-[26px]"
         )}
       >
         {formatPrice(pricePaise, currency)}
@@ -102,7 +102,7 @@ export function ProductCardPrice({
             "text-[#6B7280] dark:text-muted-foreground line-through font-mono",
             size === "sm" && "text-[13px] sm:text-[14px]",
             size === "md" && "text-[14px] sm:text-[16px]",
-            size === "lg" && "text-[16px]"
+            size === "lg" && "text-[14px] sm:text-[16px]"
           )}
         >
           {formatPrice(mrpPaise, currency)}
@@ -113,7 +113,7 @@ export function ProductCardPrice({
       {showDiscountBadge && discountPercent && discountPercent > 0 ? (
         <span
           className={cn(
-            "inline-flex items-center justify-center font-bold uppercase rounded-full bg-blue-600 text-white leading-none shadow-2xs select-none",
+            "inline-flex items-center justify-center font-bold uppercase rounded-full bg-primary text-primary-foreground leading-none shadow-2xs select-none",
             size === "sm"
               ? "text-[10px] px-1.5 py-0.5"
               : "text-[11px] sm:text-[12px] px-2 py-0.5 sm:px-2.5 sm:py-1"
@@ -151,7 +151,7 @@ export function ProductCardWishlistButton({
         "size-8 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer select-none",
         "bg-white/90 dark:bg-card/90 backdrop-blur-xs border border-border/60 shadow-xs",
         "hover:bg-white dark:hover:bg-accent hover:scale-105 active:scale-95",
-        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-600",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
         className
       )}
     >
@@ -204,7 +204,7 @@ export function ProductCardImage({
       onKeyDown={handleKeyDown}
       className={cn(
         "relative flex items-center justify-center overflow-hidden select-none bg-[#F8FAFC] dark:bg-muted/30 transition-colors",
-        onClick && "cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-600",
+        onClick && "cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
         className
       )}
     >

@@ -161,6 +161,7 @@ export function AIMessageBubble({
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const addToCart = useCart((s) => s.addToCart)
   const prepareCheckout = useCart((s) => s.prepareCheckout)
 
   const handleOpenDetails = (product: Product) => {
@@ -169,6 +170,7 @@ export function AIMessageBubble({
   }
 
   const handleBuyNow = (product: Product) => {
+    addToCart(product, 1)
     prepareCheckout(product, 1)
     toast.success(`Prepared checkout for ${product.title}`)
     navigate("/?view=checkout")
@@ -193,7 +195,7 @@ export function AIMessageBubble({
                 <User className="size-4" />
               </AvatarFallback>
             ) : (
-              <AvatarFallback className="bg-foreground text-background text-xs font-semibold shadow-xs">
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold shadow-xs">
                 <Sparkles className="size-4" />
               </AvatarFallback>
             )}
@@ -202,14 +204,6 @@ export function AIMessageBubble({
 
         {/* Content Column */}
         <MessageContent className={cn("max-w-[88%] sm:max-w-[80%]", isUser ? "items-end" : "items-start")}>
-          {/* Tool calls */}
-          {!isUser && message.toolCallsExecuted && message.toolCallsExecuted.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-1">
-              {message.toolCallsExecuted.map((tool, i) => (
-                <ToolCall key={i} name={tool} state="result" />
-              ))}
-            </div>
-          )}
 
           {/* Bubble Surface */}
           <Bubble
@@ -231,10 +225,10 @@ export function AIMessageBubble({
             </BubbleContent>
           </Bubble>
 
-          {/* Product cards */}
+          {/* Product cards: Horizontal scroll with hidden scrollbar */}
           {!isUser && message.products && message.products.length > 0 && (
-            <div className="w-full flex flex-col gap-2 mt-2">
-              {message.products.slice(0, 4).map((product, index) => (
+            <div className="w-full flex flex-row gap-2.5 overflow-x-auto pb-2 pt-1 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {message.products.slice(0, 6).map((product, index) => (
                 <AIAssistantProductCard
                   key={product.id}
                   product={product}

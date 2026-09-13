@@ -28,7 +28,15 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet"
-import { ThemeToggle } from "@/components/shared/ThemeToggle"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu"
+import { useTheme } from "@/state/useTheme"
 import { useAIChat, CHAT_SUGGESTIONS } from "./useAIChat"
 import { AIMessageBubble } from "./AIMessageBubble"
 import { AIThinkingIndicator } from "./AIThinkingIndicator"
@@ -52,6 +60,9 @@ import {
   MessageSquare,
   ShoppingCart,
   Clock,
+  MoreVertical,
+  Sun,
+  Moon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isN8nAgentEnabled } from "@/lib/agent/n8nAgent"
@@ -64,6 +75,7 @@ export default function AIAssistantPage() {
   const { user } = useUser()
   const { profile } = useClerkCustomerProfile()
   const { storeProfile } = useSettings()
+  const { mode: themeMode, setMode: setThemeMode } = useTheme()
   const cartCount = useCart((s) => s.getItemCount())
   const { agentPurchaseEnabled, toggle: toggleAgentPurchase } = useAgentPurchase()
 
@@ -197,26 +209,12 @@ export default function AIAssistantPage() {
     toast.success("Chat cleared — new session started")
   }
 
-  const engineBadge = isN8nAgentEnabled ? (
+  const engineBadge = (
     <Badge
       variant="outline"
-      className="gap-1 text-[10px] border-emerald-500/40 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
+      className="gap-1 text-[10px] border-primary/30 text-primary bg-primary/10 font-medium"
     >
-      <Wifi className="size-2.5" /> n8n Live
-    </Badge>
-  ) : isOpenRouterConfigured ? (
-    <Badge
-      variant="outline"
-      className="gap-1 text-[10px] border-border text-foreground bg-muted"
-    >
-      <Bot className="size-2.5" /> AI SDK
-    </Badge>
-  ) : (
-    <Badge
-      variant="outline"
-      className="gap-1 text-[10px] border-amber-500/40 text-amber-600 bg-amber-50 dark:bg-amber-950/30"
-    >
-      <WifiOff className="size-2.5" /> Offline
+      <Sparkles className="size-2.5" /> Online
     </Badge>
   )
 
@@ -241,8 +239,8 @@ export default function AIAssistantPage() {
           <ArrowLeft className="size-4" />
         </Button>
 
-        {/* Minimalist Monochrome Bot Avatar */}
-        <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 shadow-xs">
+        {/* Bot Avatar in Brand Primary Blue */}
+        <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-xs">
           <Sparkles className="size-4" />
         </div>
 
@@ -260,89 +258,147 @@ export default function AIAssistantPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          {/* New Chat Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs hidden sm:inline-flex"
-            onClick={startNewChat}
-            title="Start new chat"
-          >
-            <Plus className="size-3.5" data-icon="inline-start" />
-            <span>New Chat</span>
-          </Button>
-
-          {/* Chat History Sheet Trigger */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Cart Shortcut with Badge */}
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 rounded-lg relative text-muted-foreground hover:text-foreground"
-            onClick={() => setHistoryOpen(true)}
-            title="Chat History"
-          >
-            <History className="size-4" />
-            {conversationsHistory.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-foreground" />
-            )}
-          </Button>
-
-          {/* Cart Shortcut */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-lg relative text-muted-foreground hover:text-foreground"
+            className="size-8 rounded-lg relative text-muted-foreground hover:text-foreground cursor-pointer"
             onClick={() => navigate("/?view=checkout")}
             title="View Cart"
           >
             <ShoppingCart className="size-4" />
             {cartCount > 0 && (
-              <Badge className="absolute -top-1 -right-1 size-4 p-0 flex items-center justify-center text-[10px] bg-foreground text-background rounded-full font-bold">
+              <Badge className="absolute -top-1 -right-1 size-4 p-0 flex items-center justify-center text-[10px] bg-primary text-primary-foreground rounded-full font-bold shadow-xs">
                 {cartCount}
               </Badge>
             )}
           </Button>
 
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 rounded-lg text-muted-foreground hover:text-destructive"
-              onClick={handleClear}
-              title="Clear current messages"
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          )}
-
-          <ThemeToggle />
-
+          {/* New Chat Quick Action on Desktop */}
           <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
-            onClick={() => navigate("/wallet")}
-            title="Wallet & Payment Credentials"
-          >
-            <WalletCards className="size-4" />
-          </Button>
-
-          <Button
-            variant={agentPurchaseEnabled ? "default" : "outline"}
+            variant="outline"
             size="sm"
-            className="text-[11px] h-8 hidden md:inline-flex"
-            onClick={async () => {
-              const next = await toggleAgentPurchase()
-              toast(next ? "Agent purchases enabled" : "Agent purchases disabled", {
-                description: next
-                  ? "AI Assistant is authorized to place orders."
-                  : "AI Assistant is blocked from placing orders.",
-              })
-            }}
-            title="Toggle Agent Purchases (or manage in Wallet)"
+            className="h-8 gap-1.5 text-xs hidden sm:inline-flex cursor-pointer"
+            onClick={startNewChat}
+            title="Start new chat"
           >
-            Agent Purchases: {agentPurchaseEnabled ? "On" : "Off"}
+            <Plus className="size-3.5" />
+            <span>New Chat</span>
           </Button>
+
+          {/* Redesigned shadcn Dropdown Menu for Settings & Actions */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+                  aria-label="Settings and actions"
+                />
+              }
+            >
+              <MoreVertical className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 p-1.5 shadow-xl">
+              <DropdownMenuLabel className="text-[11px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
+                Chat & Session
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={startNewChat}
+                className="gap-2.5 px-2.5 py-2 text-xs font-medium cursor-pointer rounded-md"
+              >
+                <Plus className="size-4 text-primary" />
+                <span>New Chat Session</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setHistoryOpen(true)}
+                className="gap-2.5 px-2.5 py-2 text-xs font-medium cursor-pointer rounded-md flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2.5">
+                  <History className="size-4 text-muted-foreground" />
+                  <span>Chat History</span>
+                </div>
+                {conversationsHistory.length > 0 && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 leading-none">
+                    {conversationsHistory.length}
+                  </Badge>
+                )}
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="my-1" />
+
+              <DropdownMenuLabel className="text-[11px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
+                Store & Account
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => navigate("/wallet")}
+                className="gap-2.5 px-2.5 py-2 text-xs font-medium cursor-pointer rounded-md"
+              >
+                <WalletCards className="size-4 text-muted-foreground" />
+                <span>Wallet & Credentials</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={async () => {
+                  const next = await toggleAgentPurchase()
+                  toast(next ? "Agent purchases enabled" : "Agent purchases disabled", {
+                    description: next
+                      ? "AI Assistant is authorized to place orders."
+                      : "AI Assistant is blocked from placing orders.",
+                  })
+                }}
+                className="gap-2.5 px-2.5 py-2 text-xs font-medium cursor-pointer rounded-md flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Bot className="size-4 text-muted-foreground" />
+                  <span>Agent Purchases</span>
+                </div>
+                <Badge
+                  variant={agentPurchaseEnabled ? "default" : "outline"}
+                  className="text-[10px] px-1.5 py-0 h-4 leading-none font-semibold"
+                >
+                  {agentPurchaseEnabled ? "On" : "Off"}
+                </Badge>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="my-1" />
+
+              <DropdownMenuLabel className="text-[11px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
+                Preferences
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => setThemeMode(themeMode === "dark" ? "light" : "dark")}
+                className="gap-2.5 px-2.5 py-2 text-xs font-medium cursor-pointer rounded-md flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2.5">
+                  {themeMode === "dark" ? (
+                    <Sun className="size-4 text-amber-500" />
+                  ) : (
+                    <Moon className="size-4 text-primary" />
+                  )}
+                  <span>{themeMode === "dark" ? "Light Mode" : "Dark Mode"}</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground capitalize">
+                  {themeMode}
+                </span>
+              </DropdownMenuItem>
+
+              {messages.length > 0 && (
+                <>
+                  <DropdownMenuSeparator className="my-1" />
+                  <DropdownMenuItem
+                    onClick={handleClear}
+                    variant="destructive"
+                    className="gap-2.5 px-2.5 py-2 text-xs font-medium cursor-pointer rounded-md text-destructive focus:bg-destructive/10 focus:text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                    <span>Clear Messages</span>
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -456,76 +512,78 @@ export default function AIAssistantPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Chat body - the ONLY scrollable region */}
+      {/* Chat body - full-width scrollable region with hidden scrollbar */}
       <Conversation className="flex-1 min-h-0 relative overflow-hidden touch-pan-y">
         <ConversationContent
           ref={scrollRef}
           onScroll={handleScroll}
-          className="px-4 sm:px-6 max-w-3xl mx-auto w-full h-full overflow-y-auto overscroll-contain select-text touch-pan-y"
+          className="w-full h-full overflow-y-auto overscroll-contain select-text touch-pan-y p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {messages.length === 0 ? (
-            /* Welcome screen - ChatGPT / assistant-ui style */
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 py-8">
-              <div className="size-14 rounded-2xl bg-foreground text-background flex items-center justify-center shadow-xs">
-                <Sparkles className="size-7" />
-              </div>
-              <div className="text-center flex flex-col gap-1.5">
-                <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                  {user && customerName ? `Hi ${customerName.split(" ")[0]}, how can I help?` : "How can I help you today?"}
-                </h2>
-                <p className="text-muted-foreground max-w-md text-sm leading-relaxed">
-                  I'm your AI shopping assistant for {storeName}. Discover products, check order status, or prepare instant checkout.
-                </p>
-              </div>
-
-              {!user && (
-                <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-muted/60 border border-border/60 text-muted-foreground text-xs max-w-md">
-                  <Info className="size-4 shrink-0 text-foreground" />
-                  <span>
-                    <button
-                      type="button"
-                      className="underline underline-offset-2 font-medium text-foreground hover:opacity-80"
-                      onClick={() => navigate("/login")}
-                    >
-                      Sign in
-                    </button>{" "}
-                    to save and access chat history across devices
-                  </span>
+          <div className="px-4 sm:px-6 max-w-3xl mx-auto w-full flex flex-col min-h-full">
+            {messages.length === 0 ? (
+              /* Welcome screen - ChatGPT / assistant-ui style */
+              <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 py-8">
+                <div className="size-14 rounded-2xl bg-foreground text-background flex items-center justify-center shadow-xs">
+                  <Sparkles className="size-7" />
                 </div>
-              )}
-
-              <div className="w-full max-w-lg">
-                <SuggestionList label="Suggestions">
-                  {CHAT_SUGGESTIONS.map((s) => (
-                    <Suggestion key={s} onClick={() => handleSuggestion(s)}>
-                      {s}
-                    </Suggestion>
-                  ))}
-                </SuggestionList>
-              </div>
-            </div>
-          ) : (
-            <div className="py-4 flex flex-col gap-5">
-              {messages.map((msg) => (
-                <AIMessageBubble
-                  key={msg.id}
-                  message={msg}
-                  storeName={storeName}
-                  customerName={customerName}
-                  customerEmail={customerEmail}
-                  customerPhone={profile?.phone}
-                  onOpenTrackOrder={(orderId) => navigate(`/?track=${orderId}`)}
-                />
-              ))}
-
-              {/* Thinking & Shimmer state during execution (n8n agentic workflow / tool calling) */}
-              {isLoading && (
-                <div className="w-full">
-                  <AIThinkingIndicator activeToolCall={activeToolCall} />
+                <div className="text-center flex flex-col gap-1.5">
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                    {user && customerName ? `Hi ${customerName.split(" ")[0]}, how can I help?` : "How can I help you today?"}
+                  </h2>
+                  <p className="text-muted-foreground max-w-md text-sm leading-relaxed">
+                    I'm your AI shopping assistant for {storeName}. Discover products, check order status, or prepare instant checkout.
+                  </p>
                 </div>
-              )}
-            </div>
-          )}
+
+                {!user && (
+                  <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-muted/60 border border-border/60 text-muted-foreground text-xs max-w-md">
+                    <Info className="size-4 shrink-0 text-foreground" />
+                    <span>
+                      <button
+                        type="button"
+                        className="underline underline-offset-2 font-medium text-foreground hover:opacity-80"
+                        onClick={() => navigate("/login")}
+                      >
+                        Sign in
+                      </button>{" "}
+                      to save and access chat history across devices
+                    </span>
+                  </div>
+                )}
+
+                <div className="w-full max-w-lg">
+                  <SuggestionList label="Suggestions">
+                    {CHAT_SUGGESTIONS.map((s) => (
+                      <Suggestion key={s} onClick={() => handleSuggestion(s)}>
+                        {s}
+                      </Suggestion>
+                    ))}
+                  </SuggestionList>
+                </div>
+              </div>
+            ) : (
+              <div className="py-4 flex flex-col gap-5">
+                {messages.map((msg) => (
+                  <AIMessageBubble
+                    key={msg.id}
+                    message={msg}
+                    storeName={storeName}
+                    customerName={customerName}
+                    customerEmail={customerEmail}
+                    customerPhone={profile?.phone}
+                    onOpenTrackOrder={(orderId) => navigate(`/?track=${orderId}`)}
+                  />
+                ))}
+
+                {/* Thinking & Shimmer state during execution (n8n agentic workflow / tool calling) */}
+                {isLoading && (
+                  <div className="w-full">
+                    <AIThinkingIndicator activeToolCall={activeToolCall} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </ConversationContent>
 
         <ConversationScrollButton visible={showScrollBtn} onClick={scrollToBottom} />
@@ -576,7 +634,7 @@ export default function AIAssistantPage() {
             />
             <PromptInputActions>
               <p className="text-[10px] text-muted-foreground/60 pl-2 select-none">
-                {isN8nAgentEnabled ? "n8n Agentic Workflow" : "Autonomous Commerce"}
+                Razent AI
               </p>
               <PromptInputSubmit
                 isLoading={isLoading}

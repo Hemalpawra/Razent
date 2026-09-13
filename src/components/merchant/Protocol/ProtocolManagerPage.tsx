@@ -231,7 +231,7 @@ export default function ProtocolManagerPage() {
             size="sm"
             onClick={handleTestRazorpayOrder}
             disabled={rzpLoading}
-            className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+            className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <CreditCard className="h-4 w-4" />
             {rzpLoading ? "Calling Razorpay..." : "Test Razorpay Order"}
@@ -350,7 +350,7 @@ export default function ProtocolManagerPage() {
                                 s.status === "completed"
                                   ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
                                   : s.status === "ready_for_payment"
-                                  ? "bg-blue-500/10 text-blue-600 border-blue-500/30"
+                                  ? "bg-primary/10 text-primary border-primary/30"
                                   : "bg-muted text-muted-foreground"
                               }
                             >
@@ -546,8 +546,8 @@ export default function ProtocolManagerPage() {
               </div>
 
               {lastRzpOrder && (
-                <div className="mt-4 p-4 border rounded-lg bg-blue-500/5 border-blue-500/20">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-blue-600 mb-2">
+                <div className="mt-4 p-4 border rounded-lg bg-primary/5 border-primary/20">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-2">
                     <CheckCircle2 className="h-4 w-4" />
                     Real Razorpay Order Created on Test Network
                   </div>

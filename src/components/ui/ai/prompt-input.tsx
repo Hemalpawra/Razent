@@ -125,7 +125,7 @@ export function PromptInputSubmit({
       data-slot="ai-prompt-input-submit"
       disabled={disabled || isLoading}
       className={cn(
-        "p-2 rounded-xl bg-foreground text-background hover:bg-foreground/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs",
+        "p-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs",
         className
       )}
       title="Send message"

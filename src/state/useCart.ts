@@ -89,7 +89,18 @@ export const useCart = create<CartStore>((set, get) => ({
 
   prepareCheckout: (product: Product, qty = 1) => {
     const item: CartItem = { id: product.id, product, qty }
-    set({ directCheckoutItem: item })
+    const current = get().items
+    const existing = current.find((i) => i.id === product.id)
+    let newItems: CartItem[]
+    if (existing) {
+      newItems = current.map((i) =>
+        i.id === product.id ? { ...i, qty: Math.max(i.qty, qty) } : i
+      )
+    } else {
+      newItems = [...current, item]
+    }
+    saveCart(newItems)
+    set({ items: newItems, directCheckoutItem: item })
   },
 
   clearDirectCheckout: () => {

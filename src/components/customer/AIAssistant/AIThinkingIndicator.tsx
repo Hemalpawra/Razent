@@ -33,9 +33,7 @@ export function AIThinkingIndicator({
   className,
 }: AIThinkingIndicatorProps) {
   const toolText = activeToolCall
-    ? TOOL_DESCRIPTIONS[activeToolCall] || `Executing ${activeToolCall.replace(/_/g, " ")}...`
-    : isN8nAgentEnabled
-    ? "Executing n8n agentic workflow..."
+    ? TOOL_DESCRIPTIONS[activeToolCall] || "Finding the best options for you..."
     : "Thinking through your request..."
 
   return (
@@ -45,8 +43,8 @@ export function AIThinkingIndicator({
         className
       )}
     >
-      {/* Bot Avatar with subtle rotation */}
-      <div className="size-8 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+      {/* Bot Avatar with subtle rotation in Brand Primary Blue */}
+      <div className="size-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
         <Sparkles className="size-4 animate-spin [animation-duration:4s]" />
       </div>
 
@@ -54,7 +52,7 @@ export function AIThinkingIndicator({
       <div className="relative overflow-hidden rounded-2xl rounded-tl-xs border border-border/70 bg-card p-3.5 shadow-2xs max-w-[340px] sm:max-w-[400px] w-full flex flex-col gap-2.5">
         {/* Continuous Scanning Shimmer Beam */}
         <div
-          className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-foreground/8 to-transparent pointer-events-none z-10"
+          className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-primary/10 to-transparent pointer-events-none z-10"
           aria-hidden="true"
         />
 
@@ -62,31 +60,13 @@ export function AIThinkingIndicator({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="relative flex size-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-foreground opacity-75" />
-              <span className="relative inline-flex rounded-full size-2 bg-foreground" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+              <span className="relative inline-flex rounded-full size-2 bg-primary" />
             </span>
             <span className="text-xs font-semibold text-foreground tracking-tight">
               Thinking...
             </span>
           </div>
-
-          {activeToolCall ? (
-            <Badge
-              variant="outline"
-              className="text-[10px] gap-1 border-border bg-muted/60 text-muted-foreground font-mono"
-            >
-              <Loader2 className="size-2.5 animate-spin" />
-              Tool Action
-            </Badge>
-          ) : isN8nAgentEnabled ? (
-            <Badge
-              variant="outline"
-              className="text-[10px] gap-1 border-emerald-500/30 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 font-mono"
-            >
-              <Wifi className="size-2.5" />
-              n8n Live
-            </Badge>
-          ) : null}
         </div>
 
         {/* Active Action Description */}

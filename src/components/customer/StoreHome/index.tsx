@@ -2,7 +2,7 @@
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom"
 import { useCart } from "@/state/useCart"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 
 import { Badge } from "@/components/ui/badge"
@@ -547,6 +547,10 @@ export default function StoreHome() {
   }
 
   function addToCart(id: string) {
+    const prod = activeProducts.find((x) => x.id === id) || productsList.find((x) => x.id === id) || productStore.get(id)
+    if (prod) {
+      useCart.getState().addToCart(prod, 1)
+    }
     setCart((prev) => {
       const f = prev.find((c) => c.id === id)
       if (f)
@@ -569,13 +573,17 @@ export default function StoreHome() {
   }
 
   function updateQty(id: string, d: number) {
+    const current = cart.find((c) => c.id === id)
+    const newQty = (current?.qty || 0) + d
+    if (newQty <= 0) {
+      useCart.getState().removeFromCart(id)
+    } else {
+      useCart.getState().updateQty(id, newQty)
+    }
     setCart((prev) => {
       const next = prev
-
         .map((c) => (c.id === id ? { ...c, qty: c.qty + d } : c))
-
         .filter((c) => c.qty > 0)
-
       return next
     })
   }
@@ -637,7 +645,7 @@ export default function StoreHome() {
     <div className="min-h-screen bg-background">
       {/* Top utility strip */}
       <div className="border-b bg-muted/40">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-[12px] text-muted-foreground">
+        <div className="w-full px-2 sm:px-4 lg:px-[10%] flex flex-wrap items-center justify-between gap-2 py-2 text-[12px] text-muted-foreground">
           <div className="flex flex-wrap items-center gap-4">
             <span className="inline-flex items-center gap-1.5">
               <Truck className="size-3.5" /> Free shipping on orders above
@@ -660,7 +668,7 @@ export default function StoreHome() {
 
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-card">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+        <div className="w-full px-2 sm:px-4 lg:px-[10%] flex items-center gap-3 py-3">
           {/* logo + name */}
           <div className="flex items-center gap-2">
             <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -754,11 +762,11 @@ export default function StoreHome() {
       <div className="flex flex-1 overflow-hidden min-h-[calc(100vh-105px)]">
         {/* Left: Store Views & Content */}
         <main className="flex-1 min-w-0 overflow-y-auto">
-          <div className="mx-auto max-w-6xl">
+          <div className="w-full px-2 sm:px-4 lg:px-[10%]">
             <div className="min-w-0">
           {/* Breadcrumb when listing/detail */}
           {(view === "listing" || view === "detail") && (
-            <div className="flex items-center gap-1.5 px-4 py-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 px-0 sm:px-1 py-3 text-xs text-muted-foreground">
               <button
                 onClick={() => setView("home")}
                 className="hover:text-foreground"
@@ -795,7 +803,7 @@ export default function StoreHome() {
           {view === "home" && (
             <>
               {/* Hero */}
-              <section className="px-4 py-6">
+              <section className="px-0 sm:px-0 py-4 sm:py-6">
                 <Card className="overflow-hidden border-0 bg-card shadow-sm ring-1 ring-border">
                   <CardContent className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
                     <div className="flex flex-col justify-center">
@@ -871,7 +879,7 @@ export default function StoreHome() {
               </section>
 
               {/* Category section */}
-              <section id="browse-categories-section" className="px-4 py-2">
+              <section id="browse-categories-section" className="px-0 sm:px-0 py-2">
                 <div className="flex items-center justify-between">
                   <h2 className="font-heading text-sm font-semibold tracking-tight">
                     Browse by category
@@ -884,7 +892,7 @@ export default function StoreHome() {
                     View all
                   </Button>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                   {dynamicCategories.map(({ name, icon: Icon, count }) => (
                     <button
                       key={name}
@@ -912,7 +920,7 @@ export default function StoreHome() {
               </section>
 
               {/* Featured products */}
-              <section className="px-4 py-6">
+              <section className="px-0 sm:px-0 py-4 sm:py-6">
                 <div className="flex items-center justify-between">
                   <h2 className="font-heading text-sm font-semibold tracking-tight">
                     Featured products
@@ -921,7 +929,7 @@ export default function StoreHome() {
                     <span>Powered by {storeProfile.storeName}</span>
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4">
                   {loading ? (
                     Array.from({ length: 4 }).map((_, i) => (
                       <ProductCardSkeleton key={i} variant="storefront" />
@@ -944,8 +952,8 @@ export default function StoreHome() {
               </section>
 
               {/* Trust strip tiny */}
-              <section className="px-4 pb-6">
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+              <section className="px-0 sm:px-0 pb-6">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-5">
                   {[
                     {
                       icon: ShieldCheck,
@@ -991,7 +999,7 @@ export default function StoreHome() {
           )}
 
           {view === "listing" && (
-            <section className="px-4 pb-8 pt-2">
+            <section className="px-0 sm:px-0 pb-8 pt-2">
               <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
                 {/* Filter sidebar — desktop */}
                 <FilterSidebar
@@ -1230,7 +1238,7 @@ export default function StoreHome() {
                     <div
                       className={
                         layout === "grid"
-                          ? "grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"
+                          ? "grid grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-4"
                           : "space-y-3"
                       }
                     >
@@ -1294,7 +1302,7 @@ export default function StoreHome() {
                       </div>
                     </Card>
                   ) : layout === "grid" ? (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-4">
                       {filtered.map((p) => (
                         <StorefrontProductCard
                           key={p.id}
@@ -1478,7 +1486,7 @@ export default function StoreHome() {
           {!["cart", "checkout", "payment-failed", "payment-success"].includes(
             view,
           ) && (
-              <footer className="mt-6 border-t bg-card px-4 py-6">
+              <footer className="mt-6 border-t bg-card px-2 sm:px-4 lg:px-[10%] py-6">
                 <div className="grid gap-6 text-xs md:grid-cols-4">
                   <div>
                     <div className="text-sm font-semibold">
@@ -1634,6 +1642,8 @@ export default function StoreHome() {
                 className="mt-3 w-full"
                 onClick={() => {
                   setCartOpen(false)
+                  setView("checkout")
+                  window.scrollTo({ top: 0, behavior: "smooth" })
                 }}
               >
                 Checkout · {formatPrice(cartTotal)}
@@ -2637,7 +2647,7 @@ function ProductDetail({
   )
 
   return (
-    <section className="px-4 pb-20 lg:pb-12">
+    <section className="px-0 sm:px-0 pb-20 lg:pb-12">
       {/* Breadcrumb handled by parent */}
 
       {/* Main content grid */}
@@ -2815,7 +2825,7 @@ function ProductDetail({
                       View all
                     </Button>
                   </div>
-                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid gap-2 sm:gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
                     {related.map((rp: Product) => (
                       <StorefrontProductCard
                         key={rp.id}
@@ -3262,7 +3272,7 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
     const hasAnyInput = Boolean(orderId.trim() || mobile.replace(/\D/g, "").length >= 10 || email.includes("@"))
 
     return (
-      <section className="px-4 py-6">
+      <section className="px-0 sm:px-0 py-6">
         <div className="mx-auto max-w-[600px] space-y-6">
           <div className="text-center">
             <h1 className="font-heading text-2xl font-semibold">Track Order</h1>
@@ -3381,7 +3391,7 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
   } = orderData!
 
   return (
-    <section className="px-4 py-6">
+    <section className="px-0 sm:px-0 py-6">
       <div className="mx-auto max-w-[900px] space-y-6">
         {/* Failure summary if payment failed */}
         {paymentStatus === "failed" && (
@@ -3792,7 +3802,7 @@ function CartView({
   if (cart.length === 0) return <CartEmpty onClose={onClose} />
 
   return (
-    <section className="px-4 pb-12">
+    <section className="px-0 sm:px-0 pb-12">
       <div className="mx-auto max-w-[1000px] space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -4387,7 +4397,7 @@ function CheckoutView({
 
   if (cart.length === 0) {
     return (
-      <section className="px-4 pb-12">
+      <section className="px-0 sm:px-0 pb-12">
         <div className="mx-auto max-w-[1000px]">
           <CheckoutEmpty onAddAddress={() => setShowNewAddr(true)} />
         </div>
@@ -4396,7 +4406,7 @@ function CheckoutView({
   }
 
   return (
-    <section className="px-4 pb-12">
+    <section className="px-0 sm:px-0 pb-12">
       <div className="mx-auto max-w-[1000px] space-y-6">
         <div>
           <h1 className="font-heading text-2xl font-semibold">Checkout</h1>
@@ -4913,7 +4923,7 @@ function PaymentFailedView({
   })
 
   return (
-    <section className="px-4 pb-12">
+    <section className="px-0 sm:px-0 pb-12">
       <div className="mx-auto max-w-[1000px] space-y-6">
         {/* Failure summary */}
         <Card className="border-destructive/30 bg-destructive/5">
@@ -5095,7 +5105,7 @@ function PaymentSuccessView({
   const currentStep = 0 // dummy: just placed → Preparing
 
   return (
-    <section className="px-4 pb-12">
+    <section className="px-0 sm:px-0 pb-12">
       <div className="mx-auto max-w-[1000px] space-y-6">
         {/* Success summary — green */}
         <Card className="border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20">

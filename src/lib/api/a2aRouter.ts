@@ -199,10 +199,10 @@ export async function handleAP2VerifyAndCheckout(params: {
 
   // 4. Customer details
   const cust = params.customerProfile || {
-    fullName: "Autonomous Agent Customer",
-    phone: "+91 98765 43210",
-    email: "agent@razent.store",
-    address: "Indiranagar 100ft Rd, Bengaluru",
+    fullName: "",
+    phone: "",
+    email: "",
+    address: "",
   }
 
   const orderId = `RAZ-A2A-${Date.now().toString(36).toUpperCase()}`

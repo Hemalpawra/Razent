@@ -125,7 +125,7 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
         >
           {/* Panel header */}
           <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/70 bg-card text-card-foreground shrink-0">
-            <div className="size-8 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0">
+            <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-xs">
               <Sparkles className="size-4" />
             </div>
             <div className="flex-1 min-w-0">
@@ -249,27 +249,29 @@ export function AIAssistantWidget({ products = [], conversationId }: AIAssistant
         </div>
       )}
 
-      {/* Floating button */}
+      {/* Floating button with text "Razent AI" in brand primary color #146EF5 */}
       <button
         type="button"
         id="ai-assistant-fab"
         onClick={handleToggle}
-        aria-label={isOpen ? "Close AI Assistant" : "Open AI Assistant"}
+        aria-label={isOpen ? "Close Razent AI" : "Open Razent AI"}
         className={cn(
-          "fixed bottom-5 right-5 z-50 flex items-center justify-center size-13 rounded-full shadow-lg shadow-black/15 transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer select-none border border-border/60",
-          "bg-foreground text-background",
-          isOpen && !isMobile && "rotate-180",
+          "fixed bottom-5 right-5 z-50 flex items-center gap-2 h-11 sm:h-12 px-4 sm:px-4.5 rounded-full shadow-lg shadow-primary/25 transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer select-none border border-primary/30",
+          "bg-primary text-primary-foreground hover:bg-primary/90",
         )}
       >
         {isOpen && !isMobile ? (
-          <ChevronDown className="size-5.5" />
+          <ChevronDown className="size-4.5 sm:size-5" />
         ) : (
-          <Sparkles className="size-5.5" />
+          <Sparkles className="size-4.5 sm:size-5" />
         )}
+        <span className="font-semibold text-xs sm:text-sm tracking-tight text-white whitespace-nowrap">
+          Razent AI
+        </span>
 
         {/* Pulse ring animation when there are new messages */}
         {messages.length > 0 && !isOpen && (
-          <span className="absolute inset-0 rounded-full animate-ping bg-foreground/20 pointer-events-none" />
+          <span className="absolute inset-0 rounded-full animate-ping bg-primary/30 pointer-events-none" />
         )}
       </button>
     </>

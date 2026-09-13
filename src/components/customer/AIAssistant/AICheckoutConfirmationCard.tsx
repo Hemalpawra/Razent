@@ -46,14 +46,12 @@ export function AICheckoutConfirmationCard({
 }: AICheckoutConfirmationCardProps) {
   const [isPlacing, setIsPlacing] = useState(false)
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null)
-  const [name, setName] = useState(customerName || "Customer")
-  const [email, setEmail] = useState(customerEmail || "customer@example.com")
-  const [phone, setPhone] = useState(customerPhone || "9876543210")
-  const [addressLine, setAddressLine] = useState(
-    savedAddress?.line1 || "Flat 402, Highrise Heights, Indiranagar"
-  )
-  const [city, setCity] = useState(savedAddress?.city || "Bengaluru")
-  const [postalCode, setPostalCode] = useState(savedAddress?.postalCode || "560038")
+  const [name, setName] = useState(customerName || "")
+  const [email, setEmail] = useState(customerEmail || "")
+  const [phone, setPhone] = useState(customerPhone || "")
+  const [addressLine, setAddressLine] = useState(savedAddress?.line1 || "")
+  const [city, setCity] = useState(savedAddress?.city || "")
+  const [postalCode, setPostalCode] = useState(savedAddress?.postalCode || "")
   const [isEditingAddress, setIsEditingAddress] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | "cod">("upi")
 
@@ -76,6 +74,12 @@ export function AICheckoutConfirmationCard({
 
     if (items.length === 0) {
       toast.error("No items to checkout")
+      return
+    }
+
+    if (!addressLine.trim()) {
+      setIsEditingAddress(true)
+      toast.error("Please enter your delivery address")
       return
     }
     setIsPlacing(true)
@@ -299,12 +303,12 @@ export function AICheckoutConfirmationCard({
               {isEditingAddress ? "Done" : "Change"}
             </button>
           </div>
-          {isEditingAddress ? (
+          {isEditingAddress || !addressLine.trim() ? (
             <div className="flex flex-col gap-1.5 pt-1">
               <Input
                 value={addressLine}
                 onChange={(e) => setAddressLine(e.target.value)}
-                placeholder="Street address"
+                placeholder="Street address (e.g. House/Flat No, Area)"
                 className="h-7 text-xs"
               />
               <div className="grid grid-cols-2 gap-1.5">
@@ -324,7 +328,7 @@ export function AICheckoutConfirmationCard({
             </div>
           ) : (
             <p className="font-medium text-foreground">
-              {addressLine}, {city} - {postalCode}
+              {addressLine}{city ? `, ${city}` : ""}{postalCode ? ` - ${postalCode}` : ""}
             </p>
           )}
         </div>

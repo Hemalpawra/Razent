@@ -59,10 +59,9 @@ export function AIAssistantProductCard({
       }}
       className={cn(
         "group relative flex flex-col justify-between overflow-hidden text-left select-none transition-all duration-200",
-        // Desktop: 340px width, 14px radius, 14px padding, 0 4px 12px shadow
-        // Mobile: 100% width, 12px radius, 12px padding, max 180px height
-        "w-full sm:max-w-[340px] max-h-[180px] rounded-[12px] sm:rounded-[14px] border border-[#E5E7EB] dark:border-border bg-white dark:bg-card p-3 sm:p-3.5",
-        "shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-blue-500/40 hover:shadow-[0_6px_16px_rgba(0,0,0,0.1)]",
+        // Horizontal scroll sizing: 260px mobile, 290px desktop
+        "w-[260px] sm:w-[290px] shrink-0 rounded-[12px] sm:rounded-[14px] border border-[#E5E7EB] dark:border-border bg-white dark:bg-card p-3 sm:p-3.5",
+        "shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-primary/40 hover:shadow-[0_6px_16px_rgba(0,0,0,0.1)]",
         "animate-in fade-in-0 slide-in-from-bottom-1 duration-200",
         className
       )}
@@ -81,16 +80,11 @@ export function AIAssistantProductCard({
 
         {/* Details Column */}
         <div className="flex-1 min-w-0 flex flex-col justify-between">
-          {/* Category */}
-          <p className="text-[11px] font-medium text-[#64748B] dark:text-muted-foreground uppercase tracking-wide truncate leading-tight">
-            {product.category || "Personal Care"}
-          </p>
-
           {/* Product Name (16px semibold desktop, 15px mobile, max 2 lines) */}
           <h4
             onClick={handleOpen}
             title={product.title}
-            className="text-[15px] sm:text-[16px] font-semibold text-foreground leading-[19px] sm:leading-[22px] line-clamp-2 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            className="text-[15px] sm:text-[16px] font-semibold text-foreground leading-[19px] sm:leading-[22px] line-clamp-2 cursor-pointer hover:text-primary transition-colors"
           >
             {product.title}
           </h4>
@@ -117,7 +111,7 @@ export function AIAssistantProductCard({
         </div>
       </div>
 
-      {/* Buttons Row: Add to Cart (Outlined Blue) + Buy Now (Filled Blue) */}
+      {/* Buttons Row: Add to Cart (Outlined Primary Blue) + Buy Now (Filled Primary Blue) */}
       <div className="pt-2 sm:pt-2.5 grid grid-cols-2 gap-2">
         {/* Add to Cart */}
         <Button
@@ -126,7 +120,7 @@ export function AIAssistantProductCard({
           onClick={handleAddToCart}
           className={cn(
             "w-full rounded-[8px] sm:rounded-[10px] transition-all duration-200 cursor-pointer font-medium select-none shadow-2xs",
-            "border border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 active:scale-[0.98]",
+            "border border-primary text-primary hover:bg-primary/10 active:scale-[0.98]",
             // Mobile: 34px height, 13px font; Desktop: 36px height, 14px font
             "h-[34px] sm:h-[36px] text-[13px] sm:text-[14px] px-2"
           )}
@@ -137,7 +131,9 @@ export function AIAssistantProductCard({
               <span>Added</span>
             </span>
           ) : (
-            <span className="truncate">Add to Cart</span>
+            <span className="whitespace-nowrap truncate">
+              Add<span className="hidden sm:inline"> to Cart</span>
+            </span>
           )}
         </Button>
 
@@ -147,12 +143,14 @@ export function AIAssistantProductCard({
           onClick={handleBuyNow}
           className={cn(
             "w-full rounded-[8px] sm:rounded-[10px] transition-all duration-200 cursor-pointer font-semibold select-none shadow-xs",
-            "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white active:scale-[0.98]",
+            "bg-primary hover:bg-primary/90 text-primary-foreground active:scale-[0.98]",
             // Mobile: 34px height, 13px font; Desktop: 36px height, 14px font
             "h-[34px] sm:h-[36px] text-[13px] sm:text-[14px] px-2"
           )}
         >
-          <span className="truncate">Buy Now</span>
+          <span className="whitespace-nowrap truncate">
+            Buy<span className="hidden sm:inline"> Now</span>
+          </span>
         </Button>
       </div>
     </div>
