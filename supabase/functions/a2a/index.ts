@@ -167,9 +167,9 @@ Deno.serve(async (req: Request) => {
       const lineItems = []
 
       for (const item of items) {
-        const prodId = item.id || item.item_id || item.product_id
-        const qty = item.quantity || item.qty || 1
-        const prod = prods.find((p) => p.id === prodId)
+        const prodId = String(item.id || item.item_id || item.product_id || "").trim()
+        const qty = Math.max(1, parseInt(item.quantity || item.qty, 10) || 1)
+        const prod = prods.find((p) => String(p.id).trim() === prodId || String(p.external_id || "").trim() === prodId || p.title.toLowerCase().trim() === prodId.toLowerCase())
         if (!prod) continue
 
         const amount = prod.price_paise * qty

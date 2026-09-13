@@ -227,6 +227,27 @@ async function executeSearchCatalog(args) {
   }
 }
 
+function findProductInCatalog(prods, item) {
+  const rawId = String(item.id || item.product_id || item.item_id || item.title || "").trim()
+  const rawIdLower = rawId.toLowerCase()
+
+  // 1. Exact ID match (numeric or string ID, or external_id)
+  let prod = prods.find((p) => String(p.id).trim() === rawId || String(p.external_id || "").trim() === rawId)
+  if (prod) return prod
+
+  // 2. Exact Title match
+  prod = prods.find((p) => p.title.toLowerCase().trim() === rawIdLower)
+  if (prod) return prod
+
+  // 3. Substring Title match ONLY IF NOT a pure number and at least 3 characters
+  if (!/^\d+$/.test(rawId) && rawId.length >= 3) {
+    prod = prods.find((p) => p.title.toLowerCase().includes(rawIdLower))
+    if (prod) return prod
+  }
+
+  return null
+}
+
 async function executeCreateCheckoutSession(args) {
   const items = args.items || []
   if (!items.length) {
@@ -240,10 +261,9 @@ async function executeCreateCheckoutSession(args) {
   const lineItems = []
 
   for (const item of items) {
-    const rawId = String(item.id).trim().toLowerCase()
-    const prod = prods.find((p) => String(p.id).toLowerCase() === rawId || p.title.toLowerCase().includes(rawId))
+    const prod = findProductInCatalog(prods, item)
     if (!prod) {
-      throw new Error(`Product not found for: "${item.id}"`)
+      throw new Error(`Product not found for: "${item.id || item.product_id || item.item_id || item.title}"`)
     }
     const qty = Math.max(1, parseInt(item.quantity, 10) || 1)
     const lineTotal = prod.price_paise * qty
