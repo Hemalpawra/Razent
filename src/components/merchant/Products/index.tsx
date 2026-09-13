@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ImportModal } from "@/components/merchant/shared/ImportModal"
+import { KpiCard } from "@/components/merchant/shared/KpiCard"
 import { cn } from "@/lib/utils"
 import {
   Table,
@@ -433,60 +434,37 @@ export default function ProductsScreen() {
         </p>
       </div>
 
-      {/* KPI strip — 5 interactive filter cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {/* KPI strip — 5 cards */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
-          icon={<IndianRupee className="size-4" />}
+          icon={<Package className="size-4" />}
           label="Total Products"
           value={String(kpi.total)}
-          sub="All Products in catalog"
-          active={statusFilter === "all" && inventoryFilter === "all"}
-          onClick={() => {
-            setStatusFilter("all")
-            setInventoryFilter("all")
-          }}
+          sub="Catalog items"
         />
         <KpiCard
           icon={<ShoppingCart className="size-4" />}
           label="Active Products"
           value={String(kpi.active)}
-          sub="Visible to customers"
-          active={statusFilter === "active" && inventoryFilter === "all"}
-          onClick={() => {
-            setStatusFilter("active")
-            setInventoryFilter("all")
-          }}
+          sub="Visible to shoppers"
         />
         <KpiCard
           icon={<TrendingUp className="size-4" />}
-          label="Low stock"
+          label="Low Stock"
           value={String(kpi.low)}
-          sub="Below threshold"
-          active={inventoryFilter === "low_stock"}
-          onClick={() => {
-            setInventoryFilter("low_stock")
-          }}
+          sub="Needs restock"
         />
         <KpiCard
           icon={<Package className="size-4" />}
-          label="Out of stock"
+          label="Out of Stock"
           value={String(kpi.out)}
           sub="Zero inventory"
-          active={inventoryFilter === "out_of_stock"}
-          onClick={() => {
-            setInventoryFilter("out_of_stock")
-          }}
         />
         <KpiCard
           icon={<FileText className="size-4" />}
           label="Draft Products"
           value={String(kpi.draft)}
-          sub="Not Published yet"
-          active={statusFilter === "draft"}
-          onClick={() => {
-            setStatusFilter("draft")
-            setInventoryFilter("all")
-          }}
+          sub="Unpublished"
         />
       </div>
 
@@ -919,49 +897,5 @@ export default function ProductsScreen() {
         onAddProductManually={() => setIsAddOpen(true)}
       />
     </div>
-  )
-}
-
-function KpiCard({
-  icon,
-  label,
-  value,
-  sub,
-  active,
-  onClick,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  sub: string
-  active?: boolean
-  onClick?: () => void
-}) {
-  return (
-    <Card
-      onClick={onClick}
-      className={cn(
-        "rounded-xl bg-card p-5 shadow-sm transition-all text-left",
-        onClick && "cursor-pointer hover:border-primary/50 hover:bg-muted/20",
-        active && "border-primary ring-1 ring-primary/40 bg-primary/5"
-      )}
-    >
-      <div className="flex gap-3">
-        <div className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary sm:flex">
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium text-muted-foreground">
-            {label}
-          </div>
-          <div className="mt-1 font-heading text-2xl font-semibold leading-8 text-foreground">
-            {value}
-          </div>
-          <div className="text-[10px] leading-3 text-muted-foreground">
-            {sub}
-          </div>
-        </div>
-      </div>
-    </Card>
   )
 }

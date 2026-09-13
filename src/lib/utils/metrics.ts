@@ -1,6 +1,7 @@
 import type { Conversation } from "@/lib/types/conversation"
 import type { Order } from "@/lib/types/order"
 import type { AuditSession } from "@/lib/types/audit"
+import { getOrderAgentSource } from "@/lib/utils/agentSource"
 
 /**
  * Checks if a conversation is in an active state.
@@ -14,13 +15,9 @@ export function isConversationActive(c: Conversation): boolean {
  * Checks if an order was created via AI (Agent or Assistant).
  */
 export function isAiOrder(order: Order): boolean {
-  const src = ((order as any).source || "").toLowerCase()
-  return Boolean(
-    order.via_ai ||
-    src === "ai_agent" ||
-    src === "ai_assistant" ||
-    order.conversation_id,
-  )
+  if (order.via_ai || order.conversation_id) return true
+  const src = getOrderAgentSource(order)
+  return src.isAi
 }
 
 /**
@@ -142,7 +139,7 @@ export function calculateUpsellRevenue(orders: Order[], conversations: Conversat
 
     if (Array.isArray(o.items)) {
       o.items.forEach((item: any) => {
-        if (item.is_upsell === true) {
+        if (item.is_upsell === true || item.is_cross_sell === true) {
           hasTaggedUpsell = true
           orderUpsellPaise += (Number(item.unit_price_paise) || 0) * (Number(item.qty) || 1)
         }
@@ -160,13 +157,23 @@ export function calculateUpsellRevenue(orders: Order[], conversations: Conversat
       upsellPaise += o.total_paise - Number(baseTotal)
       return
     }
+
+    // Option C: multi-item AI orders where items beyond the first are cross-sells
+    if (isAiOrder(o) && Array.isArray(o.items) && o.items.length > 1) {
+      const crossSellItemsTotal = o.items.slice(1).reduce((sum, it: any) => {
+        return sum + (Number(it.unit_price_paise) || 0) * (Number(it.qty) || 1)
+      }, 0)
+      upsellPaise += crossSellItemsTotal
+    }
   })
 
   // Also account for conversations with upsell products accepted
-  if (upsellPaise === 0 && conversations.length > 0) {
+  if (conversations.length > 0) {
     conversations.forEach((c) => {
       if (c.upsell && c.upsell.price_paise && (c.order_id || c.amount_paise)) {
-        upsellPaise += Number(c.upsell.price_paise)
+        if (!orders.some((o) => o.id === c.order_id && Array.isArray(o.items) && o.items.length > 1)) {
+          upsellPaise += Number(c.upsell.price_paise)
+        }
       }
     })
   }
@@ -210,37 +217,32 @@ export function calculateAiPerformanceScore(params: {
 }
 
 /**
- * 5) AI Agent dashboard numbers
+ * 5) AI Agent dashboard numbers (calculated dynamically for the provided period)
  */
 export function calculateAiAgentDashboardNumbers(conversations: Conversation[], orders: Order[]) {
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const last24hIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-
   // Active Conversations = count(conversations where status = 'active')
   const activeConversations = conversations.filter(isConversationActive).length
 
-  // Orders Created Today = orders created in the last 24 hours or today's date
-  const ordersCreatedToday = orders.filter((o) => {
-    return o.created_at && (o.created_at.startsWith(todayStr) || o.created_at >= last24hIso)
-  }).length
+  // AI Orders in the provided filtered period
+  const aiOrders = orders.filter(isAiOrder)
+  const paidAiOrders = aiOrders.filter((o) => o.status === "paid")
 
-  // Revenue Generated Today = sum of paid order amounts created today
-  const revenueGeneratedTodayPaise = orders
-    .filter((o) => {
-      const isPaid = o.status === "paid"
-      const isToday = o.created_at && (o.created_at.startsWith(todayStr) || o.created_at >= last24hIso)
-      return isPaid && isToday
-    })
-    .reduce((sum, o) => sum + (Number(o.total_paise) || 0), 0)
+  // Orders Created in this period
+  const ordersCreatedToday = aiOrders.length
+
+  // Revenue Generated in this period from AI orders
+  const revenueGeneratedTodayPaise = paidAiOrders.reduce(
+    (sum, o) => sum + (Number(o.total_paise) || 0),
+    0
+  )
 
   // Conversion Rate = Orders Created / Conversations Started × 100
-  const aiOrders = orders.filter(isAiOrder)
   const conversionRatePct =
     conversations.length > 0
       ? Number(((aiOrders.length / conversations.length) * 100).toFixed(1))
       : 0
 
-  // Customers Helped = distinct customers who had at least one AI conversation that showed products or led to an order
+  // Customers Helped = distinct customers with AI conversations in this period
   const helpfulCustomerKeys = new Set<string>()
   conversations.forEach((c) => {
     const hasProducts =

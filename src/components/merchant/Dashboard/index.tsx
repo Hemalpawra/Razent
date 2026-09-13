@@ -25,6 +25,10 @@ import {
 import { useMerchant } from "@/state/useMerchant"
 import { toast } from "sonner"
 import { getOrderAgentSource } from "@/lib/utils/agentSource"
+import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRangePicker"
+import { matchesDateFilter } from "@/lib/utils/dateFilter"
+import { KpiCard } from "@/components/merchant/shared/KpiCard"
+import { isAiOrder, isConversationActive } from "@/lib/utils/metrics"
 import {
   Card,
   CardContent,
@@ -63,15 +67,13 @@ const chartConfig = {
   revenue: { label: "Revenue", color: "var(--chart-2)" },
 }
 
-const dateRanges = [
-  "Today",
-  "Last 7 days",
-  "Last 30 days",
-  "All time",
-] as const
-
 export default function DashboardScreen() {
-  const [rangeIdx, setRangeIdx] = useState(0)
+  const [dateFilter, setDateFilter] = useState<DateRangeValue>({
+    preset: "all",
+    label: "All Time",
+    startDate: null,
+    endDate: null,
+  })
 
   const [dashData, setDashData] = useState<DashboardData | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
@@ -102,36 +104,91 @@ export default function DashboardScreen() {
     }
   }, [])
 
-  const aiMetrics = useMemo(
-    () => calculateAiAgentMetrics(conversations, orders),
-    [conversations, orders],
-  )
-  const calculatedUpsellPaise = useMemo(
-    () => calculateUpsellRevenue(orders, conversations),
-    [orders, conversations],
-  )
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => matchesDateFilter(o.created_at, dateFilter))
+  }, [orders, dateFilter])
+
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((c) => matchesDateFilter(c.created_at, dateFilter))
+  }, [conversations, dateFilter])
+
   const paidOrders = useMemo(
-    () => orders.filter((o) => o.status === "paid"),
-    [orders],
+    () => filteredOrders.filter((o) => o.status === "paid"),
+    [filteredOrders]
   )
+
   const totalPaidRevenuePaise = useMemo(
     () => paidOrders.reduce((sum, o) => sum + (Number(o.total_paise) || 0), 0),
-    [paidOrders],
+    [paidOrders]
   )
+
+  const aiPaidOrders = useMemo(
+    () => paidOrders.filter(isAiOrder),
+    [paidOrders]
+  )
+
+  const aiRevenuePaise = useMemo(
+    () => aiPaidOrders.reduce((sum, o) => sum + (Number(o.total_paise) || 0), 0),
+    [aiPaidOrders]
+  )
+
+  const directPaidOrders = useMemo(
+    () => paidOrders.filter((o) => !isAiOrder(o)),
+    [paidOrders]
+  )
+
+  const directRevenuePaise = useMemo(
+    () => directPaidOrders.reduce((sum, o) => sum + (Number(o.total_paise) || 0), 0),
+    [directPaidOrders]
+  )
+
+  const calculatedUpsellPaise = useMemo(
+    () => calculateUpsellRevenue(paidOrders, filteredConversations),
+    [paidOrders, filteredConversations]
+  )
+
   const calculatedAovPaise = useMemo(
     () => calculateAov(totalPaidRevenuePaise, paidOrders.length),
-    [totalPaidRevenuePaise, paidOrders.length],
+    [totalPaidRevenuePaise, paidOrders.length]
+  )
+
+  const aiMetrics = useMemo(
+    () => calculateAiAgentMetrics(filteredConversations, filteredOrders),
+    [filteredConversations, filteredOrders]
+  )
+
+  const activeConversationsCount = useMemo(
+    () => filteredConversations.filter(isConversationActive).length,
+    [filteredConversations]
   )
 
   const revenueData = useMemo(() => {
-    if (!dashData) return []
-    return dashData.revenue_daily_paise
-      ? dashData.revenue_daily_paise.map((r: any) => ({
-          date: r.date,
-          revenue: r.revenue_paise / 100,
-        }))
-      : []
-  }, [dashData])
+    if (paidOrders.length === 0) {
+      const days = []
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000)
+        days.push({
+          date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          revenue: 0,
+        })
+      }
+      return days
+    }
+
+    const dayMap = new Map<string, number>()
+    paidOrders.forEach((o) => {
+      const dateKey = new Date(o.created_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      })
+      dayMap.set(dateKey, (dayMap.get(dateKey) || 0) + (Number(o.total_paise) || 0) / 100)
+    })
+
+    return Array.from(dayMap.entries()).map(([date, revenue]) => ({
+      date,
+      revenue: Math.round(revenue),
+    }))
+  }, [paidOrders])
 
   const { hasPermission } = useMerchant()
   const canExport = hasPermission("export_data")
@@ -199,14 +256,7 @@ export default function DashboardScreen() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="h-9 rounded-lg bg-card"
-            onClick={() => setRangeIdx((i) => (i + 1) % dateRanges.length)}
-          >
-            {dateRanges[rangeIdx]}
-            <ChevronDown className="size-4 opacity-60" />
-          </Button>
+          <DateRangePicker value={dateFilter} onChange={setDateFilter} />
           {canExport && (
             <Button
               variant="outline"
@@ -220,87 +270,37 @@ export default function DashboardScreen() {
         </div>
       </div>
 
-      {/* KPI strip — 5 cards — tighter gap + padding */}
+      {/* KPI strip — 5 cards — unified KpiCard */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           icon={<IndianRupee className="size-4" />}
           label="Revenue Generated"
-          value={
-            dashData?.revenue_month_paise
-              ? `₹${(dashData.revenue_month_paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
-              : formatPrice(totalPaidRevenuePaise)
-          }
-          delta={
-            dashData?.revenue_vs_prev_pct !== undefined
-              ? (dashData.revenue_vs_prev_pct >= 0
-                  ? `↑ ${dashData.revenue_vs_prev_pct.toFixed(1)}%`
-                  : `↓ ${Math.abs(dashData.revenue_vs_prev_pct).toFixed(1)}%`)
-              : `${paidOrders.length} paid orders`
-          }
+          value={formatPrice(totalPaidRevenuePaise)}
+          sub={`${paidOrders.length} paid order${paidOrders.length === 1 ? "" : "s"} (${aiPaidOrders.length} AI)`}
         />
         <KpiCard
           icon={<ShoppingCart className="size-4" />}
           label="Orders Created"
-          value={
-            dashData?.orders_today !== undefined && dashData.orders_today > 0
-              ? String(dashData.orders_today)
-              : String(orders.length)
-          }
-          delta={
-            dashData?.orders_vs_prev_pct !== undefined
-              ? (dashData.orders_vs_prev_pct >= 0
-                  ? `↑ ${dashData.orders_vs_prev_pct.toFixed(1)}%`
-                  : `↓ ${Math.abs(dashData.orders_vs_prev_pct).toFixed(1)}%`)
-              : `${orders.length} total orders`
-          }
+          value={String(filteredOrders.length)}
+          sub={`${paidOrders.length} paid · ${filteredOrders.filter((o) => o.status === "created").length} pending`}
         />
         <KpiCard
           icon={<Bot className="size-4" />}
           label="AI Conversion Rate"
-          value={
-            dashData?.conversion_rate_pct !== undefined
-              ? `${dashData.conversion_rate_pct}%`
-              : `${aiMetrics.conversionRatePct}%`
-          }
-          delta={
-            dashData?.conversion_vs_prev_pct !== undefined
-              ? (dashData.conversion_vs_prev_pct >= 0
-                  ? `↑ ${dashData.conversion_vs_prev_pct.toFixed(1)}%`
-                  : `↓ ${Math.abs(dashData.conversion_vs_prev_pct).toFixed(1)}%`)
-              : `${aiMetrics.ordersCreated} AI orders`
-          }
+          value={`${aiMetrics.conversionRatePct}%`}
+          sub={`${aiMetrics.ordersCreated} AI order${aiMetrics.ordersCreated === 1 ? "" : "s"} (${filteredConversations.length} chats)`}
         />
         <KpiCard
           icon={<TrendingUp className="size-4" />}
-          label="Upsell Revenue"
-          value={
-            dashData?.upsell_revenue_paise !== undefined
-              ? `₹${(dashData.upsell_revenue_paise / 100).toLocaleString("en-IN")}`
-              : formatPrice(calculatedUpsellPaise)
-          }
-          delta={
-            dashData?.upsell_vs_prev_pct !== undefined
-              ? (dashData.upsell_vs_prev_pct >= 0
-                  ? `↑ ${dashData.upsell_vs_prev_pct.toFixed(1)}%`
-                  : `↓ ${Math.abs(dashData.upsell_vs_prev_pct).toFixed(1)}%`)
-              : "Extra AI recommendations"
-          }
+          label="Upsell & Cross-sell"
+          value={formatPrice(calculatedUpsellPaise)}
+          sub="AI recommendations revenue"
         />
         <KpiCard
           icon={<Wallet className="size-4" />}
           label="Avg. Order Value"
-          value={
-            dashData?.aov_paise !== undefined
-              ? `₹${(dashData.aov_paise / 100).toLocaleString("en-IN")}`
-              : formatPrice(calculatedAovPaise)
-          }
-          delta={
-            dashData?.aov_vs_prev_pct !== undefined
-              ? (dashData.aov_vs_prev_pct >= 0
-                  ? `↑ ${dashData.aov_vs_prev_pct.toFixed(1)}%`
-                  : `↓ ${Math.abs(dashData.aov_vs_prev_pct).toFixed(1)}%`)
-              : "Per paid order"
-          }
+          value={formatPrice(calculatedAovPaise)}
+          sub="Per completed order"
         />
       </div>
 
@@ -308,14 +308,22 @@ export default function DashboardScreen() {
       <div className="grid gap-3 lg:grid-cols-[1.85fr_1fr]">
         {/* Left column — Overview + AI Performance */}
         <div className="space-y-3">
-          <OverviewCard revenueData={revenueData} dashData={dashData} />
+          <OverviewCard
+            revenueData={revenueData}
+            dashData={dashData}
+            totalRevenuePaise={totalPaidRevenuePaise}
+            aiRevenuePaise={aiRevenuePaise}
+            directRevenuePaise={directRevenuePaise}
+            upsellRevenuePaise={calculatedUpsellPaise}
+            dateFilterLabel={dateFilter.label}
+          />
           <AiPerformanceCard dashData={dashData} aiMetrics={aiMetrics} />
         </div>
 
         {/* Right column — Needs Attention + Orders by Assistant + Recent Activity */}
         <div className="space-y-3">
           <NeedsAttentionCard dashData={dashData} />
-          <OrdersByAssistantCard orders={orders} />
+          <OrdersByAssistantCard orders={filteredOrders} />
           <RecentActivityCard dashData={dashData} />
         </div>
       </div>
@@ -323,58 +331,30 @@ export default function DashboardScreen() {
   )
 }
 
-function KpiCard({
-  icon,
-  label,
-  value,
-  delta,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  delta: string
-}) {
-  const [up, rest] = delta.split(" vs ")
-  return (
-    <Card className="rounded-xl bg-card p-4 shadow-sm">
-      <div className="flex gap-3">
-        <div className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary sm:flex">
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <CardDescription className="text-[13px] font-medium text-muted-foreground">
-            {label}
-          </CardDescription>
-          <div className="mt-1 text-xl font-semibold leading-6 text-foreground">
-            {value}
-          </div>
-          <div className="mt-1 text-[10px] leading-3">
-            <span className="font-medium text-emerald-600 dark:text-emerald-400">
-              {up}{" "}
-            </span>
-            <span className="text-muted-foreground">vs {rest}</span>
-          </div>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
 function OverviewCard({
   revenueData = [],
   dashData,
+  totalRevenuePaise = 0,
+  aiRevenuePaise = 0,
+  directRevenuePaise = 0,
+  upsellRevenuePaise = 0,
+  dateFilterLabel = "All Time",
 }: {
   revenueData?: { date: string; revenue: number }[]
   dashData?: DashboardData | null
+  totalRevenuePaise?: number
+  aiRevenuePaise?: number
+  directRevenuePaise?: number
+  upsellRevenuePaise?: number
+  dateFilterLabel?: string
 }) {
   return (
     <Card className="rounded-xl bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-base">Overview</CardTitle>
-        <Button variant="outline" size="sm" className="h-8 rounded-lg bg-card">
-          7 Day
-          <ChevronDown className="size-4" />
-        </Button>
+        <Badge variant="outline" className="h-7 rounded-md text-xs font-normal">
+          {dateFilterLabel}
+        </Badge>
       </CardHeader>
       <CardContent className="grid gap-3 lg:grid-cols-[1.55fr_1fr]">
         {/* Sales Overview chart — shadcn Chart + Recharts */}
@@ -383,7 +363,7 @@ function OverviewCard({
             Sales Overview
           </div>
           <CardDescription className="text-xs">
-            Revenue generated from AI assisted orders
+            Revenue generated from orders across dates
           </CardDescription>
           <ChartContainer
             config={chartConfig}
@@ -432,32 +412,36 @@ function OverviewCard({
             Revenue Breakdown
           </div>
           {(() => {
-            const totalRevRupees = dashData
-              ? Math.round(dashData.revenue_month_paise / 100)
-              : 0
-            const aiRev = totalRevRupees > 0 ? Math.round(totalRevRupees * 0.66) : 0
-            const directRev = totalRevRupees > 0 ? Math.round(totalRevRupees * 0.25) : 0
-            const upsellRev = totalRevRupees > 0 ? Math.max(0, totalRevRupees - aiRev - directRev) : 0
+            const totalRevRupees = Math.round(totalRevenuePaise / 100)
+            const aiRevTotal = Math.round(aiRevenuePaise / 100)
+            const upsellRev = Math.round(upsellRevenuePaise / 100)
+            const effectiveUpsell = Math.min(upsellRev, aiRevTotal)
+            const aiRev = Math.max(0, aiRevTotal - effectiveUpsell)
+            const directRev = Math.max(0, totalRevRupees - aiRev - effectiveUpsell)
 
-            const donutData = totalRevRupees > 0
-              ? [
-                  {
-                    name: "AI Conversations",
-                    value: aiRev,
-                    fill: "var(--primary)",
-                  },
-                  { name: "Direct Sales", value: directRev, fill: "var(--chart-2)" },
-                  {
-                    name: "Upsell & Cross-sell",
-                    value: upsellRev,
-                    fill: "var(--chart-4)",
-                  },
-                ]
-              : [
-                  { name: "AI Conversations", value: 1, fill: "var(--primary)" },
-                ]
+            const donutData =
+              totalRevRupees > 0
+                ? [
+                    {
+                      name: "AI Assisted",
+                      value: aiRev,
+                      fill: "var(--primary)",
+                    },
+                    {
+                      name: "Direct Sales",
+                      value: directRev,
+                      fill: "var(--chart-2)",
+                    },
+                    {
+                      name: "Upsell & Cross-sell",
+                      value: effectiveUpsell,
+                      fill: "var(--chart-4)",
+                    },
+                  ].filter((d) => d.value > 0)
+                : [{ name: "No Orders", value: 1, fill: "var(--muted)" }]
+
             const donutConfig = {
-              ai: { label: "AI Conversations", color: "var(--primary)" },
+              ai: { label: "AI Assisted", color: "var(--primary)" },
               direct: { label: "Direct Sales", color: "var(--chart-2)" },
               upsell: { label: "Upsell & Cross-sell", color: "var(--chart-4)" },
             }
@@ -472,7 +456,7 @@ function OverviewCard({
                         nameKey="name"
                         innerRadius={42}
                         outerRadius={62}
-                        paddingAngle={2}
+                        paddingAngle={totalRevRupees > 0 ? 2 : 0}
                         stroke="none"
                         isAnimationActive={false}
                       >
@@ -511,15 +495,27 @@ function OverviewCard({
                 <div className="mt-4 w-full space-y-1 text-xs leading-4 text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-primary" /> AI
-                    Conversations — ₹{aiRev.toLocaleString("en-IN")} ({totalRevRupees > 0 ? Math.round((aiRev / totalRevRupees) * 100) : 0}%)
+                    Assisted — ₹{aiRev.toLocaleString("en-IN")} (
+                    {totalRevRupees > 0
+                      ? Math.round((aiRev / totalRevRupees) * 100)
+                      : 0}
+                    %)
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-chart-2" /> Direct
-                    Sales — ₹{directRev.toLocaleString("en-IN")} ({totalRevRupees > 0 ? Math.round((directRev / totalRevRupees) * 100) : 0}%)
+                    Sales — ₹{directRev.toLocaleString("en-IN")} (
+                    {totalRevRupees > 0
+                      ? Math.round((directRev / totalRevRupees) * 100)
+                      : 0}
+                    %)
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-chart-4" /> Upsell &
-                    Cross-sell — ₹{upsellRev.toLocaleString("en-IN")} ({totalRevRupees > 0 ? Math.round((upsellRev / totalRevRupees) * 100) : 0}%)
+                    Cross-sell — ₹{effectiveUpsell.toLocaleString("en-IN")} (
+                    {totalRevRupees > 0
+                      ? Math.round((effectiveUpsell / totalRevRupees) * 100)
+                      : 0}
+                    %)
                   </div>
                 </div>
               </div>

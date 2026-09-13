@@ -32,6 +32,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRangePicker"
+import { matchesDateFilter } from "@/lib/utils/dateFilter"
+import { KpiCard } from "@/components/merchant/shared/KpiCard"
 import { cn } from "@/lib/utils"
 import {
   Table,
@@ -143,6 +145,8 @@ export default function AIAgentScreen({
       const agentSource = getConversationAgentSource(c)
       if (assistantFilter !== "all" && agentSource.type !== assistantFilter) return false
 
+      if (!matchesDateFilter(c.created_at, dateFilter)) return false
+
       if (term) {
         const nameMatch = (c.customer_name || "").toLowerCase().includes(term)
         const msgMatch = (c.last_message || "").toLowerCase().includes(term)
@@ -151,26 +155,13 @@ export default function AIAgentScreen({
         if (!nameMatch && !msgMatch && !idMatch && !agentMatch) return false
       }
 
-      if (dateFilter.preset === "today") {
-        const today = new Date().toISOString().slice(0, 10)
-        return c.created_at.startsWith(today)
-      } else if (dateFilter.preset === "yesterday") {
-        const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-        return c.created_at.startsWith(y)
-      } else if (dateFilter.preset === "7d") {
-        const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
-        return c.created_at >= sevenDaysAgo
-      } else if (dateFilter.preset === "30d") {
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
-        return c.created_at >= thirtyDaysAgo
-      } else if (dateFilter.preset === "custom") {
-        const d = c.created_at.slice(0, 10)
-        if (dateFilter.startDate && d < dateFilter.startDate) return false
-        if (dateFilter.endDate && d > dateFilter.endDate) return false
-      }
       return true
     })
   }, [convData, q, statusFilter, assistantFilter, dateFilter])
+
+  const dateFilteredOrders = useMemo(() => {
+    return orders.filter((o) => matchesDateFilter(o.created_at, dateFilter))
+  }, [orders, dateFilter])
 
   const totalPages = Math.max(1, Math.ceil(filteredConversations.length / rowsPerPage))
   const safePage = Math.min(page, totalPages)
@@ -186,7 +177,10 @@ export default function AIAgentScreen({
     revenueGeneratedTodayPaise: revenueToday,
     conversionRatePct,
     customersHelped,
-  } = useMemo(() => calculateAiAgentDashboardNumbers(convData, orders), [convData, orders])
+  } = useMemo(
+    () => calculateAiAgentDashboardNumbers(filteredConversations, dateFilteredOrders),
+    [filteredConversations, dateFilteredOrders]
+  )
 
   const conversionRate = `${conversionRatePct}%`
 
@@ -292,34 +286,34 @@ export default function AIAgentScreen({
       </div>
 
       {/* KPI 5 cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           icon={<Users className="size-4" />}
           label="Customers Helped"
           value={String(customersHelped)}
-          sub="Total customer chats"
+          sub={dateFilter.label}
         />
         <KpiCard
           icon={<TrendingUp className="size-4" />}
           label="Conversion Rate"
-          value={conversionRate}
+          value={`${conversionRatePct}%`}
           sub="AI assisted orders"
         />
         <KpiCard
           icon={<MessageCircle className="size-4" />}
           label="Active Conversations"
           value={String(activeCount)}
-          sub="Currently in progress"
+          sub="In progress"
         />
         <KpiCard
           icon={<ShoppingCart className="size-4" />}
-          label="Orders Created Today"
+          label="AI Orders Created"
           value={String(ordersToday)}
           sub="Via AI conversations"
         />
         <KpiCard
           icon={<IndianRupee className="size-4" />}
-          label="Revenue Generated Today"
+          label="AI Revenue"
           value={formatPrice(revenueToday)}
           sub="From paid AI orders"
           valueIsAmount
@@ -362,10 +356,10 @@ export default function AIAgentScreen({
               }}
             >
               <SelectTrigger className="h-9 w-[135px] rounded-lg text-xs bg-card">
-                <SelectValue placeholder="All Assistants" />
+                <SelectValue placeholder="AI Source" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Assistants</SelectItem>
+                <SelectItem value="all">All AI Sources</SelectItem>
                 <SelectItem value="claude">Claude</SelectItem>
                 <SelectItem value="gemini">Google Gemini</SelectItem>
                 <SelectItem value="chatgpt">ChatGPT</SelectItem>
@@ -407,7 +401,7 @@ export default function AIAgentScreen({
                   Customer
                 </TableHead>
                 <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
-                  Assistant
+                  AI Source
                 </TableHead>
                 <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
                   Status
@@ -571,32 +565,5 @@ export default function AIAgentScreen({
         conversation={selected}
       />
     </div>
-  )
-}
-
-function KpiCard({
-  icon,
-  label,
-  value,
-  sub,
-  valueIsAmount,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  sub: string
-  valueIsAmount?: boolean
-}) {
-  return (
-    <Card className="rounded-xl bg-card p-3 shadow-sm border">
-      <div className="flex items-center justify-between text-muted-foreground">
-        <span className="text-xs font-medium">{label}</span>
-        <div className="p-1 rounded-md bg-muted/60 text-foreground">{icon}</div>
-      </div>
-      <div className="mt-2 text-xl font-bold tracking-tight text-foreground">
-        {value}
-      </div>
-      <div className="mt-0.5 text-[11px] text-muted-foreground">{sub}</div>
-    </Card>
   )
 }

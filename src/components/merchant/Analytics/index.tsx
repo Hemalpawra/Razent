@@ -74,6 +74,7 @@ import type { Order } from "@/lib/types/order"
 import type { Conversation } from "@/lib/types/conversation"
 import { formatPrice } from "@/lib/types/product"
 import { calculateAnalyticsDashboardMetrics } from "@/lib/utils/metrics"
+import { KpiCard } from "@/components/merchant/shared/KpiCard"
 
 type AnalyticsProps = { loading?: boolean }
 type DateRange = "7d" | "14d" | "30d" | "all"
@@ -794,41 +795,6 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
         </Card>
       </div>
     </div>
-  )
-}
-
-function KpiCard({
-  icon,
-  label,
-  value,
-  delta,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  delta: string
-}) {
-  return (
-    <Card className="rounded-xl bg-card p-5 shadow-sm">
-      <div className="flex gap-3">
-        <div className="hidden size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:flex">
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <CardDescription className="text-[13px] font-medium text-muted-foreground">
-            {label}
-          </CardDescription>
-          <div className="mt-1 text-xl font-semibold leading-6 text-foreground">
-            {value}
-          </div>
-          <div className="mt-1 text-[10px] leading-3">
-            <span className="font-medium text-emerald-600 dark:text-emerald-400">
-              {delta}
-            </span>
-          </div>
-        </div>
-      </div>
-    </Card>
   )
 }
 

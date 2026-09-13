@@ -25,6 +25,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRangePicker"
+import { matchesDateFilter } from "@/lib/utils/dateFilter"
+import { KpiCard } from "@/components/merchant/shared/KpiCard"
 import { ImportModal } from "@/components/merchant/shared/ImportModal"
 import { cn } from "@/lib/utils"
 import { useMerchant } from "@/state/useMerchant"
@@ -198,34 +200,19 @@ export default function OrdersScreen() {
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE_DEFAULT)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  const dateFilteredOrders = useMemo(() => {
+    return (orders || []).filter((o: Order) => matchesDateFilter(o.created_at, dateFilter))
+  }, [orders, dateFilter])
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
 
-    return (orders || [])
+    return dateFilteredOrders
       .filter((o: Order) => {
         if (filterStatus !== "all" && o.status !== filterStatus) return false
 
         const agentSource = getOrderAgentSource(o)
         if (assistantFilter !== "all" && agentSource.type !== assistantFilter) return false
-
-        // Date range filtering
-        if (dateFilter.preset === "today") {
-          const today = new Date().toISOString().slice(0, 10)
-          if (!o.created_at.startsWith(today)) return false
-        } else if (dateFilter.preset === "yesterday") {
-          const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-          if (!o.created_at.startsWith(y)) return false
-        } else if (dateFilter.preset === "7d") {
-          const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
-          if (o.created_at < sevenDaysAgo) return false
-        } else if (dateFilter.preset === "30d") {
-          const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
-          if (o.created_at < thirtyDaysAgo) return false
-        } else if (dateFilter.preset === "custom") {
-          const d = o.created_at.slice(0, 10)
-          if (dateFilter.startDate && d < dateFilter.startDate) return false
-          if (dateFilter.endDate && d > dateFilter.endDate) return false
-        }
 
         if (!term) return true
 
@@ -239,7 +226,7 @@ export default function OrdersScreen() {
         )
       })
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [orders, q, filterStatus, assistantFilter, dateFilter])
+  }, [dateFilteredOrders, q, filterStatus, assistantFilter])
 
   const handleExport = () => {
     if (!canExport) {
@@ -361,7 +348,7 @@ export default function OrdersScreen() {
   }
 
   const kpis = useMemo(() => {
-    const list = orders || []
+    const list = dateFilteredOrders
 
     const total = list.length
 
@@ -378,7 +365,7 @@ export default function OrdersScreen() {
       .reduce((sum, o) => sum + o.total_paise, 0)
 
     return { total, paid, pending, shipped, revenuePaise }
-  }, [orders])
+  }, [dateFilteredOrders])
 
   if (orders === null) {
     return (
@@ -434,7 +421,7 @@ export default function OrdersScreen() {
           icon={<ShoppingCart className="size-4" />}
           label="Total Orders"
           value={String(kpis.total)}
-          sub="All time Orders"
+          sub={dateFilter.label}
         />
         <KpiCard
           icon={<ShoppingCart className="size-4" />}
@@ -442,29 +429,25 @@ export default function OrdersScreen() {
           value={String(kpis.paid)}
           sub={`${
             kpis.total ? ((kpis.paid / kpis.total) * 100).toFixed(1) : "0"
-          }% of total`}
+          }% conversion`}
         />
         <KpiCard
           icon={<Clock3 className="size-4" />}
           label="Pending Payment"
           value={String(kpis.pending)}
-          sub={`${
-            kpis.total ? ((kpis.pending / kpis.total) * 100).toFixed(1) : "0"
-          }% of total`}
+          sub="Awaiting checkout"
         />
         <KpiCard
           icon={<Truck className="size-4" />}
-          label="Shipped orders"
+          label="Shipped Orders"
           value={String(kpis.shipped)}
-          sub={`${
-            kpis.total ? ((kpis.shipped / kpis.total) * 100).toFixed(1) : "0"
-          }% of total`}
+          sub="In transit / fulfilled"
         />
         <KpiCard
           icon={<IndianRupee className="size-4" />}
           label="Revenue (Paid)"
           value={formatPrice(kpis.revenuePaise)}
-          sub="From paid orders"
+          sub="Paid revenue"
           valueIsAmount
         />
       </div>
@@ -853,54 +836,5 @@ export default function OrdersScreen() {
         onImport={handleImportOrders}
       />
     </div>
-  )
-}
-
-function KpiCard({
-  icon,
-
-  label,
-
-  value,
-
-  sub,
-
-  valueIsAmount,
-}: {
-  icon: React.ReactNode
-
-  label: string
-
-  value: string
-
-  sub: string
-
-  valueIsAmount?: boolean
-}) {
-  return (
-    <Card className="rounded-xl bg-card p-5 shadow-sm py-5">
-      <div className="flex gap-3">
-        <div className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary sm:flex">
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-medium leading-5 text-muted-foreground">
-            {label}
-          </div>
-          <div
-            className={
-              valueIsAmount
-                ? "mt-0.5 text-lg font-semibold leading-6 text-foreground"
-                : "mt-0.5 font-heading text-[22px] font-semibold leading-7 text-foreground"
-            }
-          >
-            {value}
-          </div>
-          <div className="mt-0.5 text-[10px] leading-3 text-muted-foreground">
-            {sub}
-          </div>
-        </div>
-      </div>
-    </Card>
   )
 }
