@@ -10,6 +10,8 @@ import {
   Search,
   Eye,
   SlidersHorizontal,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import {
   Card,
@@ -50,11 +52,10 @@ import type { Order } from "@/lib/types/order"
 import ConversationDrawer from "@/components/merchant/AIAgent/ConversationDrawer"
 import { useMerchant } from "@/state/useMerchant"
 import { toast } from "sonner"
-
-function isConversationActive(c: Conversation): boolean {
-  const s = (c.status || "").toLowerCase()
-  return s === "active" || s === "waiting_for_customer" || s === "waiting_for_payment"
-}
+import {
+  calculateAiAgentDashboardNumbers,
+  isConversationActive,
+} from "@/lib/utils/metrics"
 
 export default function AIAgentScreen({
   loading: externalLoading,
@@ -81,6 +82,8 @@ export default function AIAgentScreen({
     startDate: null,
     endDate: null,
   })
+  const [page, setPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
 
   const loadData = async (isManual = false) => {
     if (isManual) setIsRefreshing(true)
@@ -106,6 +109,10 @@ export default function AIAgentScreen({
       unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    setPage(1)
+  }, [q, statusFilter, dateFilter])
 
   const selected = selectedId
     ? (convData.find((c) => c.id === selectedId) ?? null)
@@ -146,16 +153,23 @@ export default function AIAgentScreen({
     })
   }, [convData, q, statusFilter, dateFilter])
 
-  const activeCount = convData.filter(isConversationActive).length
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const ordersToday = orders.filter((o) => o.created_at.startsWith(todayStr)).length
-  const revenueToday = orders
-    .filter((o) => o.status === "paid" && o.created_at.startsWith(todayStr))
-    .reduce((s, o) => s + o.total_paise, 0)
-  const customersHelped = convData.length
-  const conversionRate = convData.length > 0
-    ? `${((orders.filter((o) => o.via_ai).length / convData.length) * 100).toFixed(1)}%`
-    : "0%"
+  const totalPages = Math.max(1, Math.ceil(filteredConversations.length / rowsPerPage))
+  const safePage = Math.min(page, totalPages)
+  const start = filteredConversations.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1
+  const end = Math.min(safePage * rowsPerPage, filteredConversations.length)
+  const pagedConversations = useMemo(() => {
+    return filteredConversations.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
+  }, [filteredConversations, safePage, rowsPerPage])
+
+  const {
+    activeConversations: activeCount,
+    ordersCreatedToday: ordersToday,
+    revenueGeneratedTodayPaise: revenueToday,
+    conversionRatePct,
+    customersHelped,
+  } = useMemo(() => calculateAiAgentDashboardNumbers(convData, orders), [convData, orders])
+
+  const conversionRate = `${conversionRatePct}%`
 
   const handleOpen = (id: string) => {
     if (role === "view_only") {
@@ -376,7 +390,7 @@ export default function AIAgentScreen({
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredConversations.map((c) => {
+                pagedConversations.map((c) => {
                   const active = isConversationActive(c)
                   const matchingOrder = orders.find(
                     (o) => o.id === c.order_id || o.conversation_id === c.id,
@@ -420,7 +434,7 @@ export default function AIAgentScreen({
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs text-muted-foreground hidden sm:table-cell">
                         {c.updated_at
-                          ? new Date(c.updated_at).toLocaleTimeString([], {
+                           ? new Date(c.updated_at).toLocaleTimeString([], {
                               hour: "2-digit",
                               minute: "2-digit",
                             })
@@ -445,6 +459,63 @@ export default function AIAgentScreen({
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="flex flex-col gap-3 border-t bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-xs text-muted-foreground">
+            {filteredConversations.length === 0
+              ? "Showing 0 of 0"
+              : `Showing ${start}-${end} of ${filteredConversations.length}`}
+          </span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="hidden sm:inline">Rows per page</span>
+              <Select
+                value={String(rowsPerPage)}
+                onValueChange={(v: string | null) => {
+                  if (v) {
+                    setRowsPerPage(Number(v))
+                    setPage(1)
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 w-[70px] bg-card text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="size-8 rounded-md bg-card"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous"
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <span className="px-2 text-xs text-muted-foreground">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="size-8 rounded-md bg-card"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Next"
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </Card>
 

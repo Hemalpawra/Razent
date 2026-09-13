@@ -595,7 +595,7 @@ export default function OrdersScreen() {
                   }
 
                   const totalQty = (order.items || []).reduce(
-                    (sum, it) => sum + (it?.qty || it?.quantity || 1),
+                    (sum, it) => sum + (it?.qty || (it as any)?.quantity || 1),
                     0,
                   )
 

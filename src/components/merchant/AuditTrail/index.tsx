@@ -7,6 +7,7 @@ import {
   RotateCcwIcon,
   RotateCw,
   ChevronRightIcon,
+  ChevronLeftIcon,
   ChevronDownIcon as ChevronDownSmallIcon,
   EyeIcon,
 } from "lucide-react"
@@ -20,6 +21,7 @@ import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRa
 import { cn } from "@/lib/utils"
 import { useMerchant } from "@/state/useMerchant"
 import { toast } from "sonner"
+import { calculateAuditTrailMetrics } from "@/lib/utils/metrics"
 
 import {
   Select,
@@ -72,6 +74,8 @@ export default function AuditTrailScreen() {
     startDate: null,
     endDate: null,
   })
+  const [page, setPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
   const [loading, setLoading] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -130,13 +134,17 @@ export default function AuditTrailScreen() {
     }
   }, [])
 
-  const totalSessions = auditData.length
-  const totalEvents = auditData.reduce((a, s) => a + s.event_count, 0)
-  const success = auditData
-    .filter((s) => s.status === "Success")
-    .reduce((a, s) => a + s.event_count, 0)
-  const failed = auditData.filter((s) => s.status === "Failed").length
-  const critical = auditData.filter((s) => s.status === "Critical").length
+  useEffect(() => {
+    setPage(1)
+  }, [q, eventFilter, resultFilter, actorFilter, dateFilter])
+
+  const {
+    totalSessions,
+    totalEvents,
+    successEvents: success,
+    failedEvents: failed,
+    criticalAlerts: critical,
+  } = useMemo(() => calculateAuditTrailMetrics(auditData), [auditData])
 
   const filtered = useMemo(() => {
     return auditData.filter((s) => {
@@ -189,6 +197,14 @@ export default function AuditTrailScreen() {
       return true
     })
   }, [auditData, q, eventFilter, resultFilter, actorFilter, dateFilter])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
+  const safePage = Math.min(page, totalPages)
+  const start = filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1
+  const end = Math.min(safePage * rowsPerPage, filtered.length)
+  const pagedSessions = useMemo(() => {
+    return filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
+  }, [filtered, safePage, rowsPerPage])
 
   const handleExportLogs = () => {
     if (!canExport) {
@@ -422,7 +438,7 @@ export default function AuditTrailScreen() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((s) => (
+            {pagedSessions.map((s) => (
               <>
                 <TableRow
                   key={s.session_id}
@@ -545,11 +561,61 @@ export default function AuditTrailScreen() {
           </TableBody>
         </Table>
 
-        <div className="flex items-center justify-between border-t bg-card px-3 py-3 text-xs text-muted-foreground">
-          <span>
-            Showing {filtered.length} of {totalSessions} sessions
+        {/* Pagination Footer */}
+        <div className="flex flex-col gap-3 border-t bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-xs text-muted-foreground">
+            {filtered.length === 0
+              ? "Showing 0 of 0"
+              : `Showing ${start}-${end} of ${filtered.length} sessions (${totalEvents} total events)`}
           </span>
-          <span>{totalEvents} total events</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="hidden sm:inline">Rows per page</span>
+              <Select
+                value={String(rowsPerPage)}
+                onValueChange={(v: string | null) => {
+                  if (v) {
+                    setRowsPerPage(Number(v))
+                    setPage(1)
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 w-[70px] bg-card text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="size-8 rounded-md bg-card"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous"
+              >
+                <ChevronLeftIcon className="size-4" />
+              </Button>
+              <span className="px-2 text-xs text-muted-foreground">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="size-8 rounded-md bg-card"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Next"
+              >
+                <ChevronRightIcon className="size-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </Card>
 

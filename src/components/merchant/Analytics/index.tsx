@@ -73,6 +73,7 @@ import type { AnalyticsData } from "@/lib/types/analytics"
 import type { Order } from "@/lib/types/order"
 import type { Conversation } from "@/lib/types/conversation"
 import { formatPrice } from "@/lib/types/product"
+import { calculateAnalyticsDashboardMetrics } from "@/lib/utils/metrics"
 
 type AnalyticsProps = { loading?: boolean }
 type DateRange = "7d" | "14d" | "30d" | "all"
@@ -154,6 +155,11 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
     filteredConvs.length > 0
       ? ((filteredOrders.filter((o) => o.via_ai).length / filteredConvs.length) * 100).toFixed(1)
       : "0.0"
+
+  const analyticsMetrics = useMemo(
+    () => calculateAnalyticsDashboardMetrics(filteredOrders, filteredConvs),
+    [filteredOrders, filteredConvs],
+  )
 
   // Revenue series (Daily)
   const revenueData = useMemo(() => {
@@ -454,7 +460,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
         <KpiCard
           icon={<IndianRupee className="size-4" />}
           label="Revenue Generated"
-          value={formatPrice(totalRevenuePaise)}
+          value={formatPrice(analyticsMetrics.revenueGeneratedPaise)}
           delta={`${paidOrders.length} paid orders`}
         />
         <KpiCard
@@ -466,20 +472,20 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
         <KpiCard
           icon={<Bot className="size-4" />}
           label="AI Conversion Rate"
-          value={`${conversionRate}%`}
+          value={`${analyticsMetrics.aiConversionRatePct}%`}
           delta={`${filteredConvs.length} customer chats`}
         />
         <KpiCard
           icon={<TrendingUp className="size-4" />}
           label="AI Upsell / Orders"
-          value={formatPrice(aiRevenuePaise)}
-          delta={`${aiPaidOrders.length} AI-assisted orders`}
+          value={formatPrice(analyticsMetrics.upsellRevenuePaise)}
+          delta={`${analyticsMetrics.upsellOrderRatePct}% upsell rate (${analyticsMetrics.upsellOrdersCount} orders)`}
         />
         <KpiCard
           icon={<Wallet className="size-4" />}
           label="Avg. Order Value"
-          value={formatPrice(aovPaise)}
-          delta={paidOrders.length > 0 ? "Per paid order" : "No orders yet"}
+          value={formatPrice(analyticsMetrics.aovPaise)}
+          delta={paidOrders.length > 0 ? "Revenue / paid orders" : "No orders yet"}
         />
       </div>
 

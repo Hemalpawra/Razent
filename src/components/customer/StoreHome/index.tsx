@@ -62,6 +62,7 @@ import { AIAssistantWidget } from "@/components/customer/AIAssistant"
 import { useCustomerAuth } from "@/state/useCustomerAuth"
 
 import { formatPrice, type Product } from "@/lib/types/product"
+import type { Order } from "@/lib/types/order"
 import {
   getSavedTestCards,
   getActivePaymentSelection,
@@ -171,7 +172,10 @@ export default function StoreHome() {
   const viewParam = searchParams.get("view")
   const productParam = searchParams.get("product")
   const trackParam = searchParams.get("track")
-  const sessionParam = searchParams.get("session")
+  const sessionParam = searchParams.get("session") || searchParams.get("razorpay_payment_link_reference_id")
+  const rzpPaymentIdParam = searchParams.get("razorpay_payment_id")
+  const rzpPaymentLinkIdParam = searchParams.get("razorpay_payment_link_id")
+  const rzpStatusParam = searchParams.get("razorpay_payment_link_status")
 
   useEffect(() => {
     if (trackParam) {
@@ -184,6 +188,9 @@ export default function StoreHome() {
     ) {
       if (sessionParam) {
         setLastOrderId(sessionParam)
+      }
+      if (rzpPaymentIdParam) {
+        setLastPaymentId(rzpPaymentIdParam)
       }
       setView("payment-success")
     } else if (
@@ -203,7 +210,7 @@ export default function StoreHome() {
       setSelectedId(productParam)
       setView("detail")
     }
-  }, [location.pathname, viewParam, productParam, trackParam, sessionParam])
+  }, [location.pathname, viewParam, productParam, trackParam, sessionParam, rzpPaymentIdParam])
 
   const [activeCat, setActiveCat] = useState<string | null>(null)
 
@@ -266,9 +273,142 @@ export default function StoreHome() {
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false)
   const [invoiceModalData, setInvoiceModalData] = useState<InvoiceData | null>(null)
 
-  const [lastOrderSnapshot, setLastOrderSnapshot] = useState<CartItem[] | null>(
+  const [lastOrderSnapshot, setLastOrderSnapshot] = useState<any[] | null>(
     null,
   )
+  const [lastShippingAddress, setLastShippingAddress] = useState<any>(null)
+  const [lastOrderTotalPaise, setLastOrderTotalPaise] = useState<number | null>(null)
+  const [lastOrderData, setLastOrderData] = useState<any>(null)
+  const [orderSyncLoading, setOrderSyncLoading] = useState(false)
+
+  // Sync order and checkout session details from Supabase if returning from Razorpay / ACP checkout
+  useEffect(() => {
+    const isSuccessRoute =
+      location.pathname === "/checkout/success" ||
+      location.pathname.startsWith("/checkout/success") ||
+      view === "payment-success" ||
+      viewParam === "payment-success"
+
+    if (!isSuccessRoute) return
+
+    const effectiveSessionId = sessionParam || searchParams.get("razorpay_payment_link_reference_id")
+    const effectivePaymentId = rzpPaymentIdParam || searchParams.get("razorpay_payment_id")
+
+    if (effectivePaymentId && !lastPaymentId) {
+      setLastPaymentId(effectivePaymentId)
+    }
+
+    if (!effectiveSessionId && !effectivePaymentId) return
+
+    let isMounted = true
+    setOrderSyncLoading(true)
+
+    ;(async () => {
+      try {
+        // 1. First look up the orders table
+        let query = supabase.from("orders").select("*")
+        if (effectiveSessionId && effectivePaymentId) {
+          query = query.or(`acp_checkout_session_id.eq.${effectiveSessionId},external_id.eq.${effectiveSessionId},razorpay_payment_id.eq.${effectivePaymentId}`)
+        } else if (effectiveSessionId) {
+          query = query.or(`acp_checkout_session_id.eq.${effectiveSessionId},external_id.eq.${effectiveSessionId}`)
+        } else if (effectivePaymentId) {
+          query = query.eq("razorpay_payment_id", effectivePaymentId)
+        }
+
+        const { data: matchedOrder } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle()
+
+        if (matchedOrder && isMounted) {
+          setLastOrderId(matchedOrder.external_id)
+          if (matchedOrder.razorpay_payment_id) setLastPaymentId(matchedOrder.razorpay_payment_id)
+          if (matchedOrder.total_paise) setLastOrderTotalPaise(matchedOrder.total_paise)
+          if (matchedOrder.shipping_address) setLastShippingAddress(matchedOrder.shipping_address)
+          if (matchedOrder.items) setLastOrderSnapshot(matchedOrder.items)
+          setLastOrderData(matchedOrder)
+          setOrderSyncLoading(false)
+          return
+        }
+
+        // 2. If not found in orders yet, look in acp_checkout_sessions
+        if (effectiveSessionId) {
+          const { data: dbSession } = await supabase
+            .from("acp_checkout_sessions")
+            .select("*")
+            .eq("id", effectiveSessionId)
+            .maybeSingle()
+
+          if (dbSession && isMounted) {
+            const rawItems = dbSession.line_items || []
+            const totalPaise = dbSession.totals?.[0]?.amount || 0
+            const shipping = dbSession.fulfillment_details || dbSession.delivery_address || dbSession.metadata?.fulfillment_details || dbSession.metadata?.shipping_address || {}
+            let candidateOrderId = dbSession.metadata?.order_id
+
+            const isPaid =
+              dbSession.status === "paid" ||
+              dbSession.status === "completed" ||
+              rzpStatusParam === "paid" ||
+              !!effectivePaymentId
+
+            if (isPaid) {
+              if (!candidateOrderId) {
+                candidateOrderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
+              }
+
+              // Settle into orders table
+              const { data: createdOrder } = await supabase
+                .from("orders")
+                .insert({
+                  external_id: candidateOrderId,
+                  merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
+                  status: "paid",
+                  shipping_status: "dispatched",
+                  currency: "INR",
+                  total_paise: totalPaise,
+                  items: rawItems,
+                  shipping_address: shipping,
+                  via_ai: true,
+                  commerce_protocol: "mcp",
+                  razorpay_payment_id: effectivePaymentId || dbSession.metadata?.razorpay_payment_id,
+                  acp_checkout_session_id: effectiveSessionId,
+                })
+                .select("*")
+                .maybeSingle()
+
+              await supabase
+                .from("acp_checkout_sessions")
+                .update({
+                  status: "completed",
+                  metadata: {
+                    ...(dbSession.metadata || {}),
+                    order_id: candidateOrderId,
+                    razorpay_payment_id: effectivePaymentId || dbSession.metadata?.razorpay_payment_id,
+                  },
+                })
+                .eq("id", effectiveSessionId)
+
+              setLastOrderId(candidateOrderId)
+              setLastOrderTotalPaise(totalPaise)
+              setLastShippingAddress(shipping)
+              setLastOrderSnapshot(rawItems)
+              if (createdOrder) setLastOrderData(createdOrder)
+            } else {
+              if (candidateOrderId) setLastOrderId(candidateOrderId)
+              setLastOrderTotalPaise(totalPaise)
+              setLastShippingAddress(shipping)
+              setLastOrderSnapshot(rawItems)
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error synchronizing checkout success order:", e)
+      } finally {
+        if (isMounted) setOrderSyncLoading(false)
+      }
+    })()
+
+    return () => {
+      isMounted = false
+    }
+  }, [location.pathname, view, viewParam, sessionParam, rzpPaymentIdParam, rzpStatusParam])
 
   const [productsList, setProductsList] = useState<Product[]>([])
 
@@ -589,40 +729,55 @@ export default function StoreHome() {
   }
 
   const handleOpenInvoiceModal = (customOrder?: any) => {
-    const rawItems = (customOrder?.items || lastOrderSnapshot || cart || []).map((it: any) => {
+    const activeOrder = customOrder || lastOrderData
+    const rawItems = (activeOrder?.items || lastOrderSnapshot || cart || []).map((it: any) => {
       const p = activeProducts.find((x) => x.id === it.id || x.id === it.product_id) || productStore.get(it.id)
       return {
         title: it.title || p?.title || "Grocery item",
-        qty: it.qty || 1,
-        unitPricePaise: it.unit_price_paise || p?.price_paise || 5000,
+        qty: it.qty || it.quantity || 1,
+        unitPricePaise: it.unit_price_paise || it.price_paise || p?.price_paise || 5000,
       }
     })
     const subtotal = rawItems.reduce((acc: number, it: any) => acc + it.unitPricePaise * it.qty, 0)
     const delivery = subtotal > 149900 || subtotal === 0 ? 0 : 4900
     const tax = Math.round((subtotal + delivery) * 0.18)
-    const total = subtotal + delivery + tax
+    const total = lastOrderTotalPaise ?? activeOrder?.total_paise ?? (subtotal + delivery + tax)
+
+    const activeShipping = activeOrder?.shipping_address || lastShippingAddress || {}
+    const customerName = activeOrder?.customerName || activeShipping.full_name || activeShipping.name || "Customer"
+    const phone = activeOrder?.phone || activeShipping.phone || activeShipping.contact || ""
+    const email = activeOrder?.email || activeShipping.email || ""
+    const address = activeOrder?.address || [activeShipping.street_address || activeShipping.address, activeShipping.landmark, activeShipping.city, activeShipping.state, activeShipping.pincode].filter(Boolean).join(", ") || "Address on file"
+
+    const resolvedOrderId = activeOrder?.external_id || activeOrder?.orderId || activeOrder?.id || lastOrderId || "ORD-2026-DEMO"
 
     setInvoiceModalData({
-      orderId: customOrder?.orderId || customOrder?.id || lastOrderId || "ORD-2026-DEMO",
-      invoiceNo: customOrder?.invoiceNumber || lastInvoiceNo || `INV-${(customOrder?.orderId || lastOrderId || "202603").slice(-6)}`,
-      date: customOrder?.invoiceDate || new Date().toLocaleString("en-IN"),
-      customerName: customOrder?.customerName || "Customer",
-      phone: customOrder?.phone || "",
-      email: customOrder?.email || "",
-      address: customOrder?.address || "Address not provided",
-      items: rawItems.length > 0 ? rawItems : [{ title: "Daily Groceries Basket", qty: 1, unitPricePaise: 25000 }],
-      subtotalPaise: subtotal > 0 ? subtotal : 25000,
+      orderId: resolvedOrderId,
+      invoiceNo: activeOrder?.invoiceNumber || lastInvoiceNo || `INV-${(resolvedOrderId).replace(/[^a-zA-Z0-9]/g, "").slice(-6)}`,
+      date: activeOrder?.invoiceDate || (activeOrder?.created_at ? new Date(activeOrder.created_at).toLocaleString("en-IN") : new Date().toLocaleString("en-IN")),
+      customerName,
+      phone,
+      email,
+      address,
+      items: rawItems.length > 0 ? rawItems : [{ title: "Daily Groceries Basket", qty: 1, unitPricePaise: total }],
+      subtotalPaise: subtotal > 0 ? subtotal : total,
       deliveryPaise: delivery,
-      taxPaise: tax > 0 ? tax : 4500,
-      totalPaise: total > 0 ? total : 29500,
-      paymentMethod: customOrder?.paymentMethod || "UPI (Agentic NCPI UAP)",
-      paymentId: customOrder?.paymentId || lastPaymentId || `pay_${Date.now().toString(36)}`,
+      taxPaise: tax > 0 ? tax : Math.round(total * 0.18),
+      totalPaise: total > 0 ? total : 13600,
+      paymentMethod: activeOrder?.paymentMethod || "UPI / Razorpay",
+      paymentId: activeOrder?.paymentId || lastPaymentId || activeOrder?.razorpay_payment_id || `pay_${Date.now().toString(36)}`,
       status: "PAID",
     })
     setInvoiceModalOpen(true)
   }
 
   const handleDownloadInvoice = (customOrder?: any) => {
+    const activeOrder = customOrder || lastOrderData
+    const resolvedOrderId = activeOrder?.external_id || activeOrder?.orderId || activeOrder?.id || lastOrderId
+    if (resolvedOrderId && resolvedOrderId.startsWith("RAZ-")) {
+      window.open(`https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${encodeURIComponent(resolvedOrderId)}&download=true`, "_blank")
+      return
+    }
     handleOpenInvoiceModal(customOrder)
     setTimeout(() => {
       window.print()
@@ -1449,32 +1604,35 @@ export default function StoreHome() {
             <PaymentSuccessView
               orderId={
                 lastOrderId ||
+                sessionParam ||
                 failedOrderId ||
                 `ORD-${Math.floor(100000 + Math.random() * 900000)}`
               }
               paymentId={
                 lastPaymentId ||
+                rzpPaymentIdParam ||
                 `pay_${Math.random().toString(36).slice(2, 6).toUpperCase()}1234`
               }
               invoiceNo={
                 lastInvoiceNo ||
-                `INV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
+                `INV-${new Date().getFullYear()}-${((lastOrderId || sessionParam || "123456").replace(/[^a-zA-Z0-9]/g, "")).slice(-6)}`
               }
-              cartSnapshot={lastOrderSnapshot || cart}
-              cartTotal={cartTotal}
+              cartSnapshot={lastOrderSnapshot || (cart.length > 0 ? cart : [])}
+              cartTotal={lastOrderTotalPaise ?? cartTotal}
+              shippingAddress={lastShippingAddress}
+              orderTotalPaise={lastOrderTotalPaise}
+              orderData={lastOrderData}
               products={activeProducts}
               onTrackOrder={() => {
-                // Section 4: Pass the real order info to the tracking screen
-                // using the last known successful payment info from executeAgentCheckout.
                 setTrackPrefill({
-                  orderId: lastOrderId ?? lastPaymentId ?? failedOrderId ?? `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
-                    mobile: "",
-                    email: "",
+                  orderId: lastOrderId ?? sessionParam ?? lastPaymentId ?? failedOrderId ?? `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+                  mobile: lastShippingAddress?.phone || "",
+                  email: lastShippingAddress?.email || "",
                 })
                 setView("track-order")
               }}
-              onViewInvoice={() => handleOpenInvoiceModal()}
-              onDownloadInvoice={() => handleDownloadInvoice()}
+              onViewInvoice={() => handleOpenInvoiceModal(lastOrderData)}
+              onDownloadInvoice={() => handleDownloadInvoice(lastOrderData)}
               onContinueShopping={() => {
                 setCart([])
                 setView("listing")
@@ -3586,7 +3744,7 @@ function TrackOrder({ onClose, initialValues, onViewInvoice, onDownloadInvoice }
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {ordersList.map((ord) => {
-                const isSelected = (activeOrder?.id || orderData.orderId) === ord.id
+                const isSelected = (activeOrder?.id || orderData?.orderId) === ord.id
                 const primaryItem = ord.items?.[0]
                 const extraCount = (ord.items?.length || 0) - 1
                 const itemSummary = primaryItem
@@ -4832,10 +4990,8 @@ function CheckoutView({
                     <>
                       <Loader2 className="size-4 animate-spin" /> Processing…
                     </>
-                  ) : paymentType === "upi" ? (
-                    <>Pay with UPI · {formatPrice(total)}</>
-                  ) : paymentType === "card" ? (
-                    <>Pay with Test Card · {formatPrice(total)}</>
+                  ) : paymentType === "cod" ? (
+                    <>Place Cash on Delivery Order · {formatPrice(total)}</>
                   ) : (
                     <>Pay with Razorpay · {formatPrice(total)}</>
                   )}
@@ -5055,6 +5211,9 @@ function PaymentSuccessView({
   invoiceNo,
   cartSnapshot,
   cartTotal,
+  shippingAddress,
+  orderTotalPaise,
+  orderData,
   products = [],
   onTrackOrder,
   onViewInvoice,
@@ -5064,8 +5223,11 @@ function PaymentSuccessView({
   orderId: string
   paymentId: string
   invoiceNo: string
-  cartSnapshot: CartItem[]
+  cartSnapshot: any[]
   cartTotal: number
+  shippingAddress?: any
+  orderTotalPaise?: number | null
+  orderData?: any
   products?: Product[]
   onTrackOrder: () => void
   onViewInvoice: () => void
@@ -5081,28 +5243,58 @@ function PaymentSuccessView({
     dateStyle: "medium",
   })
 
-  const displayItems = (
-    cartSnapshot.length > 0
-      ? cartSnapshot
-      : [{ id: products?.[0]?.id || productStore.list()[0]?.id || "p1", qty: 1 } as CartItem]
-  ).slice(0, 4)
+  const rawItems = (cartSnapshot && cartSnapshot.length > 0)
+    ? cartSnapshot
+    : (orderData?.items && orderData.items.length > 0 ? orderData.items : [])
 
-  const shippingCost = cartTotal > 149900 ? 0 : 4900
+  const displayItems = rawItems.slice(0, 10)
 
-  const tax = Math.round((cartTotal + shippingCost) * 0.18)
+  const activeShipping = shippingAddress || orderData?.shipping_address || {}
+  const customerName = activeShipping.full_name || activeShipping.name || orderData?.customer_name || "Customer"
+  const customerPhone = activeShipping.phone || activeShipping.contact || ""
+  const customerEmail = activeShipping.email || ""
+  const customerAddress = [
+    activeShipping.street_address || activeShipping.address,
+    activeShipping.landmark,
+    activeShipping.city,
+    activeShipping.state,
+    activeShipping.pincode,
+  ].filter(Boolean).join(", ")
 
-  const totalPaid =
-    cartSnapshot.length > 0 ? cartTotal + shippingCost + tax : 2499900
+  const calculatedSubtotal = displayItems.reduce((sum: number, it: any) => {
+    const p = (products || []).find((x) => x.id === it.id || x.id === it.product_id) || productStore.get(it.id)
+    const price = it.unit_price_paise || it.price_paise || p?.price_paise || 0
+    const qty = it.qty || it.quantity || 1
+    return sum + price * qty
+  }, 0)
+
+  const resolvedTotalPaid = orderTotalPaise ?? orderData?.total_paise ?? (
+    cartSnapshot && cartSnapshot.length > 0 ? cartTotal : (calculatedSubtotal > 0 ? calculatedSubtotal : null)
+  )
+
+  const totalPaid = resolvedTotalPaid ?? (calculatedSubtotal > 0 ? calculatedSubtotal : 0)
 
   const steps = [
-    "Preparing",
+    "Order Confirmed",
     "Packed",
     "Shipped",
     "Out for Delivery",
     "Delivered",
   ] as const
 
-  const currentStep = 0 // dummy: just placed → Preparing
+  const shippingStatus = orderData?.shipping_status || "dispatched"
+  const currentStep =
+    shippingStatus === "delivered"
+      ? 4
+      : shippingStatus === "out_for_delivery"
+        ? 3
+        : shippingStatus === "dispatched" || shippingStatus === "shipped"
+          ? 2
+          : shippingStatus === "packed"
+            ? 1
+            : 0
+
+  const invoiceEndpointUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${encodeURIComponent(orderId)}`
 
   return (
     <section className="px-0 sm:px-0 pb-12">
@@ -5136,7 +5328,17 @@ function PaymentSuccessView({
               <Button size="lg" onClick={onTrackOrder}>
                 <PackageCheck className="size-4" /> Track Order
               </Button>
-              <Button size="lg" variant="outline" onClick={onViewInvoice}>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => {
+                  if (orderId && orderId.startsWith("RAZ-")) {
+                    window.open(invoiceEndpointUrl, "_blank")
+                  } else {
+                    onViewInvoice()
+                  }
+                }}
+              >
                 <Eye className="size-4" /> View Invoice
               </Button>
               <Button size="lg" variant="ghost" onClick={onContinueShopping}>
@@ -5175,34 +5377,47 @@ function PaymentSuccessView({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Customer</span>
-                    <span>Ananya Rao · 98765 43210</span>
+                    <span className="font-medium text-right">
+                      {customerName} {customerPhone ? `· ${customerPhone}` : ""}
+                    </span>
                   </div>
+                  {customerAddress ? (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground shrink-0">Deliver to</span>
+                      <span className="text-right text-xs text-muted-foreground max-w-[280px]">
+                        {customerAddress}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
                 <Separator />
                 <div className="space-y-2">
-                  {displayItems.map((c) => {
-                    const p = (products || []).find((x) => x.id === c.id) || productStore.get(c.id)
-
-                    if (!p) return null
+                  {displayItems.map((c: any, idx: number) => {
+                    const p = (products || []).find((x) => x.id === c.id || x.id === c.product_id) || productStore.get(c.id)
+                    const title = c.title || p?.title || c.name || "Grocery Item"
+                    const qty = c.qty || c.quantity || 1
+                    const unitPrice = c.unit_price_paise || c.price_paise || p?.price_paise || (totalPaid > 0 ? Math.round(totalPaid / (displayItems.length || 1)) : 0)
+                    const img = c.image_url || p?.image_url || "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=600&auto=format&fit=crop&q=80"
+                    const category = c.category || p?.category || ""
 
                     return (
                       <div
-                        key={c.id}
+                        key={c.id || idx}
                         className="flex items-center gap-3 text-sm"
                       >
                         <img
-                          src={p.image_url}
-                          alt={p.title}
-                          className="size-10 rounded-md object-cover"
+                          src={img}
+                          alt={title}
+                          className="size-10 rounded-md object-cover border"
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium">{p.title}</div>
+                          <div className="truncate font-medium">{title}</div>
                           <div className="text-xs text-muted-foreground">
-                            Qty {c.qty} · {p.category}
+                            Qty {qty} {category ? `· ${category}` : ""}
                           </div>
                         </div>
                         <span className="font-medium">
-                          {formatPrice(p.price_paise * c.qty)}
+                          {formatPrice(unitPrice * qty)}
                         </span>
                       </div>
                     )
@@ -5216,9 +5431,7 @@ function PaymentSuccessView({
                   </span>
                 </div>
                 <div className="text-xs text-muted-foreground text-center">
-                  Inclusive of all taxes · Shipping{" "}
-                  {shippingCost === 0 ? "Free" : formatPrice(shippingCost)} ·
-                  GST {formatPrice(tax)}
+                  Inclusive of all taxes · Express 10–15 min delivery
                 </div>
               </CardContent>
             </Card>
@@ -5226,10 +5439,10 @@ function PaymentSuccessView({
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">
-                  Dummy shipping progress
+                  Delivery status
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Simulated — test mode, no carrier yet.
+                  Express Dark Store Dispatch · 10–15 mins SLA
                 </p>
               </CardHeader>
               <CardContent>
@@ -5237,7 +5450,6 @@ function PaymentSuccessView({
                   <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
                   {steps.map((s, i) => {
                     const isDone = i < currentStep
-
                     const isCurrent = i === currentStep
 
                     return (
@@ -5274,7 +5486,13 @@ function PaymentSuccessView({
                           </div>
                           <div className="text-[11px] text-muted-foreground">
                             {isCurrent
-                              ? "Order confirmed — preparing for shipment"
+                              ? s === "Shipped"
+                                ? "Dispatched from dark store — on the way"
+                                : s === "Out for Delivery"
+                                  ? "Rider is heading to your address"
+                                  : s === "Delivered"
+                                    ? "Order delivered"
+                                    : "Order confirmed — packing items"
                               : isDone
                                 ? "Completed"
                                 : "Pending"}
@@ -5331,18 +5549,47 @@ function PaymentSuccessView({
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Button size="sm" onClick={onDownloadInvoice}>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (orderId && orderId.startsWith("RAZ-")) {
+                        window.open(`${invoiceEndpointUrl}&download=true`, "_blank")
+                      } else {
+                        onDownloadInvoice()
+                      }
+                    }}
+                  >
                     <Download className="size-4" /> Download invoice
                   </Button>
-                  <Button size="sm" variant="outline" onClick={onViewInvoice}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (orderId && orderId.startsWith("RAZ-")) {
+                        window.open(invoiceEndpointUrl, "_blank")
+                      } else {
+                        onViewInvoice()
+                      }
+                    }}
+                  >
                     <Eye className="size-4" /> View invoice
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={onViewInvoice}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (orderId && orderId.startsWith("RAZ-")) {
+                        window.open(invoiceEndpointUrl, "_blank")
+                      } else {
+                        onViewInvoice()
+                      }
+                    }}
+                  >
                     <Mail className="size-4" /> Resend invoice
                   </Button>
                 </div>
                 <p className="text-center text-[11px] text-muted-foreground">
-                  PDF sent to ananya.rao@example.com
+                  {customerEmail ? `PDF sent to ${customerEmail}` : `GST Tax invoice ready for instant download`}
                 </p>
               </CardContent>
             </Card>
@@ -5355,7 +5602,17 @@ function PaymentSuccessView({
                 <Button size="sm" onClick={onTrackOrder}>
                   <PackageCheck className="size-4" /> Track Order
                 </Button>
-                <Button size="sm" variant="outline" onClick={onViewInvoice}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (orderId && orderId.startsWith("RAZ-")) {
+                      window.open(invoiceEndpointUrl, "_blank")
+                    } else {
+                      onViewInvoice()
+                    }
+                  }}
+                >
                   <Eye className="size-4" /> View Invoice
                 </Button>
                 <Button

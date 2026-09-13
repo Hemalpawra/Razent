@@ -1,5 +1,6 @@
 "use client"
 
+import { useRef, useEffect } from "react"
 import {
   XIcon,
   Bot,
@@ -31,7 +32,6 @@ import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { formatPrice } from "@/lib/types/product"
 import type { Conversation } from "@/lib/types/conversation"
-import { useIsMobile } from "@/hooks/use-mobile"
 
 interface ConversationDrawerProps {
   open: boolean
@@ -49,8 +49,15 @@ export default function ConversationDrawer({
   onClose,
   conversation,
 }: ConversationDrawerProps) {
-  const isMobile = useIsMobile()
-  if (isMobile || !conversation) return null
+  const chatScrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (open && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+    }
+  }, [open, conversation?.id, conversation?.messages?.length])
+
+  if (!conversation) return null
 
   const isActive = isActiveStatus(conversation.status)
   const messages = conversation.messages || []
@@ -86,9 +93,9 @@ export default function ConversationDrawer({
           </Button>
         </DrawerHeader>
 
-        <DrawerBody className="p-0 flex-1 flex flex-col overflow-hidden">
-          <Tabs defaultValue="chat" className="flex-1 flex flex-col">
-            <div className="border-b px-4 bg-muted/20">
+        <DrawerBody className="p-0 flex-1 min-h-0 flex flex-col overflow-hidden">
+          <Tabs defaultValue="chat" className="flex-1 min-h-0 flex flex-col gap-0 overflow-hidden">
+            <div className="border-b px-4 bg-muted/20 shrink-0">
               <TabsList className="bg-transparent h-10 p-0 gap-4">
                 <TabsTrigger
                   value="chat"
@@ -106,7 +113,11 @@ export default function ConversationDrawer({
             </div>
 
             {/* Tab: Chat Messages */}
-            <TabsContent value="chat" className="m-0 flex-1 p-4 overflow-y-auto space-y-3">
+            <TabsContent
+              value="chat"
+              ref={chatScrollRef}
+              className="m-0 flex-1 min-h-0 p-4 overflow-y-auto space-y-3 overscroll-contain focus-visible:outline-none"
+            >
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
                   <Bot className="size-8 mb-2 opacity-40" />
@@ -163,7 +174,10 @@ export default function ConversationDrawer({
             </TabsContent>
 
             {/* Tab: Order & Session Details */}
-            <TabsContent value="order" className="m-0 p-4 space-y-4 overflow-y-auto">
+            <TabsContent
+              value="order"
+              className="m-0 flex-1 min-h-0 p-4 space-y-4 overflow-y-auto overscroll-contain focus-visible:outline-none"
+            >
               <Card className="rounded-xl border shadow-none bg-card">
                 <CardContent className="p-4 space-y-3 text-xs">
                   <div className="flex justify-between py-1 border-b border-border/40">

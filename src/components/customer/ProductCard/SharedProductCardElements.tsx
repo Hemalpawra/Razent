@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Star, Heart, ShoppingBag } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatPrice } from "@/lib/types/product"
+import { formatPrice, type Currency } from "@/lib/types/product"
 
 export function calculateDiscount(pricePaise: number, mrpPaise?: number | null): number | null {
   if (!mrpPaise || mrpPaise <= pricePaise) return null
@@ -74,7 +74,7 @@ export function ProductCardPrice({
 }: {
   pricePaise: number
   mrpPaise?: number | null
-  currency?: string
+  currency?: Currency
   size?: "sm" | "md" | "lg"
   showDiscountBadge?: boolean
   className?: string

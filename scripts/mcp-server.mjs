@@ -423,13 +423,19 @@ async function executeCreateCheckoutSession(args) {
   try {
     await supabase.from("acp_checkout_sessions").insert({
       id: sessionId,
+      merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
       status: "ready_for_payment",
       currency: "INR",
       line_items: lineItems,
       totals: [{ type: "total", amount: totalPaise, display_text: "Total Amount" }],
-      metadata: { payment_link: paymentLink, razorpay_payment_link_id: razorpayPaymentLinkId },
+      capabilities: { payment_link_id: razorpayPaymentLinkId },
+      fulfillment_details: address,
+      payment_link: paymentLink,
+      metadata: { payment_link: paymentLink, razorpay_payment_link_id: razorpayPaymentLinkId, fulfillment_details: address },
     })
-  } catch {}
+  } catch (err) {
+    console.error("Error inserting checkout session:", err)
+  }
 
   return sessionObj
 }
@@ -439,23 +445,28 @@ async function executeGetCheckoutSession(args) {
   if (!session_id) throw new Error("session_id is required")
 
   let session = memorySessions.get(session_id)
-  if (!session) {
-    const { data: dbSession } = await supabase.from("acp_checkout_sessions").select("*").eq("id", session_id).maybeSingle()
-    if (dbSession) {
-      session = {
-        session_id: dbSession.id,
-        status: dbSession.status,
-        total_paise: dbSession.totals?.[0]?.amount || 0,
-        payment_link: dbSession.metadata?.payment_link,
-        razorpay_payment_link_id: dbSession.metadata?.razorpay_payment_link_id,
-        items: dbSession.line_items || [],
-      }
+  let dbSession = null
+  const { data } = await supabase.from("acp_checkout_sessions").select("*").eq("id", session_id).maybeSingle()
+  dbSession = data
+  if (!session && dbSession) {
+    session = {
+      session_id: dbSession.id,
+      status: dbSession.status,
+      total_paise: dbSession.totals?.[0]?.amount || 0,
+      payment_link: dbSession.payment_link || dbSession.metadata?.payment_link,
+      razorpay_payment_link_id: dbSession.capabilities?.payment_link_id || dbSession.metadata?.razorpay_payment_link_id,
+      items: dbSession.line_items || [],
+      order_id: dbSession.metadata?.order_id,
+      delivery_address: dbSession.fulfillment_details || dbSession.delivery_address || dbSession.metadata?.fulfillment_details || dbSession.metadata?.shipping_address || {},
     }
   }
 
   if (!session) throw new Error(`Session ${session_id} not found`)
+  if (!session.delivery_address && dbSession?.fulfillment_details) {
+    session.delivery_address = dbSession.fulfillment_details
+  }
 
-  if (session.razorpay_payment_link_id && session.status !== "paid" && session.status !== "completed") {
+  if (session.razorpay_payment_link_id && session.status !== "completed") {
     try {
       const authHeader = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString("base64")
       const rzpRes = await fetch(`https://api.razorpay.com/v1/payment_links/${session.razorpay_payment_link_id}`, {
@@ -464,25 +475,60 @@ async function executeGetCheckoutSession(args) {
       if (rzpRes.ok) {
         const rzpData = await rzpRes.json()
         if (rzpData.status === "paid") {
-          const orderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
-          session.status = "paid"
+          const paymentId = rzpData.payments?.[0]?.payment_id || rzpData.payments?.[0]?.id || rzpData.payment_id || null
+          const existingOrderId = session.order_id || dbSession?.metadata?.order_id
+          let orderId = existingOrderId
+          if (!orderId) {
+            orderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
+          }
+          session.status = "completed"
           session.order_id = orderId
 
-          await supabase.from("orders").insert({
-            external_id: orderId,
-            merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
-            status: "paid",
-            shipping_status: "dispatched",
-            currency: "INR",
-            total_paise: session.total_paise,
-            items: session.items,
-            via_ai: true,
-            commerce_protocol: "mcp",
-          })
-          await supabase.from("acp_checkout_sessions").update({ status: "paid" }).eq("id", session_id)
+          const { data: existingOrder } = await supabase
+            .from("orders")
+            .select("id, external_id")
+            .or(`external_id.eq.${orderId},acp_checkout_session_id.eq.${session_id}`)
+            .maybeSingle()
+
+          if (!existingOrder) {
+            const { error: insErr } = await supabase.from("orders").insert({
+              external_id: orderId,
+              merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
+              status: "paid",
+              shipping_status: "dispatched",
+              currency: "INR",
+              total_paise: session.total_paise,
+              items: session.items,
+              shipping_address: session.delivery_address || session.fulfillment_details || {},
+              via_ai: true,
+              commerce_protocol: "mcp",
+              razorpay_payment_id: paymentId,
+              acp_checkout_session_id: session_id,
+            })
+            if (insErr) {
+              console.error("Error inserting MCP order into orders table:", insErr)
+            }
+          } else if (existingOrder.external_id) {
+            orderId = existingOrder.external_id
+            session.order_id = orderId
+          }
+
+          const { error: updErr } = await supabase.from("acp_checkout_sessions").update({
+            status: "completed",
+            metadata: {
+              ...(dbSession?.metadata || {}),
+              order_id: orderId,
+              razorpay_payment_id: paymentId,
+            }
+          }).eq("id", session_id)
+          if (updErr) {
+            console.error("Error updating ACP checkout session:", updErr)
+          }
         }
       }
-    } catch {}
+    } catch (fetchErr) {
+      console.error("Error checking Razorpay payment link status:", fetchErr)
+    }
   }
 
   if (session.status === "paid" || session.status === "completed") {
