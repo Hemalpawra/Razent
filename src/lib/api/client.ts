@@ -38,6 +38,7 @@ import {
   type X402Challenge,
 } from "@/lib/protocol/agenticCommerce"
 import { getSavedTestCards } from "@/lib/protocol/regulatoryWrapper"
+import { formatAgentName } from "@/lib/utils/agentSource"
 
 // ─────────────────────────────────────────────────────────────────
 // DB row mappers (Q2 — reconcile SQL↔TS shape)
@@ -126,6 +127,7 @@ function mapDbOrder(row: any): Order {
     billing_address: row.billing_address ?? undefined,
     via_ai: !!row.via_ai,
     conversation_id: row.conversation_id ?? undefined,
+    agent_id: row.agent_id ?? undefined,
     mandate_id: row.mandate_id ?? undefined,
     checkout_session_id: row.checkout_session_id ?? undefined,
     commerce_protocol: row.commerce_protocol ?? undefined,
@@ -1153,6 +1155,8 @@ export async function createStorefrontOrder(order: Order): Promise<Order> {
       billing_address: order.billing_address ?? null,
       via_ai: !!order.via_ai,
       commerce_protocol: order.commerce_protocol || "direct_web",
+      agent_id: order.agent_id ?? null,
+      acp_checkout_session_id: (order as any).acp_checkout_session_id ?? null,
       notes: order.notes ?? null,
       paid_at: order.status === "paid" ? (order.paid_at || new Date().toISOString()) : null,
     } as any)
@@ -1390,10 +1394,11 @@ export async function executeStorefrontPayment(
       const saved = await createStorefrontOrder(paidOrder)
       const invoiceNo = `INV-${new Date().getFullYear()}-${order.id.slice(-6)}`
 
+      const actorLabel = order.agent_id ? formatAgentName(order.agent_id) : (order.via_ai ? "AI Assistant" : "Razorpay Checkout Modal")
       const audit = await logAuditEvent({
         order_id: order.id,
         customer: order.shipping_address.full_name,
-        actor_label: "Razorpay Checkout Modal",
+        actor_label: actorLabel,
         events: [
           { id: `ev_${Date.now()}_1`, timestamp: new Date().toISOString(), type: "customer_request", actor: "Customer", source: "storefront_checkout", result: "Success", reason: "Customer opened Razorpay modal" },
           { id: `ev_${Date.now()}_2`, timestamp: new Date().toISOString(), type: "ai_search", actor: "System", source: "catalog_browser", result: "Success", reason: "Catalog items validated in real-time" },
@@ -1403,7 +1408,7 @@ export async function executeStorefrontPayment(
           { id: `ev_${Date.now()}_6`, timestamp: new Date().toISOString(), type: "order_review_shown", actor: "System", source: "checkout_engine", result: "Success", reason: "Itemized total verified" },
           { id: `ev_${Date.now()}_7`, timestamp: new Date().toISOString(), type: "approval_received", actor: "Customer", source: "razorpay_modal", result: "Success", reason: "Customer authorized payment in Razorpay modal" },
           { id: `ev_${Date.now()}_8`, timestamp: new Date().toISOString(), type: "razorpay_order_created", actor: "Razorpay Gateway", source: "payment_orchestrator", result: "Success", reason: `Order created for ₹${(order.total_paise / 100).toFixed(2)}` },
-          { id: `ev_${Date.now()}_9`, timestamp: new Date().toISOString(), type: "payment_success", actor: "Razorpay Gateway", source: "gateway_modal", result: "Success", reason: `Verified payment ${razorpayResponse.razorpay_payment_id}`, status_code: 200 },
+          { id: `ev_${Date.now()}_9`, timestamp: new Date().toISOString(), type: "payment_success", actor: actorLabel, source: "gateway_modal", result: "Success", reason: `Verified payment ${razorpayResponse.razorpay_payment_id}`, status_code: 200 },
           { id: `ev_${Date.now()}_10`, timestamp: new Date().toISOString(), type: "invoice_generated", actor: "System", source: "billing_service", result: "Success", reason: `Generated invoice ${invoiceNo}` },
           { id: `ev_${Date.now()}_11`, timestamp: new Date().toISOString(), type: "tracking_started", actor: "Logistics", source: "dispatch_engine", result: "Success", reason: "Order confirmed, logistics tracking initiated" },
         ] as AuditEvent[],
@@ -1417,6 +1422,7 @@ export async function executeStorefrontPayment(
         auditSessionId: audit?.session_id,
       }
     } else {
+      const actorLabel = order.agent_id ? formatAgentName(order.agent_id) : (order.via_ai ? "AI Assistant" : "Razorpay Checkout Modal")
       const failedOrder: Order = {
         ...order,
         status: "failed",
@@ -1426,9 +1432,9 @@ export async function executeStorefrontPayment(
       await logAuditEvent({
         order_id: order.id,
         customer: order.shipping_address.full_name,
-        actor_label: "Razorpay Checkout Modal",
+        actor_label: actorLabel,
         events: [
-          { id: `ev_${Date.now()}_fail`, timestamp: new Date().toISOString(), type: "payment_failed", actor: "Razorpay Gateway", source: "gateway_modal", result: "Failed", reason: "Payment cancelled or declined in Razorpay modal" },
+          { id: `ev_${Date.now()}_fail`, timestamp: new Date().toISOString(), type: "payment_failed", actor: actorLabel, source: "gateway_modal", result: "Failed", reason: "Payment cancelled or declined in Razorpay modal" },
         ] as AuditEvent[],
       }).catch(() => null)
 

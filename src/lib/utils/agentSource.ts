@@ -19,7 +19,7 @@ export interface AgentSourceInfo {
   isAi: boolean
 }
 
-export function formatAgentName(rawId: string): string {
+export function formatAgentName(rawId?: string | null): string {
   if (!rawId) return "External Agent"
   
   let cleaned = rawId
@@ -44,51 +44,14 @@ export function getOrderAgentSource(order: Partial<Order> | any): AgentSourceInf
   const agentId = (order?.agent_id || "").toLowerCase()
   const convId = (order?.conversation_id || "").toLowerCase()
 
-  // 1. Claude
+  // 1. Check explicit assistant keywords in agentId or notes FIRST
+  // ChatGPT
   if (
-    protocol === "mcp" ||
-    externalId.startsWith("RAZ-MCP") ||
-    notes.includes("claude") ||
-    agentId.includes("claude")
-  ) {
-    return {
-      type: "claude",
-      name: "Claude",
-      shortLabel: "Claude",
-      badgeClass:
-        "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800",
-      dotClass: "bg-purple-500",
-      color: "#8B5CF6",
-      isAi: true,
-    }
-  }
-
-  // 2. Google Gemini
-  if (
-    protocol === "ap2" ||
-    order?.ap2_mandate_chain_id ||
-    notes.includes("gemini") ||
-    agentId.includes("gemini")
-  ) {
-    return {
-      type: "gemini",
-      name: "Google Gemini",
-      shortLabel: "Gemini",
-      badgeClass:
-        "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
-      dotClass: "bg-blue-500",
-      color: "#3B82F6",
-      isAi: true,
-    }
-  }
-
-  // 3. ChatGPT
-  if (
-    (protocol === "acp" && !agentId && !notes) ||
+    agentId.includes("chatgpt") ||
+    agentId.includes("openai") ||
     notes.includes("chatgpt") ||
     notes.includes("openai") ||
-    agentId.includes("chatgpt") ||
-    agentId.includes("openai")
+    (protocol === "acp" && !agentId && !notes.includes("gemini") && !notes.includes("claude"))
   ) {
     return {
       type: "chatgpt",
@@ -102,20 +65,94 @@ export function getOrderAgentSource(order: Partial<Order> | any): AgentSourceInf
     }
   }
 
-  // 4. External Agent (with known name or generic fallback)
+  // Google Gemini
   if (
-    agentId ||
-    protocol === "ncpi_uap" ||
-    protocol === "x402" ||
-    (protocol === "acp" && agentId)
+    agentId.includes("gemini") ||
+    agentId.includes("google") ||
+    notes.includes("gemini") ||
+    notes.includes("google") ||
+    protocol === "ap2" ||
+    order?.ap2_mandate_chain_id
   ) {
-    const rawName =
-      agentId ||
-      notes.match(/agent[:\s]+([a-zA-Z0-9_-]+)/i)?.[1] ||
-      ""
+    return {
+      type: "gemini",
+      name: "Google Gemini",
+      shortLabel: "Gemini",
+      badgeClass:
+        "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
+      dotClass: "bg-blue-500",
+      color: "#3B82F6",
+      isAi: true,
+    }
+  }
 
-    if (rawName && rawName !== "ncpi_uap" && rawName !== "acp") {
-      const formatted = formatAgentName(rawName)
+  // Claude
+  if (
+    agentId.includes("claude") ||
+    agentId.includes("anthropic") ||
+    notes.includes("claude") ||
+    notes.includes("anthropic")
+  ) {
+    return {
+      type: "claude",
+      name: "Claude",
+      shortLabel: "Claude",
+      badgeClass:
+        "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800",
+      dotClass: "bg-purple-500",
+      color: "#8B5CF6",
+      isAi: true,
+    }
+  }
+
+  // Store Agent (In-App Storefront AI Assistant)
+  if (
+    agentId.includes("store_agent") ||
+    agentId.includes("store-agent") ||
+    agentId.includes("razent-ai") ||
+    notes.includes("store agent")
+  ) {
+    return {
+      type: "store_agent",
+      name: "Store Agent",
+      shortLabel: "Store Agent",
+      badgeClass:
+        "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+      dotClass: "bg-amber-500",
+      color: "#F59E0B",
+      isAi: true,
+    }
+  }
+
+  // 2. Custom Named External Agent
+  if (
+    agentId &&
+    agentId !== "direct_web" &&
+    agentId !== "human_customer" &&
+    agentId !== "mcp" &&
+    agentId !== "acp" &&
+    agentId !== "ap2" &&
+    agentId !== "uap"
+  ) {
+    const formatted = formatAgentName(agentId)
+    return {
+      type: "external_agent",
+      name: `External Agent (${formatted})`,
+      shortLabel: formatted,
+      badgeClass:
+        "bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800",
+      dotClass: "bg-cyan-500",
+      color: "#06B6D4",
+      isAi: true,
+    }
+  }
+
+  // 3. Check protocols / MCP fallback
+  if (protocol === "mcp" || externalId.startsWith("RAZ-MCP")) {
+    // If agent mentioned in notes
+    const match = notes.match(/(?:via|agent)[:\s]+([a-zA-Z0-9_-]+)/i)
+    if (match?.[1]) {
+      const formatted = formatAgentName(match[1])
       return {
         type: "external_agent",
         name: `External Agent (${formatted})`,
@@ -128,6 +165,20 @@ export function getOrderAgentSource(order: Partial<Order> | any): AgentSourceInf
       }
     }
 
+    // Default MCP order with unknown agent
+    return {
+      type: "external_agent",
+      name: "External Agent (MCP)",
+      shortLabel: "External Agent",
+      badgeClass:
+        "bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800",
+      dotClass: "bg-cyan-500",
+      color: "#06B6D4",
+      isAi: true,
+    }
+  }
+
+  if (protocol === "ncpi_uap" || protocol === "x402") {
     return {
       type: "external_agent",
       name: "External Agent",
@@ -140,7 +191,7 @@ export function getOrderAgentSource(order: Partial<Order> | any): AgentSourceInf
     }
   }
 
-  // 5. Store Agent (In-App Storefront AI Assistant)
+  // 4. Storefront AI Assistant fallback
   if (order?.via_ai || convId || (protocol === "direct_web" && order?.via_ai)) {
     return {
       type: "store_agent",
@@ -154,7 +205,7 @@ export function getOrderAgentSource(order: Partial<Order> | any): AgentSourceInf
     }
   }
 
-  // 6. Direct Customer
+  // 5. Direct Customer
   return {
     type: "direct_customer",
     name: "Direct Customer",
@@ -174,37 +225,8 @@ export function getConversationAgentSource(
   const agentId = (conv?.agent_id || "").toLowerCase()
   const convType = (conv?.type || "").toLowerCase()
 
-  if (agentId.includes("claude") || protocol === "mcp") {
-    return {
-      type: "claude",
-      name: "Claude",
-      shortLabel: "Claude",
-      badgeClass:
-        "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800",
-      dotClass: "bg-purple-500",
-      color: "#8B5CF6",
-      isAi: true,
-    }
-  }
-
-  if (agentId.includes("gemini") || protocol === "ap2") {
-    return {
-      type: "gemini",
-      name: "Google Gemini",
-      shortLabel: "Gemini",
-      badgeClass:
-        "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
-      dotClass: "bg-blue-500",
-      color: "#3B82F6",
-      isAi: true,
-    }
-  }
-
-  if (
-    agentId.includes("chatgpt") ||
-    agentId.includes("openai") ||
-    (protocol === "acp" && !agentId)
-  ) {
+  // 1. Explicit keywords
+  if (agentId.includes("chatgpt") || agentId.includes("openai")) {
     return {
       type: "chatgpt",
       name: "ChatGPT",
@@ -217,17 +239,71 @@ export function getConversationAgentSource(
     }
   }
 
+  if (agentId.includes("gemini") || agentId.includes("google") || protocol === "ap2") {
+    return {
+      type: "gemini",
+      name: "Google Gemini",
+      shortLabel: "Gemini",
+      badgeClass:
+        "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
+      dotClass: "bg-blue-500",
+      color: "#3B82F6",
+      isAi: true,
+    }
+  }
+
+  if (agentId.includes("claude") || agentId.includes("anthropic")) {
+    return {
+      type: "claude",
+      name: "Claude",
+      shortLabel: "Claude",
+      badgeClass:
+        "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800",
+      dotClass: "bg-purple-500",
+      color: "#8B5CF6",
+      isAi: true,
+    }
+  }
+
   if (
     agentId &&
     agentId !== "razent-ai-assistant" &&
     agentId !== "store-agent" &&
-    agentId !== "direct_web"
+    agentId !== "store_agent" &&
+    agentId !== "direct_web" &&
+    agentId !== "human_customer"
   ) {
     const formatted = formatAgentName(conv.agent_id)
     return {
       type: "external_agent",
       name: `External Agent (${formatted})`,
       shortLabel: formatted,
+      badgeClass:
+        "bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800",
+      dotClass: "bg-cyan-500",
+      color: "#06B6D4",
+      isAi: true,
+    }
+  }
+
+  if (protocol === "acp") {
+    return {
+      type: "chatgpt",
+      name: "ChatGPT",
+      shortLabel: "ChatGPT",
+      badgeClass:
+        "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
+      dotClass: "bg-emerald-500",
+      color: "#10B981",
+      isAi: true,
+    }
+  }
+
+  if (protocol === "mcp") {
+    return {
+      type: "external_agent",
+      name: "External Agent (MCP)",
+      shortLabel: "External Agent",
       badgeClass:
         "bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800",
       dotClass: "bg-cyan-500",

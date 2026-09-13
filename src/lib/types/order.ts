@@ -49,8 +49,10 @@ export type Order = {
   /** True if the order was created via the AI assistant (vs the storefront). */
   via_ai: boolean
   conversation_id?: string
+  agent_id?: string
   mandate_id?: string
   checkout_session_id?: string
+  acp_checkout_session_id?: string
   settlement_reference?: string
   challenge_id?: string
   commerce_protocol?: CommerceProtocol

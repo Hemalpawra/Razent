@@ -32,9 +32,12 @@ const SERVER_INFO = {
 
 const INSTRUCTIONS =
   "You are connected to the Razent Quick Commerce MCP Server (https://razent.vercel.app). " +
-  "Help customers discover products across 10 aisles, prepare checkout sessions with Razorpay payment links, and track deliveries. " +
-  "Never charge a customer automatically without consent; always present the secure Razorpay payment link for human verification. " +
-  "Format links cleanly as markdown buttons: [Click here to Pay ₹XX via Razorpay](url) and [Click here to Download Tax Invoice](url)."
+  "Help customers discover products across 10 store aisles, collect their delivery address, prepare in-app checkout sessions on Razent, and track deliveries. " +
+  "CRITICAL RULES: " +
+  "1. ALWAYS ask the customer for their full delivery address (full name, phone number, house/street address, city, pincode) BEFORE calling create_checkout_session. Never place an order or create a checkout session without asking for the delivery address first. " +
+  "2. When calling create_checkout_session, identify yourself in the 'assistant' field ('chatgpt', 'gemini', 'claude', 'store_agent', or external agent name). " +
+  "3. Always provide the in-app Razent checkout link so the customer can review their cart, authenticate in the app, confirm their address, and pay securely. " +
+  "4. Format the checkout link as a markdown link: [Click here to Complete Checkout on Razent](checkout_url)."
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,11 +76,12 @@ const TOOLS = [
   {
     name: "create_checkout_session",
     description:
-      "Create an Agentic Commerce Protocol (ACP) checkout session and generate a verified Razorpay payment link. " +
-      "Human-in-the-loop: Present the payment link to the customer for authorization. Never charge automatically.",
+      "Create an in-app Razent checkout session and order. " +
+      "MANDATORY REQUIREMENT: You MUST ask the customer for their full delivery address (full name, phone number, address line/flat, city, pincode) BEFORE calling this tool. " +
+      "Returns an in-app Razent checkout link so the customer can authenticate, confirm address, and pay in the app. Never call without address.",
     inputSchema: {
       type: "object",
-      required: ["items"],
+      required: ["items", "delivery_address"],
       properties: {
         items: {
           type: "array",
@@ -86,21 +90,27 @@ const TOOLS = [
             type: "object",
             required: ["id", "quantity"],
             properties: {
-              id: { type: "string", description: "Product ID (number or string) or exact product title" },
+              id: { type: "string", description: "Product ID or exact product title" },
               quantity: { type: "number", minimum: 1, description: "Quantity of item" },
             },
           },
         },
         delivery_address: {
           type: "object",
-          description: "Customer delivery address",
+          description: "Customer delivery address (REQUIRED - ask customer first)",
+          required: ["full_name", "phone", "line1", "city", "pincode"],
           properties: {
-            full_name: { type: "string" },
-            phone: { type: "string" },
-            line1: { type: "string" },
-            city: { type: "string" },
-            pincode: { type: "string" },
+            full_name: { type: "string", description: "Customer full name" },
+            phone: { type: "string", description: "Customer 10-digit mobile number" },
+            line1: { type: "string", description: "House/flat number, building, street" },
+            city: { type: "string", description: "City name" },
+            pincode: { type: "string", description: "6-digit postal code" },
           },
+        },
+        assistant: {
+          type: "string",
+          description: "Your AI assistant identifier: 'chatgpt', 'gemini', 'claude', 'store_agent', or external agent name",
+          enum: ["chatgpt", "gemini", "claude", "store_agent", "external_agent"],
         },
       },
     },
@@ -147,6 +157,101 @@ const TOOLS = [
     },
   },
 ]
+
+function formatAssistantName(raw?: string): string {
+  if (!raw) return "External Agent"
+  const l = raw.toLowerCase().trim()
+  if (l.includes("chatgpt") || l.includes("openai")) return "ChatGPT"
+  if (l.includes("gemini") || l.includes("google")) return "Google Gemini"
+  if (l.includes("claude") || l.includes("anthropic")) return "Claude"
+  if (l.includes("store_agent") || l.includes("store")) return "Store Agent"
+  return (
+    raw
+      .replace(/[_-]/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim() || "External Agent"
+  )
+}
+
+async function logMcpAudit({
+  sessionId,
+  orderId,
+  customer,
+  actorLabel,
+  event,
+}: {
+  sessionId: string
+  orderId?: string | null
+  customer?: string
+  actorLabel: string
+  event: {
+    type: string
+    result: "Success" | "Warning" | "Failed" | "Critical"
+    reason?: string
+    payload_summary?: string
+  }
+}) {
+  try {
+    const fullEvent = {
+      id: "evt_" + crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      actor: actorLabel,
+      source: "MCP Server",
+      type: event.type,
+      result: event.result,
+      reason: event.reason,
+      payload_summary: event.payload_summary,
+      request_id: orderId || sessionId,
+    }
+
+    const { data: existing } = await supabase
+      .from("audit_sessions")
+      .select("*")
+      .or(`external_id.eq.${sessionId},id.eq.${sessionId}`)
+      .maybeSingle()
+
+    if (existing) {
+      const existingEvents = Array.isArray(existing.events) ? existing.events : []
+      const combined = [...existingEvents, fullEvent]
+      const worst = combined.some((e: any) => e.result === "Critical")
+        ? "Critical"
+        : combined.some((e: any) => e.result === "Failed")
+        ? "Failed"
+        : combined.some((e: any) => e.result === "Warning")
+        ? "Warning"
+        : "Success"
+
+      await supabase
+        .from("audit_sessions")
+        .update({
+          order_id: orderId ?? existing.order_id,
+          customer: customer || existing.customer,
+          actor_label: actorLabel || existing.actor_label,
+          events: combined,
+          event_count: combined.length,
+          last_event: fullEvent.type,
+          status: worst,
+          severity: worst,
+        })
+        .eq("id", existing.id)
+    } else {
+      await supabase.from("audit_sessions").insert({
+        external_id: sessionId,
+        merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
+        order_id: orderId ?? null,
+        customer: customer || "AI Shopper",
+        actor_label: actorLabel,
+        events: [fullEvent],
+        event_count: 1,
+        last_event: fullEvent.type,
+        status: event.result,
+        severity: event.result,
+      })
+    }
+  } catch (err) {
+    console.error("[logMcpAudit] error logging audit event:", err)
+  }
+}
 
 function cleanSearchQuery(q: string): string {
   return q
@@ -298,6 +403,21 @@ async function executeSearchCatalog(args: any) {
     }
   }
 
+  // Audit trail for catalog discovery
+  const assistant = (args.assistant || "external_agent").toLowerCase().trim()
+  const actorLabel = formatAssistantName(assistant)
+  const searchSessionId = `search_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  logMcpAudit({
+    sessionId: searchSessionId,
+    actorLabel,
+    event: {
+      type: "ai_search",
+      result: "Success",
+      reason: `MCP Search for query: "${rawInput}"`,
+      payload_summary: `Found ${deduped.length} items`,
+    },
+  }).catch(() => {})
+
   return {
     protocol: "ucp",
     version: "2026-01-16",
@@ -344,6 +464,31 @@ async function executeCreateCheckoutSession(args: any) {
     throw new Error("No items provided in checkout session request")
   }
 
+  const rawAddress = args.delivery_address
+  if (
+    !rawAddress ||
+    !rawAddress.full_name?.trim() ||
+    !rawAddress.phone?.trim() ||
+    !rawAddress.line1?.trim() ||
+    !rawAddress.city?.trim() ||
+    !rawAddress.pincode?.trim()
+  ) {
+    throw new Error(
+      "MANDATORY ADDRESS REQUIRED: Please ask the customer for their full delivery address (full name, 10-digit mobile number, house/street address, city, and 6-digit pincode) before creating the checkout session."
+    )
+  }
+
+  const address = {
+    full_name: rawAddress.full_name.trim(),
+    phone: rawAddress.phone.trim(),
+    line1: rawAddress.line1.trim(),
+    city: rawAddress.city.trim(),
+    pincode: rawAddress.pincode.trim(),
+  }
+
+  const assistant = (args.assistant || "external_agent").toLowerCase().trim()
+  const actorLabel = formatAssistantName(assistant)
+
   const { data: allProds, error: pErr } = await supabase.from("products").select("*")
   if (pErr) throw pErr
   const prods = allProds || []
@@ -369,53 +514,7 @@ async function executeCreateCheckoutSession(args: any) {
   }
 
   const sessionId = `acp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
-  const fallbackAddress = {
-    full_name: args.delivery_address?.full_name || "Customer",
-    phone: args.delivery_address?.phone || "",
-    line1: args.delivery_address?.line1 || "",
-    city: args.delivery_address?.city || "",
-    pincode: args.delivery_address?.pincode || "",
-  }
-  const address = args.delivery_address ? { ...fallbackAddress, ...args.delivery_address } : fallbackAddress
-
-  let paymentLink = `https://razent.vercel.app/checkout?session=${sessionId}`
-  let razorpayPaymentLinkId = null
-
-  try {
-    const authHeader = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)
-    const rzpRes = await fetch("https://api.razorpay.com/v1/payment_links", {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${authHeader}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        amount: totalPaise,
-        currency: "INR",
-        accept_partial: false,
-        reference_id: sessionId,
-        description: `Razent Instant Delivery - ${lineItems.length} item(s)`,
-        customer: {
-          name: address.full_name,
-          contact: address.phone.replace(/[^0-9]/g, "").slice(-10),
-        },
-        notify: { sms: false, email: false },
-        reminder_enable: false,
-        callback_url: `https://razent.vercel.app/checkout/success?session=${sessionId}`,
-        callback_method: "get",
-      }),
-    })
-
-    if (rzpRes.ok) {
-      const rzpData = await rzpRes.json()
-      if (rzpData.short_url) {
-        paymentLink = rzpData.short_url
-        razorpayPaymentLinkId = rzpData.id
-      }
-    }
-  } catch (err) {
-    console.warn("Razorpay link creation notice:", err.message)
-  }
+  const checkoutUrl = `https://razent.vercel.app/checkout?session=${sessionId}`
 
   const sessionObj = {
     session_id: sessionId,
@@ -425,10 +524,11 @@ async function executeCreateCheckoutSession(args: any) {
     total_paise: totalPaise,
     items: lineItems,
     delivery_address: address,
-    payment_link: paymentLink,
-    payment_link_markdown: `[Click here to Pay ₹${(totalPaise / 100).toFixed(2)} on Razorpay](${paymentLink})`,
-    razorpay_payment_link_id: razorpayPaymentLinkId,
-    instructions: "CRITICAL: Present the payment link above to the customer for manual verification. Never pay on customer behalf.",
+    assistant,
+    checkout_url: checkoutUrl,
+    payment_link: checkoutUrl,
+    payment_link_markdown: `[Click here to Complete Checkout on Razent](${checkoutUrl})`,
+    instructions: "CRITICAL: Present the checkout link above to the customer. They will complete checkout, confirm address, and pay securely directly in the Razent app.",
     created_at: new Date().toISOString(),
   }
 
@@ -442,15 +542,55 @@ async function executeCreateCheckoutSession(args: any) {
       currency: "INR",
       line_items: lineItems,
       totals: [{ type: "total", amount: totalPaise, display_text: "Total Amount" }],
-      capabilities: { payment_link_id: razorpayPaymentLinkId },
       fulfillment_details: address,
-      payment_link: paymentLink,
-      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      delivery_address: address,
+      payment_link: checkoutUrl,
+      agent_id: assistant,
+      metadata: {
+        assistant,
+        agent_id: assistant,
+        actor_label: actorLabel,
+      },
+      expires_at: new Date(Date.now() + 86400_000).toISOString(),
     })
     if (insErr) console.error("Insert checkout session error:", insErr)
   } catch (e) {
     console.error("Exception inserting checkout session:", e)
   }
+
+  // Also upsert a conversation entry so it displays under Merchant AI Agents screen
+  try {
+    await supabase.from("conversations").upsert(
+      {
+        external_id: sessionId,
+        merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
+        customer_name: address.full_name || "AI Shopper",
+        type: "order",
+        agent_id: assistant,
+        protocol: "mcp",
+        status: "active",
+        last_message: `Checkout session created for ${lineItems.length} item(s) (₹${(totalPaise / 100).toFixed(2)})`,
+        amount_paise: totalPaise,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "external_id" }
+    )
+  } catch (convErr) {
+    console.warn("Exception upserting conversation:", convErr)
+  }
+
+  // Log audit event
+  logMcpAudit({
+    sessionId,
+    customer: address.full_name,
+    actorLabel,
+    event: {
+      type: "checkout_created",
+      result: "Success",
+      reason: `Checkout session created by ${actorLabel} for ₹${(totalPaise / 100).toFixed(2)}`,
+      payload_summary: `${lineItems.length} item(s) to ${address.city} (${address.pincode})`,
+    },
+  }).catch(() => {})
 
   return sessionObj
 }
@@ -468,11 +608,18 @@ async function executeGetCheckoutSession(args: any) {
       session_id: dbSession.id,
       status: dbSession.status,
       total_paise: dbSession.totals?.[0]?.amount || 0,
-      payment_link: dbSession.payment_link || dbSession.metadata?.payment_link,
+      payment_link: dbSession.payment_link || `https://razent.vercel.app/checkout?session=${session_id}`,
+      checkout_url: dbSession.payment_link || `https://razent.vercel.app/checkout?session=${session_id}`,
       razorpay_payment_link_id: dbSession.capabilities?.payment_link_id || dbSession.metadata?.razorpay_payment_link_id,
       items: dbSession.line_items || [],
       order_id: dbSession.metadata?.order_id,
-      delivery_address: dbSession.fulfillment_details || dbSession.delivery_address || dbSession.metadata?.fulfillment_details || dbSession.metadata?.shipping_address || {},
+      delivery_address:
+        dbSession.fulfillment_details ||
+        dbSession.delivery_address ||
+        dbSession.metadata?.fulfillment_details ||
+        dbSession.metadata?.shipping_address ||
+        {},
+      assistant: dbSession.agent_id || dbSession.metadata?.assistant || dbSession.metadata?.agent_id || "claude",
     }
   }
 
@@ -481,7 +628,25 @@ async function executeGetCheckoutSession(args: any) {
     session.delivery_address = dbSession.fulfillment_details
   }
 
-  if (session.razorpay_payment_link_id && session.status !== "completed") {
+  const assistant = session.assistant || dbSession?.agent_id || dbSession?.metadata?.assistant || "claude"
+  const actorLabel = formatAssistantName(assistant)
+
+  // Also check if an order was already created in orders table for this session
+  const { data: existingOrder } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("acp_checkout_session_id", session_id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (existingOrder) {
+    session.status = existingOrder.status === "paid" ? "completed" : existingOrder.status
+    session.order_id = existingOrder.external_id
+  }
+
+  // If Razorpay link exists and not yet completed, check Razorpay API
+  if (session.razorpay_payment_link_id && session.status !== "completed" && session.status !== "paid") {
     try {
       const authHeader = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)
       const rzpRes = await fetch(`https://api.razorpay.com/v1/payment_links/${session.razorpay_payment_link_id}`, {
@@ -491,22 +656,12 @@ async function executeGetCheckoutSession(args: any) {
         const rzpData = await rzpRes.json()
         if (rzpData.status === "paid") {
           const paymentId = rzpData.payments?.[0]?.payment_id || rzpData.payments?.[0]?.id || rzpData.payment_id || null
-          const existingOrderId = session.order_id || dbSession?.metadata?.order_id
-          let orderId = existingOrderId
-          if (!orderId) {
-            orderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
-          }
+          let orderId = session.order_id || dbSession?.metadata?.order_id || `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
           session.status = "completed"
           session.order_id = orderId
 
-          const { data: existingOrder } = await supabase
-            .from("orders")
-            .select("id, external_id")
-            .or(`external_id.eq.${orderId},acp_checkout_session_id.eq.${session_id}`)
-            .maybeSingle()
-
           if (!existingOrder) {
-            const { error: insErr } = await supabase.from("orders").insert({
+            await supabase.from("orders").insert({
               external_id: orderId,
               merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
               status: "paid",
@@ -514,31 +669,92 @@ async function executeGetCheckoutSession(args: any) {
               currency: "INR",
               total_paise: session.total_paise,
               items: session.items,
-              shipping_address: session.delivery_address || session.fulfillment_details || {},
+              shipping_address: session.delivery_address || {},
               via_ai: true,
               commerce_protocol: "mcp",
+              agent_id: assistant,
+              notes: `Placed by ${actorLabel} via MCP`,
               razorpay_payment_id: paymentId,
               acp_checkout_session_id: session_id,
             })
-            if (insErr) {
-              console.error("Error inserting MCP order into orders table:", insErr)
-            }
-          } else if (existingOrder.external_id) {
-            orderId = existingOrder.external_id
-            session.order_id = orderId
           }
 
-          const { error: updErr } = await supabase.from("acp_checkout_sessions").update({
-            status: "completed",
-            metadata: {
-              ...(dbSession?.metadata || {}),
+          await supabase
+            .from("acp_checkout_sessions")
+            .update({
+              status: "completed",
+              metadata: {
+                ...(dbSession?.metadata || {}),
+                order_id: orderId,
+                razorpay_payment_id: paymentId,
+                assistant,
+              },
+            })
+            .eq("id", session_id)
+
+          // Update conversation
+          await supabase
+            .from("conversations")
+            .update({
+              status: "paid",
               order_id: orderId,
-              razorpay_payment_id: paymentId,
-            }
-          }).eq("id", session_id)
-          if (updErr) {
-            console.error("Error updating ACP checkout session:", updErr)
+              last_message: `Payment successful. Order ${orderId} placed.`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("external_id", session_id)
+
+          logMcpAudit({
+            sessionId: session_id,
+            orderId,
+            customer: session.delivery_address?.full_name,
+            actorLabel,
+            event: {
+              type: "payment_completed",
+              result: "Success",
+              reason: `Payment verified on Razorpay for ${orderId}`,
+              payload_summary: `₹${(session.total_paise / 100).toFixed(2)} settled`,
+            },
+          }).catch(() => {})
+        } else if (rzpData.status === "cancelled" || rzpData.status === "expired") {
+          let orderId = session.order_id || dbSession?.metadata?.order_id || `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
+          session.status = "failed"
+          session.order_id = orderId
+
+          if (!existingOrder) {
+            await supabase.from("orders").insert({
+              external_id: orderId,
+              merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
+              status: "failed",
+              shipping_status: "pending",
+              currency: "INR",
+              total_paise: session.total_paise,
+              items: session.items,
+              shipping_address: session.delivery_address || {},
+              via_ai: true,
+              commerce_protocol: "mcp",
+              agent_id: assistant,
+              notes: `Payment ${rzpData.status} via ${actorLabel}`,
+              acp_checkout_session_id: session_id,
+            })
           }
+
+          await supabase
+            .from("acp_checkout_sessions")
+            .update({ status: "failed" })
+            .eq("id", session_id)
+
+          logMcpAudit({
+            sessionId: session_id,
+            orderId,
+            customer: session.delivery_address?.full_name,
+            actorLabel,
+            event: {
+              type: "payment_failed",
+              result: "Failed",
+              reason: `Payment link was ${rzpData.status}`,
+              payload_summary: `Session ${session_id}`,
+            },
+          }).catch(() => {})
         }
       }
     } catch (fetchErr) {
@@ -553,18 +769,31 @@ async function executeGetCheckoutSession(args: any) {
     return {
       status: "paid",
       order_id: orderId,
+      assistant: actorLabel,
       delivery_sla: "10-15 minutes",
       tracking_markdown: `[Click here to Track Live Delivery](${trackingUrl})`,
       invoice_markdown: `[Click here to Download Tax Invoice](${invoiceUrl})`,
     }
   }
 
+  if (session.status === "failed") {
+    return {
+      status: "failed",
+      session_id: session.session_id,
+      assistant: actorLabel,
+      order_id: session.order_id,
+      message: "Payment failed or was cancelled. Customer can reattempt checkout in Razent app.",
+    }
+  }
+
+  const checkoutLink = session.checkout_url || session.payment_link || `https://razent.vercel.app/checkout?session=${session.session_id}`
   return {
     status: session.status,
     session_id: session.session_id,
-    payment_link: session.payment_link,
-    payment_link_markdown: `[Click here to Pay on Razorpay](${session.payment_link})`,
-    message: "Awaiting customer payment authorization.",
+    assistant: actorLabel,
+    checkout_url: checkoutLink,
+    payment_link_markdown: `[Click here to Complete Checkout on Razent](${checkoutLink})`,
+    message: "Awaiting customer checkout completion on Razent app.",
   }
 }
 
@@ -622,20 +851,92 @@ async function executeAP2Checkout(args: any) {
   if (!session) throw new Error(`Checkout session ${checkout_session_id} not found`)
 
   const totalPaise = session.total_paise || session.totals?.[0]?.amount || 0
+  const orderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
+  const shipping = session.delivery_address || session.fulfillment_details || {}
+
   if (totalPaise > delegated_price_cap_paise) {
+    // Record failed order in database so merchant sees it!
+    try {
+      await supabase.from("orders").insert({
+        external_id: orderId,
+        merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
+        status: "failed",
+        shipping_status: "pending",
+        currency: "INR",
+        total_paise: totalPaise,
+        items: session.items || session.line_items || [],
+        shipping_address: shipping,
+        via_ai: true,
+        commerce_protocol: "ap2",
+        agent_id: "gemini",
+        notes: `Order total ₹${(totalPaise / 100).toFixed(2)} exceeds delegated limit ₹${(delegated_price_cap_paise / 100).toFixed(2)}. Human approval required.`,
+        acp_checkout_session_id: checkout_session_id,
+      })
+    } catch (e) {
+      console.error("Error inserting failed AP2 order:", e)
+    }
+
+    logMcpAudit({
+      sessionId: checkout_session_id,
+      orderId,
+      customer: shipping?.full_name,
+      actorLabel: "Google Gemini",
+      event: {
+        type: "mandate_limit_exceeded",
+        result: "Failed",
+        reason: `Delegated cap exceeded (₹${(totalPaise / 100).toFixed(2)} > ₹${(delegated_price_cap_paise / 100).toFixed(2)})`,
+        payload_summary: `Order ${orderId}`,
+      },
+    }).catch(() => {})
+
     return {
       status: "step_up_required",
       protocol: "x402",
+      order_id: orderId,
       message: `Order total ₹${(totalPaise / 100).toFixed(2)} exceeds delegated limit ₹${(delegated_price_cap_paise / 100).toFixed(2)}. Human approval required.`,
     }
   }
 
-  const orderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
+  // Insert paid order into database!
+  try {
+    await supabase.from("orders").insert({
+      external_id: orderId,
+      merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
+      status: "paid",
+      shipping_status: "dispatched",
+      currency: "INR",
+      total_paise: totalPaise,
+      items: session.items || session.line_items || [],
+      shipping_address: shipping,
+      via_ai: true,
+      commerce_protocol: "ap2",
+      agent_id: "gemini",
+      notes: "Settled via Google Gemini AP2 Mandate",
+      acp_checkout_session_id: checkout_session_id,
+    })
+  } catch (e) {
+    console.error("Error inserting paid AP2 order:", e)
+  }
+
+  logMcpAudit({
+    sessionId: checkout_session_id,
+    orderId,
+    customer: shipping?.full_name,
+    actorLabel: "Google Gemini",
+    event: {
+      type: "ap2_settled",
+      result: "Success",
+      reason: `Settled autonomously via AP2 by Google Gemini`,
+      payload_summary: `Order ${orderId} for ₹${(totalPaise / 100).toFixed(2)}`,
+    },
+  }).catch(() => {})
+
   return {
     success: true,
     status: "settled",
     protocol: "ap2",
     order_id: orderId,
+    assistant: "Google Gemini",
     amount_paid_rupees: (totalPaise / 100).toFixed(2),
     settlement_rail: "NPCI UPI AutoPay via Razorpay Test Rails",
     delivery_eta: "10-15 minutes",

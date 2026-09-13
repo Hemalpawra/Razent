@@ -63,6 +63,7 @@ import { useCustomerAuth } from "@/state/useCustomerAuth"
 
 import { formatPrice, type Product } from "@/lib/types/product"
 import type { Order } from "@/lib/types/order"
+import { formatAgentName } from "@/lib/utils/agentSource"
 import {
   getSavedTestCards,
   getActivePaymentSelection,
@@ -280,6 +281,128 @@ export default function StoreHome() {
   const [lastOrderTotalPaise, setLastOrderTotalPaise] = useState<number | null>(null)
   const [lastOrderData, setLastOrderData] = useState<any>(null)
   const [orderSyncLoading, setOrderSyncLoading] = useState(false)
+  const [sessionAddress, setSessionAddress] = useState<any>(null)
+  const [sessionAssistant, setSessionAssistant] = useState<string | null>(null)
+
+  const [productsList, setProductsList] = useState<Product[]>([])
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    listProducts()
+      .then((data) => {
+        if (alive && data && data.length > 0) {
+          setProductsList(data)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+
+    // Realtime subscription: if merchant adds/updates a 13th product, it reflects immediately
+    const unsub = subscribeToProducts(() => {
+      listProducts()
+        .then((data) => {
+          if (alive && data && data.length > 0) {
+            setProductsList(data)
+          }
+        })
+        .catch(() => {})
+    })
+
+    return () => {
+      alive = false
+      unsub()
+    }
+  }, [])
+
+  const activeProducts = useMemo(
+    () => productsList.filter((p) => p.status === "active"),
+    [productsList],
+  )
+
+  // Load ACP checkout session items & details when arriving via /checkout?session=...
+  useEffect(() => {
+    const isCheckoutRoute =
+      location.pathname === "/checkout" ||
+      location.pathname.startsWith("/checkout") ||
+      view === "checkout" ||
+      viewParam === "checkout"
+
+    if (!isCheckoutRoute || !sessionParam) return
+
+    let isMounted = true
+    ;(async () => {
+      try {
+        const { data: dbSession, error } = await supabase
+          .from("acp_checkout_sessions")
+          .select("*")
+          .eq("id", sessionParam)
+          .maybeSingle()
+
+        if (error || !dbSession || !isMounted) return
+
+        // 1. Identify assistant
+        const assistant =
+          dbSession.agent_id ||
+          dbSession.metadata?.assistant ||
+          dbSession.metadata?.agent_id ||
+          null
+        if (assistant) setSessionAssistant(assistant)
+
+        // 2. Extract delivery address
+        const addr =
+          dbSession.fulfillment_details ||
+          dbSession.delivery_address ||
+          dbSession.metadata?.fulfillment_details ||
+          dbSession.metadata?.shipping_address ||
+          null
+        if (addr) setSessionAddress(addr)
+
+        // 3. Preserve cart & merge session line items
+        const sessionLineItems = dbSession.line_items || []
+        if (sessionLineItems.length > 0) {
+          const currentStoreItems = useCart.getState().items
+          sessionLineItems.forEach((it: any) => {
+            const itId = String(it.id || it.product_id || "")
+            const matchingProd = (activeProducts || []).find((p) => String(p.id) === itId) || {
+              id: itId || `prod_${Date.now()}`,
+              title: it.title || "Selected Product",
+              price_paise: it.unit_price_paise || it.price_paise || 10000,
+              mrp_paise: it.unit_price_paise || it.price_paise || 10000,
+              unit: it.unit || "1 unit",
+              category: "Grocery & Staples",
+              stock: 50,
+              image_url:
+                it.image_url ||
+                "https://images.unsplash.com/photo-1546470427-227df1ed3a1d?w=480&q=80&auto=format&fit=crop",
+              rating: 4.8,
+              reviews_count: 50,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }
+
+            const existing = currentStoreItems.find(
+              (c) => String(c.id) === String(matchingProd.id)
+            )
+            const targetQty = it.quantity || it.qty || 1
+            if (!existing) {
+              useCart.getState().addToCart(matchingProd as any, targetQty)
+            } else if (existing.qty < targetQty) {
+              useCart.getState().updateQty(matchingProd.id, targetQty)
+            }
+          })
+        }
+      } catch (err) {
+        console.warn("Failed to load ACP session items:", err)
+      }
+    })()
+
+    return () => {
+      isMounted = false
+    }
+  }, [location.pathname, view, viewParam, sessionParam, activeProducts])
 
   // Sync order and checkout session details from Supabase if returning from Razorpay / ACP checkout
   useEffect(() => {
@@ -410,43 +533,7 @@ export default function StoreHome() {
     }
   }, [location.pathname, view, viewParam, sessionParam, rzpPaymentIdParam, rzpStatusParam])
 
-  const [productsList, setProductsList] = useState<Product[]>([])
 
-  useEffect(() => {
-    let alive = true
-    setLoading(true)
-    listProducts()
-      .then((data) => {
-        if (alive && data && data.length > 0) {
-          setProductsList(data)
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-
-    // Realtime subscription: if merchant adds/updates a 13th product, it reflects immediately
-    const unsub = subscribeToProducts(() => {
-      listProducts()
-        .then((data) => {
-          if (alive && data && data.length > 0) {
-            setProductsList(data)
-          }
-        })
-        .catch(() => {})
-    })
-
-    return () => {
-      alive = false
-      unsub()
-    }
-  }, [])
-
-  const activeProducts = useMemo(
-    () => productsList.filter((p) => p.status === "active"),
-    [productsList],
-  )
 
   // 100% dynamic categories derived directly from active products with smart icons
   const dynamicCategories = useMemo(() => {
@@ -1549,6 +1636,9 @@ export default function StoreHome() {
               cartTotal={cartTotal}
               products={activeProducts}
               conversationId={convExternalId}
+              sessionId={sessionParam}
+              sessionAssistant={sessionAssistant}
+              sessionAddress={sessionAddress}
               onClose={() => setView("home")}
               onBackToCart={() => setView("cart")}
               onOpenProduct={openProduct}
@@ -4196,6 +4286,12 @@ interface CheckoutViewProps {
 
   conversationId?: string
 
+  sessionId?: string | null
+
+  sessionAssistant?: string | null
+
+  sessionAddress?: any | null
+
   onClose: () => void
 
   onBackToCart: () => void
@@ -4269,6 +4365,9 @@ function CheckoutView({
   cartTotal,
   products = [],
   conversationId,
+  sessionId,
+  sessionAssistant,
+  sessionAddress,
   onClose: _onClose,
   onBackToCart,
   onPaymentSuccess,
@@ -4285,24 +4384,51 @@ function CheckoutView({
     let active = true
     async function loadAddresses() {
       const stored = customerProfile?.metadata?.addresses
+      let nextAddresses: Address[] = []
       if (Array.isArray(stored)) {
-        const nextAddresses = stored as Address[]
-        if (active) {
-          setAddresses(nextAddresses)
-          setSelectedAddr(nextAddresses[0]?.id || "")
+        nextAddresses = [...(stored as Address[])]
+      }
+      if (sessionAddress && (sessionAddress.full_name || sessionAddress.name || sessionAddress.line1)) {
+        const sAddr: Address = {
+          id: "session_addr",
+          label: "Delivery Address (from Assistant)",
+          name: sessionAddress.full_name || sessionAddress.name || "Customer",
+          phone: sessionAddress.phone || "",
+          email: sessionAddress.email || clerkUser?.primaryEmailAddress?.emailAddress || "",
+          line1: sessionAddress.line1 || "",
+          city: sessionAddress.city || "",
+          state: sessionAddress.state || "",
+          pincode: sessionAddress.pincode || "",
+          country: sessionAddress.country || "IN",
         }
-        return
+        if (!nextAddresses.some((a) => a.id === "session_addr" || (a.line1 === sAddr.line1 && a.pincode === sAddr.pincode))) {
+          nextAddresses = [sAddr, ...nextAddresses]
+        }
       }
       if (active) {
-        setAddresses([])
-        setSelectedAddr("")
+        setAddresses(nextAddresses)
+        setSelectedAddr(nextAddresses[0]?.id || "")
       }
     }
     void loadAddresses()
     return () => {
       active = false
     }
-  }, [customerProfile])
+  }, [customerProfile, sessionAddress, clerkUser])
+
+  useEffect(() => {
+    if (sessionAddress && !newAddr.line1) {
+      setNewAddr({
+        name: sessionAddress.full_name || sessionAddress.name || "",
+        phone: sessionAddress.phone || "",
+        email: sessionAddress.email || clerkUser?.primaryEmailAddress?.emailAddress || "",
+        line1: sessionAddress.line1 || "",
+        city: sessionAddress.city || "",
+        state: sessionAddress.state || "",
+        pincode: sessionAddress.pincode || "",
+      })
+    }
+  }, [sessionAddress, clerkUser])
 
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">(
     "standard",
@@ -4368,6 +4494,10 @@ function CheckoutView({
         pincode: "",
         country: "IN",
       }
+    const assistantId = sessionAssistant || (conversationId ? "store_agent" : undefined)
+    const isFromAiSession = Boolean(sessionId || sessionAssistant || conversationId)
+    const assistantName = formatAgentName(assistantId)
+
     const orderId = `ORD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
     const order: import("@/lib/types/order").Order = {
       id: orderId,
@@ -4379,9 +4509,13 @@ function CheckoutView({
       shipping_paise: shippingCost,
       items: items as import("@/lib/types/order").OrderItem[],
       shipping_address: shippingAddress,
-      via_ai: false,
-      commerce_protocol: "direct_web",
-      notes: "Created via storefront checkout with Razorpay",
+      via_ai: isFromAiSession,
+      commerce_protocol: isFromAiSession ? (sessionId ? "acp" : "direct_web") : "direct_web",
+      agent_id: assistantId,
+      acp_checkout_session_id: sessionId || undefined,
+      notes: isFromAiSession
+        ? `Order via ${assistantName}${sessionId ? ` (Session: ${sessionId})` : ""}`
+        : "Created via storefront checkout with Razorpay",
       created_at: new Date().toISOString(),
     }
 
@@ -4392,16 +4526,39 @@ function CheckoutView({
         const codOrder = {
           ...order,
           status: "paid" as const,
-          commerce_protocol: "direct_web" as const,
-          notes: "Created via storefront checkout with Cash on Delivery (COD)",
+          commerce_protocol: order.commerce_protocol,
+          notes: isFromAiSession
+            ? `Order via ${assistantName} with Cash on Delivery (COD)${sessionId ? ` (Session: ${sessionId})` : ""}`
+            : "Created via storefront checkout with Cash on Delivery (COD)",
         }
+        await createStorefrontOrder(codOrder)
+
+        if (sessionId) {
+          try {
+            await supabase.from("acp_checkout_sessions").update({
+              status: "completed",
+              completed_at: new Date().toISOString(),
+              fulfillment_details: {
+                order_id: codOrder.id,
+                shipping_address: shippingAddress,
+              },
+            }).eq("id", sessionId)
+            await supabase.from("conversations").update({
+              status: "paid",
+              updated_at: new Date().toISOString(),
+            }).eq("id", sessionId)
+          } catch (sessErr) {
+            console.warn("Failed to update checkout session status:", sessErr)
+          }
+        }
+
         const invoiceNo = "INV-" + new Date().getFullYear() + "-" + orderId.slice(-6)
         logAuditEvent({
           order_id: codOrder.id,
           customer: shippingAddress.full_name || "Customer",
-          actor_label: "Storefront Checkout",
+          actor_label: isFromAiSession ? assistantName : "Storefront Checkout",
           events: [
-            { id: `ev_${Date.now()}_1`, timestamp: new Date().toISOString(), type: "customer_request", actor: "Customer", source: "storefront_checkout", result: "Success", reason: "Customer initiated manual checkout (COD)", payload_summary: `Order Total: ₹${(total / 100).toFixed(2)}` },
+            { id: `ev_${Date.now()}_1`, timestamp: new Date().toISOString(), type: "customer_request", actor: isFromAiSession ? assistantName : "Customer", source: "storefront_checkout", result: "Success", reason: `Order initiated via ${isFromAiSession ? assistantName : "storefront"} (COD)`, payload_summary: `Order Total: ₹${(total / 100).toFixed(2)}` },
             { id: `ev_${Date.now()}_2`, timestamp: new Date().toISOString(), type: "ai_search", actor: "System", source: "catalog_browser", result: "Success", reason: "Catalog items validated in real-time" },
             { id: `ev_${Date.now()}_3`, timestamp: new Date().toISOString(), type: "product_recommendation", actor: "System", source: "storefront", result: "Success", reason: "Verified items in stock" },
             { id: `ev_${Date.now()}_4`, timestamp: new Date().toISOString(), type: "upsell_cross_sell", actor: "System", source: "checkout", result: "Success", reason: "Free delivery applied if eligible" },
@@ -4457,6 +4614,24 @@ function CheckoutView({
           conversationId,
         })
         if (res.success) {
+          if (sessionId) {
+            try {
+              await supabase.from("acp_checkout_sessions").update({
+                status: "completed",
+                completed_at: new Date().toISOString(),
+                fulfillment_details: {
+                  order_id: res.order.id,
+                  shipping_address: shippingAddress,
+                },
+              }).eq("id", sessionId)
+              await supabase.from("conversations").update({
+                status: "paid",
+                updated_at: new Date().toISOString(),
+              }).eq("id", sessionId)
+            } catch (sessErr) {
+              console.warn("Failed to update checkout session status:", sessErr)
+            }
+          }
           onPaymentSuccess(
             res.order.id,
             res.paymentId || `pay_${Date.now()}`,
@@ -4485,8 +4660,37 @@ function CheckoutView({
           color: "#0f172a",
         },
         modal: {
-          ondismiss: () => {
+          ondismiss: async () => {
             setPaying(false)
+            console.warn("Razorpay checkout modal dismissed by customer")
+            try {
+              await createStorefrontOrder({
+                ...order,
+                status: "failed",
+                notes: isFromAiSession
+                  ? `Payment cancelled by customer during checkout via ${assistantName}`
+                  : "Payment modal dismissed / cancelled by customer",
+              })
+              logAuditEvent({
+                order_id: order.id,
+                customer: shippingAddress.full_name || "Customer",
+                actor_label: isFromAiSession ? assistantName : "Storefront Checkout",
+                events: [
+                  {
+                    id: `ev_${Date.now()}_cancel`,
+                    timestamp: new Date().toISOString(),
+                    type: "payment_failed",
+                    actor: "Customer",
+                    source: "razorpay_modal",
+                    result: "Cancelled",
+                    reason: "Customer dismissed payment modal without completing transaction",
+                  },
+                ] as any,
+              }).catch(() => {})
+            } catch (failDbErr) {
+              console.warn("Failed to record dismissed payment:", failDbErr)
+            }
+            onPaymentFailed(order.id, total, "Payment modal was closed before completing payment.")
           },
         },
         handler: async (response: any) => {
@@ -4501,6 +4705,24 @@ function CheckoutView({
               },
             })
             if (res.success) {
+              if (sessionId) {
+                try {
+                  await supabase.from("acp_checkout_sessions").update({
+                    status: "completed",
+                    completed_at: new Date().toISOString(),
+                    fulfillment_details: {
+                      order_id: res.order.id,
+                      shipping_address: shippingAddress,
+                    },
+                  }).eq("id", sessionId)
+                  await supabase.from("conversations").update({
+                    status: "paid",
+                    updated_at: new Date().toISOString(),
+                  }).eq("id", sessionId)
+                } catch (sessErr) {
+                  console.warn("Failed to update checkout session status:", sessErr)
+                }
+              }
               onPaymentSuccess(
                 res.order.id,
                 res.paymentId || response.razorpay_payment_id,
@@ -4528,8 +4750,27 @@ function CheckoutView({
           await createStorefrontOrder({
             ...order,
             status: "failed",
-            notes: `Payment failed: ${failedReason}`,
+            notes: isFromAiSession
+              ? `Payment failed via ${assistantName}: ${failedReason}`
+              : `Payment failed: ${failedReason}`,
           })
+          logAuditEvent({
+            order_id: order.id,
+            customer: shippingAddress.full_name || "Customer",
+            actor_label: isFromAiSession ? assistantName : "Storefront Checkout",
+            events: [
+              {
+                id: `ev_${Date.now()}_fail`,
+                timestamp: new Date().toISOString(),
+                type: "payment_failed",
+                actor: "Banking Network",
+                source: "razorpay_gateway",
+                result: "Failed",
+                reason: failedReason,
+                status_code: 400,
+              },
+            ] as any,
+          }).catch(() => {})
         } catch {
           // ignore
         }
@@ -4544,14 +4785,36 @@ function CheckoutView({
   }
 
   const handlePay = async () => {
-    if (!selectedAddr && !showNewAddr) {
-      setAddrError("Select a delivery address")
+    if (!selectedAddr && !showNewAddr && !newAddr.line1) {
+      setAddrError("Select or enter a delivery address")
       return
     }
     setAddrError(null)
 
     if (!isSignedIn) {
-      navigate("/signup")
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search)
+      navigate(`/login?redirect_url=${returnUrl}`)
+      return
+    }
+
+    if (showNewAddr) {
+      if (!newAddr.name || !newAddr.phone || !newAddr.line1 || !newAddr.city || !newAddr.pincode) {
+        setAddrError("Please fill all required address fields")
+        return
+      }
+      const createdAddr: Address = {
+        id: `addr_${Date.now()}`,
+        label: newAddr.label || "Delivery Address",
+        name: newAddr.name,
+        phone: newAddr.phone,
+        email: newAddr.email || clerkUser?.primaryEmailAddress?.emailAddress || "",
+        line1: newAddr.line1,
+        city: newAddr.city,
+        state: newAddr.state || "",
+        pincode: newAddr.pincode,
+        country: "IN",
+      }
+      await executePayment(createdAddr)
       return
     }
 
@@ -4577,6 +4840,39 @@ function CheckoutView({
             Enter your delivery details and complete payment securely with Razorpay.
           </p>
         </div>
+
+        {sessionAssistant && (
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3.5 flex items-center gap-2.5 text-xs text-emerald-800 dark:text-emerald-300">
+            <Sparkles className="size-4 text-emerald-600 shrink-0" />
+            <span>
+              Connected from <strong>{formatAgentName(sessionAssistant)}</strong> session. Your selected items and delivery address have been pre-filled.
+            </span>
+          </div>
+        )}
+
+        {!isSignedIn && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 font-medium text-sm text-amber-900 dark:text-amber-200">
+                <ShieldCheck className="size-4 text-amber-600 shrink-0" />
+                <span>Sign in required before payment</span>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-300/80">
+                Your cart items and delivery address are safely preserved. Sign in or create an account to finalize your order.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                const returnUrl = encodeURIComponent(window.location.pathname + window.location.search)
+                navigate(`/login?redirect_url=${returnUrl}`)
+              }}
+            >
+              Sign in / Sign up
+            </Button>
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
           {/* LEFT */}
