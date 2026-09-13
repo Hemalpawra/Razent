@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   XIcon,
   FileTextIcon,
@@ -77,10 +77,24 @@ export default function AuditDrawer({
   const navigate = useNavigate()
   const isSubdomain = isMerchantSubdomain()
 
+  // Reset/sync active event whenever drawer opens or session changes
+  useEffect(() => {
+    if (open && session) {
+      if (initialEvent) {
+        setSelectedEventId(initialEvent.id)
+      } else if (session.events && session.events.length > 0) {
+        // Default to latest event in the sequence
+        setSelectedEventId(session.events[session.events.length - 1].id)
+      } else {
+        setSelectedEventId(null)
+      }
+    }
+  }, [open, session, initialEvent])
+
   // Select current active event
   const events = session?.events || []
   const activeEvent =
-    events.find((e) => e.id === selectedEventId) ||
+    (selectedEventId ? events.find((e) => e.id === selectedEventId) : null) ||
     initialEvent ||
     (events.length > 0 ? events[events.length - 1] : null)
 
@@ -109,12 +123,19 @@ export default function AuditDrawer({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const linkedConvId =
+    (session as any)?.conversation_id ||
+    (session?.session_id?.startsWith("conv_") ? session.session_id : null)
+
   const handleViewConversation = () => {
     if (role === "view_only") {
       toast.error("View-only account: Access to customer conversation transcripts is restricted.")
       return
     }
     onClose()
+    if (linkedConvId) {
+      useUI.getState().openConversationDrawer(linkedConvId)
+    }
     setActiveScreen("ai_agent")
     navigate(isSubdomain ? "/ai_agent" : "/merchant/ai_agent")
   }
@@ -329,7 +350,20 @@ export default function AuditDrawer({
                       <CardContent className="p-4 space-y-2.5 text-xs divide-y divide-border/40">
                         <DetailRow label="Event Type" value={activeEvent?.type || session.last_event} />
                         <DetailRow label="Session ID" value={session.session_id} mono />
-                        <DetailRow label="Order ID" value={orderId || "No order assigned"} mono />
+                        <DetailRow
+                          label="Order ID"
+                          value={
+                            orderId ? (
+                              orderId
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground/80 font-normal border-dashed bg-muted/20">
+                                Not Created
+                              </Badge>
+                            )
+                          }
+                          mono={!!orderId}
+                        />
+                        <DetailRow label="Customer / User" value={session.customer?.trim() ? session.customer : "Guest Customer"} />
                         <DetailRow label="Actor" value={actor} />
                         <DetailRow label="Source System" value={source} />
                         <DetailRow
@@ -352,29 +386,35 @@ export default function AuditDrawer({
                     </Card>
                   </TabsContent>
 
-                  {/* 3. PAYLOAD TAB */}
+                  {/* 3. PAYLOAD TAB (Event-Wise Capture) */}
                   <TabsContent value="payload" className="p-4 space-y-4 m-0 flex-1">
+                    <div className="flex items-center justify-between bg-muted/30 p-2.5 rounded-lg border border-border/70 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-foreground shrink-0">Selected Event Step:</span>
+                        <Badge variant="secondary" className="font-mono text-[11px] truncate">
+                          {activeEvent?.type || session.last_event || "Session Event"}
+                        </Badge>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground font-mono shrink-0">
+                        Event-wise payload
+                      </Badge>
+                    </div>
+
                     <Card className="rounded-xl bg-card border shadow-none">
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-xs font-semibold">Request & Inbound Summary</CardTitle>
                           <Badge variant="outline" className="font-mono text-[10px]">
-                            {activeEvent?.request_id || session.session_id}
+                            {activeEvent?.request_id || activeEvent?.id || session.session_id}
                           </Badge>
                         </div>
                       </CardHeader>
                       <CardContent>
                         <pre className="rounded-lg bg-muted/60 p-3 text-[11px] leading-relaxed font-mono overflow-auto max-h-[160px]">
                           {activeEvent?.payload_summary ||
-                            JSON.stringify(
-                              {
-                                session_id: session.session_id,
-                                customer: session.customer,
-                                order_id: orderId,
-                              },
-                              null,
-                              2,
-                            )}
+                            (orderId
+                              ? JSON.stringify({ session_id: session.session_id, order_id: orderId, customer: session.customer || "Guest Customer" }, null, 2)
+                              : JSON.stringify({ session_id: session.session_id, step: activeEvent?.type, result: activeEvent?.result }, null, 2))}
                         </pre>
                       </CardContent>
                     </Card>
@@ -396,9 +436,9 @@ export default function AuditDrawer({
                           {activeEvent?.response_summary ||
                             JSON.stringify(
                               {
-                                status: status.toLowerCase(),
-                                event_count: session.event_count,
-                                verified_by: "Supabase DB trigger",
+                                status: (activeEvent?.result || status).toLowerCase(),
+                                reason: activeEvent?.reason || "Event executed successfully",
+                                verified: true,
                               },
                               null,
                               2,
@@ -410,7 +450,7 @@ export default function AuditDrawer({
                     {/* Metadata Card */}
                     <Card className="rounded-xl bg-card border shadow-none">
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-semibold">Session & Event Metadata</CardTitle>
+                        <CardTitle className="text-xs font-semibold">Event Metadata</CardTitle>
                       </CardHeader>
                       <CardContent>
                         {activeEvent?.metadata && Object.keys(activeEvent.metadata).length > 0 ? (
@@ -425,8 +465,9 @@ export default function AuditDrawer({
                             ))}
                           </div>
                         ) : (
-                          <div className="text-xs text-muted-foreground py-2 font-mono">
-                            merchant_id: {session.customer} · protocol: direct_web
+                          <div className="text-xs text-muted-foreground py-2 font-mono flex items-center justify-between">
+                            <span>actor: {activeEvent?.actor || actor}</span>
+                            <span>source: {activeEvent?.source || source}</span>
                           </div>
                         )}
                       </CardContent>
@@ -435,8 +476,9 @@ export default function AuditDrawer({
 
                   {/* 4. TIMELINE TAB */}
                   <TabsContent value="timeline" className="p-4 space-y-3 m-0 flex-1">
-                    <div className="text-xs text-muted-foreground mb-2">
-                      Click any step to inspect its specific payload and details.
+                    <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between">
+                      <span>{events.length} sequential protocol step(s) recorded in Supabase</span>
+                      <span className="text-[11px] text-muted-foreground">Click step to view payload</span>
                     </div>
                     <div className="relative border-l-2 border-border/80 pl-4 py-2 space-y-4 ml-3">
                       {events.map((e, idx) => {
@@ -448,7 +490,7 @@ export default function AuditDrawer({
                             onClick={() => setSelectedEventId(e.id)}
                             className={`group relative p-3 rounded-lg border transition-all cursor-pointer ${
                               isSelected
-                                ? "bg-primary/5 border-primary/40 shadow-xs"
+                                ? "bg-primary/5 border-primary shadow-xs ring-1 ring-primary/20"
                                 : "bg-card hover:bg-muted/40 border-border/60"
                             }`}
                           >
@@ -462,9 +504,14 @@ export default function AuditDrawer({
                               }`}
                             />
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
-                                {e.type}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                  #{idx + 1}
+                                </span>
+                                <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
+                                  {e.type}
+                                </span>
+                              </div>
                               <span className="text-[10px] text-muted-foreground font-mono">
                                 {new Date(e.timestamp).toLocaleTimeString("en-IN", {
                                   hour: "2-digit",
@@ -473,7 +520,7 @@ export default function AuditDrawer({
                                 })}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1.5">
                               <Badge variant={resultVariant(e.result)} className="rounded-full text-[10px] px-1.5 py-0">
                                 {e.result}
                               </Badge>
@@ -486,6 +533,22 @@ export default function AuditDrawer({
                                 {e.reason}
                               </p>
                             )}
+                            {isSelected && (
+                              <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[11px]">
+                                <span className="text-primary font-medium">Currently inspecting</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 px-1.5 text-[10px] text-primary hover:text-primary"
+                                  onClick={(ev) => {
+                                    ev.stopPropagation()
+                                    setActiveTab("payload")
+                                  }}
+                                >
+                                  Inspect Payload &rarr;
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )
                       })}
@@ -495,23 +558,28 @@ export default function AuditDrawer({
                   {/* 5. LINKED ITEMS TAB */}
                   <TabsContent value="linked" className="p-4 space-y-3 m-0 flex-1">
                     <div className="text-xs text-muted-foreground mb-1">
-                      Navigate to the authoritative canonical records linked to this session.
+                      Authoritative canonical records linked to this session.
                     </div>
 
                     <LinkedItemCard
                       icon={MessageCircleIcon}
                       title="Customer Conversation"
-                      subtitle={session.session_id}
-                      badge={role === "view_only" ? "Restricted" : "Active"}
+                      subtitle={
+                        linkedConvId
+                          ? linkedConvId
+                          : "Direct storefront session (no AI chat attached)"
+                      }
+                      badge={linkedConvId ? "Linked Chat" : "Direct Web"}
                       actionLabel="View Conversation"
+                      disabled={!linkedConvId}
                       onClick={handleViewConversation}
                     />
 
                     <LinkedItemCard
                       icon={PackageIcon}
                       title="Store Order"
-                      subtitle={orderId || "No order generated"}
-                      badge={orderId ? "Confirmed" : "None"}
+                      subtitle={orderId || "Order not created for this session"}
+                      badge={orderId ? "Confirmed" : "Not Created"}
                       actionLabel="View Order"
                       disabled={!orderId}
                       onClick={handleViewOrder}
@@ -532,9 +600,9 @@ export default function AuditDrawer({
                       subtitle={
                         orderId
                           ? `INV-${new Date().getFullYear()}-${orderId.slice(-6).toUpperCase()}`
-                          : "Requires paid order"
+                          : "Requires confirmed order"
                       }
-                      badge={orderId ? "GST Verified" : "Pending"}
+                      badge={orderId ? "GST Verified" : "Not Created"}
                       actionLabel="View Invoice"
                       disabled={!orderId}
                       onClick={handleViewInvoice}

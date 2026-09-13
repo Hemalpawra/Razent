@@ -138,6 +138,20 @@ export default function AuditTrailScreen() {
     setPage(1)
   }, [q, eventFilter, resultFilter, actorFilter, dateFilter])
 
+  // Sync with global UI state if drawerAuditSessionId is set externally
+  useEffect(() => {
+    if (drawerAuditSessionId && auditData.length > 0) {
+      const found = auditData.find(
+        (s) => s.session_id === drawerAuditSessionId || (s as any).id === drawerAuditSessionId
+      )
+      if (found) {
+        setSelectedSession(found)
+        setSelectedEvent(null)
+        setDrawerOpen(true)
+      }
+    }
+  }, [drawerAuditSessionId, auditData])
+
   const {
     totalSessions,
     totalEvents,
@@ -469,12 +483,18 @@ export default function AuditTrailScreen() {
                     {s.session_id}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {s.order_id ?? "—"}
+                    {s.order_id ? (
+                      s.order_id
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground/80 font-normal border-dashed bg-muted/20">
+                        Not Created
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs">
-                    <span className="font-medium">{s.customer}</span>
+                    <span className="font-medium">{s.customer?.trim() ? s.customer : "Guest Customer"}</span>
                     <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[11px]">
-                      {s.actor_label}
+                      {s.actor_label || "Customer"}
                     </span>
                   </TableCell>
                   <TableCell className="text-center text-xs font-medium tabular-nums">
@@ -621,7 +641,10 @@ export default function AuditTrailScreen() {
 
       <AuditDrawer
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          setDrawerOpen(false)
+          closeAuditDrawer()
+        }}
         session={selectedSession}
         event={selectedEvent}
       />

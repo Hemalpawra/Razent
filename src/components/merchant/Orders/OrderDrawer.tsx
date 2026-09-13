@@ -35,6 +35,8 @@ import { useMerchant } from "@/state/useMerchant"
 import { useUI } from "@/state/useUI"
 import { toast } from "sonner"
 import { refundOrder } from "@/lib/api/client"
+import { getOrderAgentSource } from "@/lib/utils/agentSource"
+import { AgentBadge } from "@/components/shared/AgentBadge"
 import InvoiceDialog from "./InvoiceDialog"
 
 interface OrderDrawerProps {
@@ -168,7 +170,10 @@ export default function OrderDrawer({
           <div className="flex items-center justify-between pr-8">
             <div>
               <DrawerTitle>Order Details</DrawerTitle>
-              <DrawerDescription>Order #{order?.id}</DrawerDescription>
+              <div className="flex items-center gap-2 mt-1">
+                <DrawerDescription>Order #{order?.id}</DrawerDescription>
+                {order && <AgentBadge source={getOrderAgentSource(order)} size="sm" />}
+              </div>
             </div>
           </div>
           <Button
@@ -299,6 +304,10 @@ export default function OrderDrawer({
                     <span className="font-medium text-xs truncate max-w-[55%] text-right">
                       {order.razorpay_order_id}
                     </span>
+                  </div>
+                  <div className="flex justify-between gap-4 text-sm items-center">
+                    <span className="text-muted-foreground">Ordered via</span>
+                    <AgentBadge source={getOrderAgentSource(order)} size="sm" />
                   </div>
                   <div className="flex justify-between gap-4 text-sm">
                     <span className="text-muted-foreground">

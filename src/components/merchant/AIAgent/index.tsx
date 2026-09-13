@@ -51,11 +51,14 @@ import type { Conversation } from "@/lib/types/conversation"
 import type { Order } from "@/lib/types/order"
 import ConversationDrawer from "@/components/merchant/AIAgent/ConversationDrawer"
 import { useMerchant } from "@/state/useMerchant"
+import { useUI } from "@/state/useUI"
 import { toast } from "sonner"
 import {
   calculateAiAgentDashboardNumbers,
   isConversationActive,
 } from "@/lib/utils/metrics"
+import { getConversationAgentSource } from "@/lib/utils/agentSource"
+import { AgentBadge } from "@/components/shared/AgentBadge"
 
 export default function AIAgentScreen({
   loading: externalLoading,
@@ -67,8 +70,19 @@ export default function AIAgentScreen({
   const { role, hasPermission } = useMerchant()
   const canExport = hasPermission("export_data")
 
+  const globalConvId = useUI((s) => s.drawerConversationId)
+  const closeGlobalConvDrawer = useUI((s) => s.closeConversationDrawer)
+
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  useEffect(() => {
+    if (globalConvId) {
+      setSelectedId(globalConvId)
+      setDrawerOpen(true)
+      closeGlobalConvDrawer()
+    }
+  }, [globalConvId, closeGlobalConvDrawer])
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoading, setIsLoading] = useState(!externalLoading)
 
@@ -76,6 +90,7 @@ export default function AIAgentScreen({
   const [orders, setOrders] = useState<Order[]>([])
   const [q, setQ] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
+  const [assistantFilter, setAssistantFilter] = useState<string>("all")
   const [dateFilter, setDateFilter] = useState<DateRangeValue>({
     preset: "all",
     label: "All Time",
@@ -112,7 +127,7 @@ export default function AIAgentScreen({
 
   useEffect(() => {
     setPage(1)
-  }, [q, statusFilter, dateFilter])
+  }, [q, statusFilter, assistantFilter, dateFilter])
 
   const selected = selectedId
     ? (convData.find((c) => c.id === selectedId) ?? null)
@@ -125,11 +140,15 @@ export default function AIAgentScreen({
       if (statusFilter === "active" && !active) return false
       if (statusFilter === "inactive" && active) return false
 
+      const agentSource = getConversationAgentSource(c)
+      if (assistantFilter !== "all" && agentSource.type !== assistantFilter) return false
+
       if (term) {
         const nameMatch = (c.customer_name || "").toLowerCase().includes(term)
         const msgMatch = (c.last_message || "").toLowerCase().includes(term)
         const idMatch = c.id.toLowerCase().includes(term)
-        if (!nameMatch && !msgMatch && !idMatch) return false
+        const agentMatch = agentSource.name.toLowerCase().includes(term)
+        if (!nameMatch && !msgMatch && !idMatch && !agentMatch) return false
       }
 
       if (dateFilter.preset === "today") {
@@ -151,7 +170,7 @@ export default function AIAgentScreen({
       }
       return true
     })
-  }, [convData, q, statusFilter, dateFilter])
+  }, [convData, q, statusFilter, assistantFilter, dateFilter])
 
   const totalPages = Math.max(1, Math.ceil(filteredConversations.length / rowsPerPage))
   const safePage = Math.min(page, totalPages)
@@ -192,7 +211,7 @@ export default function AIAgentScreen({
     const headers = [
       "ID",
       "Customer",
-      "Type",
+      "Assistant",
       "Status",
       "Last Message",
       "Order Amount (INR)",
@@ -201,10 +220,11 @@ export default function AIAgentScreen({
     const rows = filteredConversations.map((c) => {
       const active = isConversationActive(c)
       const amt = c.amount_paise ? (c.amount_paise / 100).toFixed(2) : ""
+      const agentSource = getConversationAgentSource(c)
       return [
         c.id,
         `"${(c.customer_name || "").replace(/"/g, '""')}"`,
-        c.type,
+        `"${agentSource.name.replace(/"/g, '""')}"`,
         active ? "Active" : "Inactive",
         `"${(c.last_message || "").replace(/"/g, '""')}"`,
         amt,
@@ -335,6 +355,24 @@ export default function AIAgentScreen({
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
+            <Select
+              value={assistantFilter}
+              onValueChange={(v) => {
+                if (v) setAssistantFilter(v)
+              }}
+            >
+              <SelectTrigger className="h-9 w-[135px] rounded-lg text-xs bg-card">
+                <SelectValue placeholder="All Assistants" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Assistants</SelectItem>
+                <SelectItem value="claude">Claude</SelectItem>
+                <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="chatgpt">ChatGPT</SelectItem>
+                <SelectItem value="store_agent">Store Agent</SelectItem>
+                <SelectItem value="external_agent">External Agent</SelectItem>
+              </SelectContent>
+            </Select>
             <DateRangePicker value={dateFilter} onChange={setDateFilter} />
             <Button
               variant="outline"
@@ -366,7 +404,10 @@ export default function AIAgentScreen({
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-10 px-4 text-xs font-semibold text-foreground">
-                  Customer / Channel
+                  Customer
+                </TableHead>
+                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
+                  Assistant
                 </TableHead>
                 <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
                   Status
@@ -385,13 +426,14 @@ export default function AIAgentScreen({
             <TableBody>
               {filteredConversations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground text-sm">
+                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground text-sm">
                     No conversations match the current filters.
                   </TableCell>
                 </TableRow>
               ) : (
                 pagedConversations.map((c) => {
                   const active = isConversationActive(c)
+                  const agentSource = getConversationAgentSource(c)
                   const matchingOrder = orders.find(
                     (o) => o.id === c.order_id || o.conversation_id === c.id,
                   )
@@ -411,9 +453,12 @@ export default function AIAgentScreen({
                         <div className="text-sm font-medium text-foreground">
                           {c.customer_name || "Storefront Customer"}
                         </div>
-                        <div className="max-w-[22rem] truncate text-xs text-muted-foreground">
+                        <div className="max-w-[18rem] truncate text-xs text-muted-foreground">
                           {c.last_message || "Active customer shopping session"}
                         </div>
+                      </TableCell>
+                      <TableCell className="px-3 py-3">
+                        <AgentBadge source={agentSource} size="sm" />
                       </TableCell>
                       <TableCell className="px-3 py-3">
                         <Badge

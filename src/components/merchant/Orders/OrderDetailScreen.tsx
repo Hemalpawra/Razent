@@ -20,6 +20,8 @@ import { useUI } from "@/state/useUI"
 import { getOrder } from "@/lib/api/client"
 import { formatPrice } from "@/lib/types/order"
 import type { Order } from "@/lib/types/order"
+import { getOrderAgentSource } from "@/lib/utils/agentSource"
+import { AgentBadge } from "@/components/shared/AgentBadge"
 import InvoiceDialog from "./InvoiceDialog"
 
 function formatPaid(paise: number) {
@@ -120,9 +122,12 @@ export default function OrderDetailScreen() {
         >
           <ArrowLeft className="size-5" />
         </Button>
-        <span className="text-sm font-medium capitalize">
-          Order #{order?.id ?? "Details"}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium capitalize">
+            Order #{order?.id ?? "Details"}
+          </span>
+          {order && <AgentBadge source={getOrderAgentSource(order)} size="sm" />}
+        </div>
       </header>
 
       <div className="p-4">
@@ -250,6 +255,10 @@ export default function OrderDetailScreen() {
                   <span className="font-medium text-xs truncate max-w-[55%] text-right">
                     {order.razorpay_order_id}
                   </span>
+                </div>
+                <div className="flex justify-between text-sm items-center">
+                  <span className="text-muted-foreground">Ordered via</span>
+                  <AgentBadge source={getOrderAgentSource(order)} size="sm" />
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Payment Method</span>

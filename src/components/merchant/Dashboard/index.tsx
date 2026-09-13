@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { useMerchant } from "@/state/useMerchant"
 import { toast } from "sonner"
+import { getOrderAgentSource } from "@/lib/utils/agentSource"
 import {
   Card,
   CardContent,
@@ -311,9 +312,10 @@ export default function DashboardScreen() {
           <AiPerformanceCard dashData={dashData} aiMetrics={aiMetrics} />
         </div>
 
-        {/* Right column — Needs Attention + Recent Activity */}
+        {/* Right column — Needs Attention + Orders by Assistant + Recent Activity */}
         <div className="space-y-3">
           <NeedsAttentionCard dashData={dashData} />
+          <OrdersByAssistantCard orders={orders} />
           <RecentActivityCard dashData={dashData} />
         </div>
       </div>
@@ -825,3 +827,164 @@ function RecentActivityCard({ dashData }: { dashData?: DashboardData | null }) {
     </Card>
   )
 }
+
+function OrdersByAssistantCard({ orders = [] }: { orders?: Order[] }) {
+  const distribution = useMemo(() => {
+    if (!orders || orders.length === 0) return []
+
+    const map = new Map<
+      string,
+      {
+        type: string
+        name: string
+        count: number
+        totalPaise: number
+        color: string
+      }
+    >()
+
+    for (const order of orders) {
+      const src = getOrderAgentSource(order)
+      const key = src.type === "external_agent" ? src.name : src.type
+      const existing = map.get(key)
+      if (existing) {
+        existing.count += 1
+        existing.totalPaise += Number(order.total_paise) || 0
+      } else {
+        map.set(key, {
+          type: src.type,
+          name: src.name,
+          count: 1,
+          totalPaise: Number(order.total_paise) || 0,
+          color: src.color,
+        })
+      }
+    }
+
+    const totalCount = orders.length
+    return Array.from(map.values())
+      .map((item) => ({
+        ...item,
+        pct: totalCount > 0 ? Math.round((item.count / totalCount) * 100) : 0,
+        value: item.count,
+        fill: item.color,
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [orders])
+
+  const totalOrders = orders.length
+
+  const chartConfig = useMemo(() => {
+    const cfg: Record<string, { label: string; color: string }> = {}
+    for (const d of distribution) {
+      cfg[d.name] = { label: d.name, color: d.color }
+    }
+    return cfg
+  }, [distribution])
+
+  return (
+    <Card className="rounded-xl bg-card">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <div>
+          <CardTitle className="text-base">Orders by Assistant</CardTitle>
+          <CardDescription className="text-xs">
+            Distribution across AI assistants & direct shoppers
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-2">
+        {totalOrders === 0 ? (
+          <div className="flex h-[180px] items-center justify-center text-center text-xs text-muted-foreground">
+            No orders recorded yet. Assistant order distribution will appear as orders are placed.
+          </div>
+        ) : (
+          <div className="flex flex-col items-center">
+            {/* Donut Chart */}
+            <div className="relative size-[150px]">
+              <ChartContainer config={chartConfig} className="size-full">
+                <PieChart>
+                  <Pie
+                    data={distribution}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={46}
+                    outerRadius={68}
+                    paddingAngle={3}
+                    stroke="none"
+                    isAnimationActive={false}
+                  >
+                    {distribution.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        hideLabel
+                        formatter={(val, name, item) => {
+                          const payload = item?.payload
+                          return (
+                            <div className="flex w-full flex-col gap-0.5">
+                              <div className="flex items-center justify-between gap-4">
+                                <span className="font-medium text-foreground">{String(name)}</span>
+                                <span className="font-semibold tabular-nums text-foreground">
+                                  {Number(val)} {Number(val) === 1 ? "order" : "orders"} ({payload?.pct ?? 0}%)
+                                </span>
+                              </div>
+                              {payload?.totalPaise ? (
+                                <span className="text-[11px] text-muted-foreground">
+                                  ₹{(payload.totalPaise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                </span>
+                              ) : null}
+                            </div>
+                          )
+                        }}
+                      />
+                    }
+                  />
+                </PieChart>
+              </ChartContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <div className="text-[15px] font-bold leading-none text-foreground tabular-nums">
+                  {totalOrders}
+                </div>
+                <div className="text-[10px] leading-none text-muted-foreground mt-0.5">
+                  Total Orders
+                </div>
+              </div>
+            </div>
+
+            {/* Assistant list with dots and percentages */}
+            <div className="mt-4 w-full space-y-2 text-xs">
+              {distribution.map((item) => (
+                <div
+                  key={item.name}
+                  className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="size-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="font-medium text-foreground truncate max-w-[140px]">
+                      {item.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 tabular-nums shrink-0">
+                    <span className="font-semibold text-foreground">
+                      {item.count}
+                    </span>
+                    <span className="text-muted-foreground text-[11px] w-8 text-right">
+                      {item.pct}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+

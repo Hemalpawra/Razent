@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { PrinterIcon, DownloadIcon, CheckCircle2Icon, Building2Icon, UserIcon } from "lucide-react"
 import type { Order } from "@/lib/types/order"
+import { getOrderAgentSource } from "@/lib/utils/agentSource"
+import { AgentBadge } from "@/components/shared/AgentBadge"
 import { getOrder } from "@/lib/api/client"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Empty, EmptyContent, EmptyTitle, EmptyDescription } from "@/components/ui/empty"
@@ -206,11 +208,9 @@ export default function InvoiceDialog({
                     <span className="text-muted-foreground">Order ID:</span>
                     <span className="font-mono font-medium">{order.id}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Payment Protocol:</span>
-                    <span className="font-medium capitalize">
-                      {order.commerce_protocol || (order.via_ai ? "NPCI UAP" : "Direct Web")}
-                    </span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Ordered via:</span>
+                    <AgentBadge source={getOrderAgentSource(order)} size="sm" />
                   </div>
                   {order.razorpay_payment_id && (
                     <div className="flex justify-between">

@@ -32,6 +32,8 @@ import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { formatPrice } from "@/lib/types/product"
 import type { Conversation } from "@/lib/types/conversation"
+import { getConversationAgentSource } from "@/lib/utils/agentSource"
+import { AgentBadge } from "@/components/shared/AgentBadge"
 
 interface ConversationDrawerProps {
   open: boolean
@@ -68,10 +70,11 @@ export default function ConversationDrawer({
       <DrawerContent className="p-0 max-w-[540px] ml-auto h-full flex flex-col bg-card">
         {/* Single top-right close icon in DrawerHeader */}
         <DrawerHeader className="relative p-4 border-b shrink-0 pr-12">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <DrawerTitle className="text-base font-semibold text-foreground">
               {conversation.customer_name || "Store Customer"}
             </DrawerTitle>
+            <AgentBadge source={getConversationAgentSource(conversation)} size="sm" />
             <Badge
               variant={isActive ? "default" : "secondary"}
               className="text-[10px] px-2 py-0 h-5"
@@ -80,7 +83,7 @@ export default function ConversationDrawer({
             </Badge>
           </div>
           <DrawerDescription className="text-xs text-muted-foreground font-mono">
-            ID: {conversation.id} · {conversation.type === "agent_to_agent" ? "Agent-to-Agent" : "Storefront AI"}
+            ID: {conversation.id}
           </DrawerDescription>
           <Button
             variant="ghost"
@@ -184,9 +187,9 @@ export default function ConversationDrawer({
                     <span className="text-muted-foreground">Customer</span>
                     <span className="font-medium text-foreground">{conversation.customer_name || "Storefront User"}</span>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-border/40">
-                    <span className="text-muted-foreground">Channel</span>
-                    <span className="capitalize text-foreground">{conversation.protocol || "Direct Web"}</span>
+                  <div className="flex justify-between items-center py-1 border-b border-border/40">
+                    <span className="text-muted-foreground">Assistant</span>
+                    <AgentBadge source={getConversationAgentSource(conversation)} size="sm" />
                   </div>
                   <div className="flex justify-between py-1 border-b border-border/40">
                     <span className="text-muted-foreground">Order ID</span>

@@ -71,6 +71,8 @@ import { listOrders } from "@/lib/api/client"
 import { formatPrice, type OrderStatus } from "@/lib/types/order"
 
 import type { Order } from "@/lib/types/order"
+import { getOrderAgentSource } from "@/lib/utils/agentSource"
+import { AgentBadge } from "@/components/shared/AgentBadge"
 
 const STATUS_FILTERS: (OrderStatus | "all")[] = [
   "all",
@@ -132,15 +134,6 @@ function labelForStatus(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function getSource(order: Order): { label: string; icon: typeof Bot } {
-  if (order.via_ai && order.conversation_id)
-    return { label: "AI Agent", icon: Bot }
-
-  if (order.via_ai) return { label: "AI Assistant", icon: Bot }
-
-  return { label: "Customer", icon: User }
-}
-
 const PAGE_SIZE_DEFAULT = 10
 
 export default function OrdersScreen() {
@@ -200,6 +193,7 @@ export default function OrdersScreen() {
 
   const [q, setQ] = useState("")
   const [filterStatus, setFilterStatus] = useState<OrderStatus | "all">("all")
+  const [assistantFilter, setAssistantFilter] = useState<string>("all")
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE_DEFAULT)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -210,6 +204,9 @@ export default function OrdersScreen() {
     return (orders || [])
       .filter((o: Order) => {
         if (filterStatus !== "all" && o.status !== filterStatus) return false
+
+        const agentSource = getOrderAgentSource(o)
+        if (assistantFilter !== "all" && agentSource.type !== assistantFilter) return false
 
         // Date range filtering
         if (dateFilter.preset === "today") {
@@ -237,11 +234,12 @@ export default function OrdersScreen() {
           (o.shipping_address?.full_name || "").toLowerCase().includes(term) ||
           (o.shipping_address?.email || "").toLowerCase().includes(term) ||
           (o.shipping_address?.phone || "").toLowerCase().includes(term) ||
+          agentSource.name.toLowerCase().includes(term) ||
           o.items.some((it) => it.title.toLowerCase().includes(term))
         )
       })
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [orders, q, filterStatus, dateFilter])
+  }, [orders, q, filterStatus, assistantFilter, dateFilter])
 
   const handleExport = () => {
     if (!canExport) {
@@ -498,6 +496,28 @@ export default function OrdersScreen() {
             >
               <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
             </Button>
+            <Select
+              value={assistantFilter}
+              onValueChange={(v) => {
+                if (v) {
+                  setAssistantFilter(v)
+                  setPage(1)
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 w-[135px] rounded-lg text-xs bg-card">
+                <SelectValue placeholder="All Channels" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Channels</SelectItem>
+                <SelectItem value="claude">Claude</SelectItem>
+                <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="chatgpt">ChatGPT</SelectItem>
+                <SelectItem value="store_agent">Store Agent</SelectItem>
+                <SelectItem value="external_agent">External Agent</SelectItem>
+                <SelectItem value="direct_customer">Direct Customer</SelectItem>
+              </SelectContent>
+            </Select>
             <DateRangePicker value={dateFilter} onChange={setDateFilter} />
             {canExport && (
               <Button
@@ -583,9 +603,7 @@ export default function OrdersScreen() {
                 </TableRow>
               ) : (
                 paged.map((order) => {
-                  const source = getSource(order)
-
-                  const SourceIcon = source.icon
+                  const agentSource = getOrderAgentSource(order)
 
                   const primaryItem = order.items?.[0] || {
                     product_id: "default",
@@ -670,10 +688,7 @@ export default function OrdersScreen() {
                         </div>
                       </TableCell>
                       <TableCell className="px-3 py-3">
-                        <span className="inline-flex items-center gap-1.5 text-xs text-foreground">
-                          <SourceIcon className="size-3.5 text-muted-foreground" />
-                          {source.label}
-                        </span>
+                        <AgentBadge source={agentSource} size="sm" />
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs font-medium tabular-nums text-foreground">
                         {formatPrice(order.total_paise)}
