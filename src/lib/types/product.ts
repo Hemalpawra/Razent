@@ -18,6 +18,7 @@ export type Product = {
   sku?: string
   mrp_paise?: number
   external_id?: string
+  db_id?: string
   images?: string[]
   rating?: number
   review_count?: number

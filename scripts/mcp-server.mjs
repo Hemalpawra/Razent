@@ -862,10 +862,14 @@ async function executeCreateCheckoutSession(args, req, meta) {
     totalPaise += lineTotal
     lineItems.push({
       id: prod.id,
+      product_id: prod.id,
+      external_id: prod.external_id,
       title: prod.title,
       quantity: qty,
       unit_price_paise: prod.price_paise,
+      price_paise: prod.price_paise,
       line_total_paise: lineTotal,
+      image_url: prod.image_url || "",
     })
   }
 

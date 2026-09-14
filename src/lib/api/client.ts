@@ -61,8 +61,13 @@ function mapDbProduct(row: any): Product {
       ? metadata.specifications
       : {}
 
-  return {
-    id: row.external_id || String(row.id),
+  const dbId = String(row.id)
+  const extId = row.external_id ? String(row.external_id) : undefined
+
+  const prod: Product = {
+    id: extId || dbId,
+    external_id: extId,
+    db_id: dbId,
     title: row.title,
     description: row.description || "",
     category: row.category || "General",
@@ -86,6 +91,17 @@ function mapDbProduct(row: any): Product {
     mrp_paise: row.mrp_paise ? Number(row.mrp_paise) : undefined,
     stock_threshold: Number(row.stock_threshold ?? metadata.stock_threshold ?? 10) || 10,
   }
+
+  // Register in in-memory productStore under all lookup keys
+  productStore.upsert(prod)
+  if (dbId && dbId !== prod.id) {
+    productStore.upsert({ ...prod, id: dbId })
+  }
+  if (extId && extId !== prod.id) {
+    productStore.upsert({ ...prod, id: extId })
+  }
+
+  return prod
 }
 
 function mapDbOrder(row: any): Order {

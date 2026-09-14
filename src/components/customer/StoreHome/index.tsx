@@ -140,6 +140,59 @@ type StoreView = "home" | "listing" | "detail" | "track-order" | "cart" | "check
 
 type CartItem = { id: string; qty: number }
 
+export function resolveCartProduct(c: { id: string }, products: Product[] = []): Product {
+  const cId = String(c.id).trim()
+
+  // 1. Check useCart Zustand store (it retains full product objects)
+  const sharedItem = useCart.getState().items.find(
+    (i) =>
+      String(i.id) === cId ||
+      String(i.product?.id) === cId ||
+      (i.product?.external_id && String(i.product.external_id) === cId) ||
+      ((i.product as any)?.db_id && String((i.product as any).db_id) === cId)
+  )
+  if (sharedItem?.product && (sharedItem.product.price_paise > 0 || sharedItem.product.title)) {
+    return sharedItem.product
+  }
+
+  // 2. Check in-memory productStore singleton
+  const stored = productStore.get(cId)
+  if (stored && (stored.price_paise > 0 || stored.title)) {
+    return stored
+  }
+
+  // 3. Search loaded products by id, external_id, db_id, numeric equality
+  const matched = (products || []).find((p) => {
+    if (String(p.id) === cId) return true
+    if (p.external_id && String(p.external_id) === cId) return true
+    if (p.db_id && String(p.db_id) === cId) return true
+    if (!isNaN(Number(cId)) && !isNaN(Number(p.id)) && Number(p.id) === Number(cId)) return true
+    return false
+  })
+  if (matched) {
+    return matched
+  }
+
+  // 4. Return any partial product available
+  if (sharedItem?.product) return sharedItem.product
+  if (stored) return stored
+
+  return {
+    id: cId,
+    title: "Product",
+    description: "",
+    price_paise: 0,
+    currency: "INR",
+    stock: 10,
+    category: "Laptops & Tech",
+    tags: [],
+    status: "active",
+    image_url: "",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+}
+
 export function getCategoryIcon(catName: string) {
   const c = catName.toLowerCase()
   if (c.includes("fruit")) return Apple
@@ -230,7 +283,7 @@ export default function StoreHome() {
   useEffect(() => {
     if (directCheckout) {
       setCart([{ id: directCheckout.id, qty: directCheckout.qty }])
-    } else if (sharedCartItems.length > 0) {
+    } else {
       setCart(sharedCartItems.map((i) => ({ id: i.id, qty: i.qty })))
     }
   }, [sharedCartItems, directCheckout])
@@ -373,14 +426,31 @@ export default function StoreHome() {
 
           sessionLineItems.forEach((it: any) => {
             const itId = String(it.id || it.product_id || "")
-            const matchingProd = (activeProducts || []).find((p) => String(p.id) === itId) || {
+            const itExtId = it.external_id ? String(it.external_id) : undefined
+            const unitPrice = Number(it.unit_price_paise || it.price_paise || 0)
+
+            const matchingProd: Product = (activeProducts || []).find((p) =>
+              String(p.id) === itId ||
+              (itExtId && String(p.id) === itExtId) ||
+              (p.external_id && String(p.external_id) === itId) ||
+              (itExtId && p.external_id && String(p.external_id) === itExtId) ||
+              ((p as any).db_id && String((p as any).db_id) === itId) ||
+              (!isNaN(Number(p.id)) && !isNaN(Number(itId)) && Number(p.id) === Number(itId)) ||
+              (p.title && it.title && p.title.toLowerCase().trim() === it.title.toLowerCase().trim())
+            ) || {
               id: itId || `prod_${Date.now()}`,
+              external_id: itExtId,
+              db_id: itId,
               title: it.title || "Selected Product",
-              price_paise: it.unit_price_paise || it.price_paise || 10000,
-              mrp_paise: it.unit_price_paise || it.price_paise || 10000,
+              description: it.description || "",
+              price_paise: unitPrice || 10000,
+              mrp_paise: unitPrice || 10000,
+              currency: "INR",
               unit: it.unit || "1 unit",
               category: "Laptops & Tech",
               stock: 50,
+              tags: [],
+              status: "active",
               image_url:
                 it.image_url ||
                 "https://images.unsplash.com/photo-1546470427-227df1ed3a1d?w=480&q=80&auto=format&fit=crop",
@@ -390,8 +460,14 @@ export default function StoreHome() {
               updated_at: new Date().toISOString(),
             }
 
+            // Register in productStore under all aliases so synchronous lookups never return undefined
+            productStore.upsert(matchingProd)
+            if (matchingProd.id) productStore.upsert({ ...matchingProd, id: String(matchingProd.id) })
+            if (itId && itId !== matchingProd.id) productStore.upsert({ ...matchingProd, id: itId })
+            if (itExtId && itExtId !== matchingProd.id) productStore.upsert({ ...matchingProd, id: itExtId })
+
             const targetQty = it.quantity || it.qty || 1
-            useCart.getState().addToCart(matchingProd as any, targetQty)
+            useCart.getState().addToCart(matchingProd, targetQty)
           })
         }
       } catch (err) {
@@ -701,8 +777,7 @@ export default function StoreHome() {
   const cartCount = cart.reduce((s, c) => s + c.qty, 0)
 
   const cartTotal = cart.reduce((s, c) => {
-    const p = productsList.find((x) => x.id === c.id)
-
+    const p = resolveCartProduct(c, productsList)
     return s + (p ? p.price_paise * c.qty : 0)
   }, 0)
 
@@ -1814,12 +1889,7 @@ export default function StoreHome() {
               </Card>
             ) : (
               cart.map((c) => {
-                const p = activeProducts.find((x) => x.id === c.id) || productsList.find((x) => x.id === c.id) || productStore.get(c.id) || {
-                  id: c.id,
-                  title: "Grocery Item",
-                  price_paise: 9900,
-                  image_url: "",
-                }
+                const p = resolveCartProduct(c, activeProducts)
 
                 return (
                   <Card key={c.id} className="p-3">
@@ -4056,20 +4126,7 @@ function CartView({
           {/* LEFT: Cart items */}
           <div className="space-y-4">
             {cart.map((c) => {
-              const p: Product = (products || []).find((x: Product) => x.id === c.id) || productStore.get(c.id) || {
-                id: c.id,
-                title: "Grocery Item",
-                description: "Fresh quality grocery product",
-                price_paise: 9900,
-                currency: "INR",
-                stock: 10,
-                category: "Groceries",
-                tags: [],
-                status: "active",
-                image_url: "",
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              }
+              const p: Product = resolveCartProduct(c, products)
 
               const itemTotal = p.price_paise * c.qty
 
@@ -4463,13 +4520,13 @@ function CheckoutView({
     }
 
     const items = cart.map((c) => {
-      const p = (products || []).find((x) => x.id === c.id) || productStore.get(c.id)
+      const p = resolveCartProduct(c, products)
       return {
         product_id: c.id,
-        title: p?.title ?? c.id,
-        image_url: p?.image_url ?? "",
+        title: p.title,
+        image_url: p.image_url,
         qty: c.qty,
-        unit_price_paise: p?.price_paise ?? 0,
+        unit_price_paise: p.price_paise,
       }
     })
     const rawAddr = address as (Address & { full_name?: string; country?: string; line2?: string }) | null
@@ -5245,11 +5302,9 @@ function CheckoutView({
               <CardContent className="space-y-3">
                 <div className="space-y-2 max-h-40 overflow-auto pr-1">
                   {cart.map((c) => {
-                    const p =
-                      (products || []).find((x) => x.id === c.id) ||
-                      productStore.get(c.id)
-                    const itemTitle = p?.title || "Product"
-                    const itemPrice = p?.price_paise || 0
+                    const p = resolveCartProduct(c, products)
+                    const itemTitle = p.title
+                    const itemPrice = p.price_paise
 
                     return (
                       <div key={c.id} className="flex justify-between text-xs">
@@ -5698,8 +5753,8 @@ function PaymentSuccessView({
                 <Separator />
                 <div className="space-y-2">
                   {displayItems.map((c: any, idx: number) => {
-                    const p = (products || []).find((x) => x.id === c.id || x.id === c.product_id) || productStore.get(c.id)
-                    const title = c.title || p?.title || c.name || "Grocery Item"
+                    const p = resolveCartProduct(c, products)
+                    const title = c.title || p?.title || c.name || "Item"
                     const qty = c.qty || c.quantity || 1
                     const unitPrice = c.unit_price_paise || c.price_paise || p?.price_paise || (totalPaid > 0 ? Math.round(totalPaid / (displayItems.length || 1)) : 0)
                     const img = c.image_url || p?.image_url || "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=600&auto=format&fit=crop&q=80"
