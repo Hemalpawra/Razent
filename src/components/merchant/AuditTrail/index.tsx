@@ -193,19 +193,46 @@ export default function AuditTrailScreen() {
           return false
       }
 
-      if (
-        eventFilter !== "all" &&
-        !s.events.some((e) => e.type === eventFilter)
-      )
-        return false
+      if (eventFilter !== "all") {
+        if (eventFilter === "order_settled") {
+          const match = s.events.some((e) => ["autonomous_order_settled", "payment_completed", "Payment Successful"].includes(e.type))
+          if (!match) return false
+        } else if (eventFilter === "order_blocked") {
+          const match = s.events.some((e) => ["autonomous_purchase_blocked", "payment_failed", "spend_limit_exceeded", "npci_limit_exceeded", "insufficient_wallet_balance"].includes(e.type))
+          if (!match) return false
+        } else if (eventFilter === "checkout_created") {
+          const match = s.events.some((e) => ["checkout_created", "checkout_initiated", "Razorpay Order Created"].includes(e.type))
+          if (!match) return false
+        } else if (eventFilter === "ai_search") {
+          const match = s.events.some((e) => ["ai_search", "Products Searched"].includes(e.type))
+          if (!match) return false
+        } else if (!s.events.some((e) => e.type.toLowerCase().includes(eventFilter.toLowerCase()))) {
+          return false
+        }
+      }
 
-      if (resultFilter !== "all" && s.status !== resultFilter) return false
+      if (resultFilter !== "all" && s.status.toLowerCase() !== resultFilter.toLowerCase()) return false
 
-      if (
-        actorFilter !== "all" &&
-        !s.events.some((e) => e.actor === actorFilter)
-      )
-        return false
+      if (actorFilter !== "all") {
+        if (actorFilter === "customer") {
+          const isCust = s.actor_label?.toLowerCase().includes("customer") || s.events.some((e) => (e.actor || "").toLowerCase().includes("customer"))
+          if (!isCust) return false
+        } else if (actorFilter === "ai_assistants") {
+          const isAi = (s.actor_label && !["customer", "user action", "system"].includes(s.actor_label.toLowerCase())) ||
+                       s.events.some((e) => e.actor && !["customer", "user action", "system"].includes(e.actor.toLowerCase()))
+          if (!isAi) return false
+        } else if (actorFilter === "mcp") {
+          const isMcp = (s.session_id || "").startsWith("acp_") ||
+                        (s.order_id || "").startsWith("RAZ-MCP") ||
+                        s.events.some((e) => (e.source || "").toLowerCase().includes("mcp"))
+          if (!isMcp) return false
+        } else {
+          const target = actorFilter.toLowerCase()
+          const match = (s.actor_label || "").toLowerCase().includes(target) ||
+                        s.events.some((e) => (e.actor || "").toLowerCase().includes(target))
+          if (!match) return false
+        }
+      }
 
       // Date range filtering
       const sessionDate = s.created_at || ""
@@ -406,22 +433,25 @@ export default function AuditTrailScreen() {
               />
             </div>
             <Select value={eventFilter} onValueChange={(v) => setEventFilter(v ?? "all")}>
-              <SelectTrigger className="h-9 w-full sm:w-[150px] rounded-lg bg-card text-xs flex-1 sm:flex-none">
+              <SelectTrigger className="h-9 w-full sm:w-[160px] rounded-lg bg-card text-xs flex-1 sm:flex-none">
                 <SelectValue placeholder="Event type">
-                  {eventFilter === "all" ? "All Events" : eventFilter}
+                  {eventFilter === "all"
+                    ? "All Events"
+                    : eventFilter === "order_settled"
+                    ? "Order Settled / Paid"
+                    : eventFilter === "order_blocked"
+                    ? "Order Blocked / Failed"
+                    : eventFilter === "checkout_created"
+                    ? "Checkout Created"
+                    : "Product Search"}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Events</SelectItem>
-                <SelectItem value="Razorpay Order Created">
-                  Order Created
-                </SelectItem>
-                <SelectItem value="Payment Successful">
-                  Payment Successful
-                </SelectItem>
-                <SelectItem value="Products Searched">
-                  Products Searched
-                </SelectItem>
+                <SelectItem value="order_settled">Order Settled / Paid</SelectItem>
+                <SelectItem value="order_blocked">Order Blocked / Failed</SelectItem>
+                <SelectItem value="checkout_created">Checkout Created</SelectItem>
+                <SelectItem value="ai_search">Product Search</SelectItem>
               </SelectContent>
             </Select>
             <Select value={resultFilter} onValueChange={(v) => setResultFilter(v ?? "all")}>
@@ -439,21 +469,33 @@ export default function AuditTrailScreen() {
               </SelectContent>
             </Select>
             <Select value={actorFilter} onValueChange={(v) => setActorFilter(v ?? "all")}>
-              <SelectTrigger className="h-9 w-full sm:w-[130px] rounded-lg bg-card text-xs flex-1 sm:flex-none">
+              <SelectTrigger className="h-9 w-full sm:w-[145px] rounded-lg bg-card text-xs flex-1 sm:flex-none">
                 <SelectValue placeholder="Actor">
                   {actorFilter === "all"
                     ? "All Actors"
+                    : actorFilter === "chatgpt"
+                    ? "ChatGPT"
+                    : actorFilter === "claude"
+                    ? "Claude"
+                    : actorFilter === "gemini"
+                    ? "Google Gemini"
+                    : actorFilter === "store_agent"
+                    ? "Store Agent"
+                    : actorFilter === "mcp"
+                    ? "Connected MCP"
                     : actorFilter === "customer"
                     ? "Customer"
-                    : actorFilter === "AI Assistant"
-                    ? "AI Assistant"
                     : "System"}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Actors</SelectItem>
+                <SelectItem value="chatgpt">ChatGPT</SelectItem>
+                <SelectItem value="claude">Claude</SelectItem>
+                <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="store_agent">Store Agent</SelectItem>
+                <SelectItem value="mcp">Connected MCP</SelectItem>
                 <SelectItem value="customer">Customer</SelectItem>
-                <SelectItem value="AI Assistant">AI Assistant</SelectItem>
                 <SelectItem value="system">System</SelectItem>
               </SelectContent>
             </Select>
@@ -586,10 +628,19 @@ export default function AuditTrailScreen() {
                     )}
                   </TableCell>
                   <TableCell className="text-xs">
-                    <span className="font-medium">{s.customer?.trim() ? s.customer : "Guest Customer"}</span>
-                    <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[11px]">
-                      {s.actor_label || "Customer"}
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium text-foreground">{s.customer?.trim() ? s.customer : "Guest Customer"}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-medium">
+                          {s.actor_label || "Customer"}
+                        </span>
+                        {(s.session_id.startsWith("acp_") || (s.order_id && s.order_id.startsWith("RAZ-MCP")) || s.events.some((e) => (e.source || "").toLowerCase().includes("mcp"))) && (
+                          <span className="rounded px-1 py-0.5 text-[9px] font-mono font-bold bg-cyan-100 text-cyan-800 border border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800">
+                            MCP
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell className="text-center text-xs font-medium tabular-nums">
                     {s.event_count} events

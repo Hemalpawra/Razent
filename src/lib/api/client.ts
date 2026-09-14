@@ -127,7 +127,7 @@ function mapDbOrder(row: any): Order {
     billing_address: row.billing_address ?? undefined,
     via_ai: !!row.via_ai,
     conversation_id: row.conversation_id ?? undefined,
-    agent_id: row.agent_id ?? undefined,
+    agent_id: row.agent_id || row.conversation_id || undefined,
     mandate_id: row.mandate_id ?? undefined,
     checkout_session_id: row.checkout_session_id ?? undefined,
     commerce_protocol: row.commerce_protocol ?? undefined,
@@ -1155,7 +1155,7 @@ export async function createStorefrontOrder(order: Order): Promise<Order> {
       billing_address: order.billing_address ?? null,
       via_ai: !!order.via_ai,
       commerce_protocol: order.commerce_protocol || "direct_web",
-      agent_id: order.agent_id ?? null,
+      conversation_id: order.conversation_id || order.agent_id || null,
       acp_checkout_session_id: (order as any).acp_checkout_session_id ?? null,
       notes: order.notes ?? null,
       paid_at: order.status === "paid" ? (order.paid_at || new Date().toISOString()) : null,
@@ -1815,9 +1815,56 @@ export async function executeAutonomousWalletPurchase(
   if (totalPaise > NPCI_TRANSACTION_LIMIT_PAISE) {
     const formattedTotal = (totalPaise / 100).toLocaleString("en-IN")
     const formattedCap = (NPCI_TRANSACTION_LIMIT_PAISE / 100).toLocaleString("en-IN")
+    const failedOrderId = `RAZ-AGT-${Date.now().toString(36).toUpperCase()}`
+
+    const failedOrder: Order = {
+      id: failedOrderId,
+      razorpay_order_id: `wallet_declined_${Date.now()}`,
+      total_paise: totalPaise,
+      shipping_paise: 0,
+      currency: "INR",
+      status: "failed",
+      shipping_status: "pending",
+      via_ai: true,
+      commerce_protocol: "mcp",
+      agent_id: assistant || "store_agent",
+      items: resolvedItems,
+      shipping_address: {
+        full_name: deliveryAddress.full_name,
+        phone: deliveryAddress.phone,
+        email: wallet.customer_email || "customer@example.com",
+        line1: deliveryAddress.line1,
+        city: deliveryAddress.city,
+        state: deliveryAddress.state || "Maharashtra",
+        pincode: deliveryAddress.pincode,
+        country: deliveryAddress.country || "IN",
+      },
+      created_at: new Date().toISOString(),
+      notes: `Autonomous purchase blocked: Order total (₹${formattedTotal}) exceeds NPCI mandate cap (₹${formattedCap}) (Assistant: ${assistant || "Store Agent"})`,
+    }
+    await createStorefrontOrder(failedOrder).catch(() => {})
+
+    await logAuditEvent({
+      order_id: failedOrderId,
+      customer: deliveryAddress.full_name,
+      actor_label: assistant ? formatAgentName(assistant) : "Store Agent",
+      events: [
+        {
+          id: `ev_${Date.now()}_npci_fail`,
+          timestamp: new Date().toISOString(),
+          type: "order_blocked",
+          actor: assistant ? formatAgentName(assistant) : "Store Agent",
+          source: "regulatory_guardrails",
+          result: "Failed",
+          reason: `Order total (₹${formattedTotal}) exceeds NPCI mandate cap of ₹${formattedCap}`,
+        } as AuditEvent,
+      ],
+    }).catch(() => null)
+
     return {
       success: false,
       status: "npci_limit_exceeded",
+      order_id: failedOrderId,
       message:
         `Order total (₹${formattedTotal}) exceeds the NPCI autonomous transaction limit of ₹${formattedCap}. ` +
         `Regulatory guidelines require two-factor authentication for transactions above ₹${formattedCap}. ` +
@@ -1834,9 +1881,56 @@ export async function executeAutonomousWalletPurchase(
   if (totalPaise > wallet.spend_limit_paise) {
     const formattedTotal = (totalPaise / 100).toLocaleString("en-IN")
     const formattedLimit = (wallet.spend_limit_paise / 100).toLocaleString("en-IN")
+    const failedOrderId = `RAZ-AGT-${Date.now().toString(36).toUpperCase()}`
+
+    const failedOrder: Order = {
+      id: failedOrderId,
+      razorpay_order_id: `wallet_declined_${Date.now()}`,
+      total_paise: totalPaise,
+      shipping_paise: 0,
+      currency: "INR",
+      status: "failed",
+      shipping_status: "pending",
+      via_ai: true,
+      commerce_protocol: "mcp",
+      agent_id: assistant || "store_agent",
+      items: resolvedItems,
+      shipping_address: {
+        full_name: deliveryAddress.full_name,
+        phone: deliveryAddress.phone,
+        email: wallet.customer_email || "customer@example.com",
+        line1: deliveryAddress.line1,
+        city: deliveryAddress.city,
+        state: deliveryAddress.state || "Maharashtra",
+        pincode: deliveryAddress.pincode,
+        country: deliveryAddress.country || "IN",
+      },
+      created_at: new Date().toISOString(),
+      notes: `Autonomous purchase blocked: Exceeds customer spend limit ₹${formattedLimit} (Assistant: ${assistant || "Store Agent"})`,
+    }
+    await createStorefrontOrder(failedOrder).catch(() => {})
+
+    await logAuditEvent({
+      order_id: failedOrderId,
+      customer: deliveryAddress.full_name,
+      actor_label: assistant ? formatAgentName(assistant) : "Store Agent",
+      events: [
+        {
+          id: `ev_${Date.now()}_limit_fail`,
+          timestamp: new Date().toISOString(),
+          type: "order_blocked",
+          actor: assistant ? formatAgentName(assistant) : "Store Agent",
+          source: "wallet_guardrails",
+          result: "Failed",
+          reason: `Order total ₹${formattedTotal} exceeds customer spend limit ₹${formattedLimit}`,
+        } as AuditEvent,
+      ],
+    }).catch(() => null)
+
     return {
       success: false,
       status: "limit_exceeded",
+      order_id: failedOrderId,
       message:
         `Your agent purchase limit is exceeded. Order total is ₹${formattedTotal}, which is higher than your current AI spend limit of ₹${formattedLimit}. ` +
         `To place this order, you can:\n` +
@@ -1856,9 +1950,56 @@ export async function executeAutonomousWalletPurchase(
     const formattedTotal = (totalPaise / 100).toLocaleString("en-IN")
     const formattedBalance = (wallet.wallet_balance_paise / 100).toLocaleString("en-IN")
     const formattedShortfall = ((totalPaise - wallet.wallet_balance_paise) / 100).toLocaleString("en-IN")
+    const failedOrderId = `RAZ-AGT-${Date.now().toString(36).toUpperCase()}`
+
+    const failedOrder: Order = {
+      id: failedOrderId,
+      razorpay_order_id: `wallet_declined_${Date.now()}`,
+      total_paise: totalPaise,
+      shipping_paise: 0,
+      currency: "INR",
+      status: "failed",
+      shipping_status: "pending",
+      via_ai: true,
+      commerce_protocol: "mcp",
+      agent_id: assistant || "store_agent",
+      items: resolvedItems,
+      shipping_address: {
+        full_name: deliveryAddress.full_name,
+        phone: deliveryAddress.phone,
+        email: wallet.customer_email || "customer@example.com",
+        line1: deliveryAddress.line1,
+        city: deliveryAddress.city,
+        state: deliveryAddress.state || "Maharashtra",
+        pincode: deliveryAddress.pincode,
+        country: deliveryAddress.country || "IN",
+      },
+      created_at: new Date().toISOString(),
+      notes: `Autonomous purchase blocked: Insufficient wallet balance (Available: ₹${formattedBalance}, Shortfall: ₹${formattedShortfall}) (Assistant: ${assistant || "Store Agent"})`,
+    }
+    await createStorefrontOrder(failedOrder).catch(() => {})
+
+    await logAuditEvent({
+      order_id: failedOrderId,
+      customer: deliveryAddress.full_name,
+      actor_label: assistant ? formatAgentName(assistant) : "Store Agent",
+      events: [
+        {
+          id: `ev_${Date.now()}_balance_fail`,
+          timestamp: new Date().toISOString(),
+          type: "order_blocked",
+          actor: assistant ? formatAgentName(assistant) : "Store Agent",
+          source: "settlement_ledger",
+          result: "Failed",
+          reason: `Insufficient wallet balance: available ₹${formattedBalance}, required ₹${formattedTotal}`,
+        } as AuditEvent,
+      ],
+    }).catch(() => null)
+
     return {
       success: false,
       status: "insufficient_balance",
+      order_id: failedOrderId,
       message:
         `Insufficient wallet balance. Order total is ₹${formattedTotal}, but your available wallet balance is ₹${formattedBalance} (shortfall of ₹${formattedShortfall}). ` +
         `To place this order, you can:\n` +

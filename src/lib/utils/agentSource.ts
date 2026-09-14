@@ -44,14 +44,16 @@ export function getOrderAgentSource(order: Partial<Order> | any): AgentSourceInf
   const agentId = (order?.agent_id || "").toLowerCase()
   const convId = (order?.conversation_id || "").toLowerCase()
 
-  // 1. Check explicit assistant keywords in agentId or notes FIRST
+  // 1. Check explicit assistant keywords in agentId, convId, or notes FIRST
   // ChatGPT
   if (
     agentId.includes("chatgpt") ||
     agentId.includes("openai") ||
+    convId.includes("chatgpt") ||
+    convId.includes("openai") ||
     notes.includes("chatgpt") ||
     notes.includes("openai") ||
-    (protocol === "acp" && !agentId && !notes.includes("gemini") && !notes.includes("claude"))
+    (protocol === "acp" && !agentId && !convId.includes("claude") && !convId.includes("gemini") && !notes.includes("gemini") && !notes.includes("claude"))
   ) {
     return {
       type: "chatgpt",
@@ -69,6 +71,8 @@ export function getOrderAgentSource(order: Partial<Order> | any): AgentSourceInf
   if (
     agentId.includes("gemini") ||
     agentId.includes("google") ||
+    convId.includes("gemini") ||
+    convId.includes("google") ||
     notes.includes("gemini") ||
     notes.includes("google") ||
     protocol === "ap2" ||
@@ -90,6 +94,8 @@ export function getOrderAgentSource(order: Partial<Order> | any): AgentSourceInf
   if (
     agentId.includes("claude") ||
     agentId.includes("anthropic") ||
+    convId.includes("claude") ||
+    convId.includes("anthropic") ||
     notes.includes("claude") ||
     notes.includes("anthropic")
   ) {
@@ -110,6 +116,8 @@ export function getOrderAgentSource(order: Partial<Order> | any): AgentSourceInf
     agentId.includes("store_agent") ||
     agentId.includes("store-agent") ||
     agentId.includes("razent-ai") ||
+    convId.includes("store_agent") ||
+    convId.includes("store-agent") ||
     notes.includes("store agent")
   ) {
     return {
@@ -224,9 +232,17 @@ export function getConversationAgentSource(
   const protocol = (conv?.protocol || "").toLowerCase()
   const agentId = (conv?.agent_id || "").toLowerCase()
   const convType = (conv?.type || "").toLowerCase()
+  const convId = (conv?.external_id || conv?.id || "").toLowerCase()
+  const lastMsg = (conv?.last_message || "").toLowerCase()
 
   // 1. Explicit keywords
-  if (agentId.includes("chatgpt") || agentId.includes("openai")) {
+  if (
+    agentId.includes("chatgpt") ||
+    agentId.includes("openai") ||
+    convId.includes("chatgpt") ||
+    convId.includes("openai") ||
+    lastMsg.includes("chatgpt")
+  ) {
     return {
       type: "chatgpt",
       name: "ChatGPT",
@@ -239,7 +255,14 @@ export function getConversationAgentSource(
     }
   }
 
-  if (agentId.includes("gemini") || agentId.includes("google") || protocol === "ap2") {
+  if (
+    agentId.includes("gemini") ||
+    agentId.includes("google") ||
+    convId.includes("gemini") ||
+    convId.includes("google") ||
+    lastMsg.includes("gemini") ||
+    protocol === "ap2"
+  ) {
     return {
       type: "gemini",
       name: "Google Gemini",
@@ -252,7 +275,13 @@ export function getConversationAgentSource(
     }
   }
 
-  if (agentId.includes("claude") || agentId.includes("anthropic")) {
+  if (
+    agentId.includes("claude") ||
+    agentId.includes("anthropic") ||
+    convId.includes("claude") ||
+    convId.includes("anthropic") ||
+    lastMsg.includes("claude")
+  ) {
     return {
       type: "claude",
       name: "Claude",
