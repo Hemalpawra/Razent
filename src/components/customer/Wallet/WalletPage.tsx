@@ -90,17 +90,26 @@ export default function WalletPage() {
   const [customLimit, setCustomLimit] = useState("")
   const [copiedToken, setCopiedToken] = useState(false)
   const [copiedUrl, setCopiedUrl] = useState(false)
+  const [copiedBaseUrl, setCopiedBaseUrl] = useState(false)
   const [isEditingAddress, setIsEditingAddress] = useState(false)
 
+  const baseMcpUrl = "https://razent.vercel.app/mcp"
   const remoteMcpUrl = wallet?.agent_auth_token
-    ? `https://razent.vercel.app/mcp?token=${wallet.agent_auth_token}`
-    : "https://razent.vercel.app/mcp"
+    ? `${baseMcpUrl}?token=${wallet.agent_auth_token}`
+    : baseMcpUrl
+
+  const handleCopyBaseUrl = () => {
+    navigator.clipboard.writeText(baseMcpUrl)
+    setCopiedBaseUrl(true)
+    toast.success("Standard MCP URL copied!")
+    setTimeout(() => setCopiedBaseUrl(false), 2500)
+  }
 
   const handleCopyUrl = () => {
     if (!wallet?.agent_auth_token) return
     navigator.clipboard.writeText(remoteMcpUrl)
     setCopiedUrl(true)
-    toast.success("Remote MCP URL copied! Paste into Claude or ChatGPT.")
+    toast.success("Authenticated Remote MCP URL copied! Paste into Claude or ChatGPT.")
     setTimeout(() => setCopiedUrl(false), 2500)
   }
 
@@ -667,35 +676,68 @@ export default function WalletPage() {
               Your AI assistant will be automatically authenticated, able to inspect your wallet balance, and will <strong>always ask for your confirmation</strong> before finalizing any order.
             </p>
 
-            {/* Remote MCP URL (Recommended) */}
-            <div className="p-3.5 rounded-xl border border-primary/30 bg-primary/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Badge variant="outline" className="text-[10px] font-semibold bg-primary/10 text-primary border-primary/20">
-                    Recommended
-                  </Badge>
-                  <span className="text-[11px] font-semibold text-foreground">
-                    One-Click Remote MCP URL
-                  </span>
+            {/* Remote MCP URLs */}
+            <div className="space-y-2.5">
+              {/* Remote MCP URL with Token (Recommended) */}
+              <div className="p-3.5 rounded-xl border border-primary/30 bg-primary/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Badge variant="outline" className="text-[10px] font-semibold bg-primary/10 text-primary border-primary/20">
+                      Recommended
+                    </Badge>
+                    <span className="text-[11px] font-semibold text-foreground">
+                      Authenticated MCP URL (with Passkey)
+                    </span>
+                  </div>
+                  <code className="text-xs font-mono font-medium text-foreground/90 truncate block select-all bg-background/60 px-2 py-1 rounded border border-border/60">
+                    {remoteMcpUrl}
+                  </code>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Add as an SSE/HTTP MCP server in Claude Desktop, ChatGPT, or Cursor. Carries your passkey for autonomous wallet checks and purchasing.
+                  </p>
                 </div>
-                <code className="text-xs font-mono font-medium text-foreground/90 truncate block select-all bg-background/60 px-2 py-1 rounded border border-border/60">
-                  {remoteMcpUrl}
-                </code>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Add as an SSE/HTTP MCP server in Claude Desktop, ChatGPT Custom Actions, or Cursor. Automatically carries your authenticated session.
-                </p>
+
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 shrink-0 w-full sm:w-auto"
+                  disabled={!isSignedIn || !wallet?.agent_auth_token}
+                  onClick={handleCopyUrl}
+                >
+                  {copiedUrl ? <Check className="size-3.5 text-white" /> : <Copy className="size-3.5" />}
+                  <span>{copiedUrl ? "Copied URL" : "Copy Authenticated URL"}</span>
+                </Button>
               </div>
 
-              <Button
-                variant="default"
-                size="sm"
-                className="h-8 text-xs gap-1.5 shrink-0 w-full sm:w-auto"
-                disabled={!isSignedIn || !wallet?.agent_auth_token}
-                onClick={handleCopyUrl}
-              >
-                {copiedUrl ? <Check className="size-3.5 text-white" /> : <Copy className="size-3.5" />}
-                <span>{copiedUrl ? "Copied URL" : "Copy Remote MCP URL"}</span>
-              </Button>
+              {/* Standard MCP URL without Token */}
+              <div className="p-3 rounded-xl border border-border/70 bg-muted/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Badge variant="secondary" className="text-[10px] font-mono">
+                      Standard
+                    </Badge>
+                    <span className="text-[11px] font-semibold text-foreground">
+                      Standard MCP URL (without Token)
+                    </span>
+                  </div>
+                  <code className="text-xs font-mono font-medium text-foreground/80 truncate block select-all bg-background/60 px-2 py-1 rounded border border-border/60">
+                    {baseMcpUrl}
+                  </code>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Base endpoint for catalog discovery and manual checkout links. Passkey can be passed in prompts or environment variables.
+                  </p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 shrink-0 w-full sm:w-auto"
+                  onClick={handleCopyBaseUrl}
+                >
+                  {copiedBaseUrl ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                  <span>{copiedBaseUrl ? "Copied URL" : "Copy Base URL"}</span>
+                </Button>
+              </div>
             </div>
 
             {/* Passkey & Stdio Config */}
