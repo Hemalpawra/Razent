@@ -5,12 +5,14 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v4-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![shadcn/ui](https://img.shields.io/badge/shadcn%2Fui-base--mira-000000?logo=shadcnui&logoColor=white)](https://ui.shadcn.com/)
-[![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Edge%20Functions-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%2010%20Edge%20Functions-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Clerk](https://img.shields.io/badge/Clerk-Customer%20Auth-6C47FF?logo=clerk&logoColor=white)](https://clerk.com/)
+[![MCP](https://img.shields.io/badge/MCP-2026--07--28%20Streamable%20HTTP-black)](https://modelcontextprotocol.io/)
 [![Google AP2](https://img.shields.io/badge/Google-AP2%20Protocol-4285F4?logo=google&logoColor=white)](https://github.com/google-agentic-commerce/AP2)
-[![NPCI UPI AutoPay](https://img.shields.io/badge/NPCI-UPI%20AutoPay%20Compliant-FF6F00)](https://www.npci.org.in/)
+[![NPCI UPI AutoPay](https://img.shields.io/badge/NPCI-UPI%20AutoPay%20Compliant%20(%E2%82%B915K%20Cap)-FF6F00)](https://www.npci.org.in/)
 [![RBI Compliance](https://img.shields.io/badge/RBI-e--Mandate%20Guidelines-1A237E)](https://www.rbi.org.in/)
 
-Razent is an **Agentic Commerce and Instant Retail Platform**. It bridges traditional high-converting consumer grocery and retail storefronts with next-generation autonomous AI agents (ChatGPT, Claude, Gemini, and custom agents). Razent natively supports **Google Agent Payment Protocol (AP2)**, **Agentic Commerce Protocol (ACP)**, **Universal Commerce Protocol (UCP)**, and **NPCI / RBI payment regulatory compliance wrappers**.
+Razent is an **Agentic Commerce and Instant Retail Platform**. It bridges traditional high-converting consumer grocery and retail storefronts with next-generation autonomous AI agents (ChatGPT, Claude, Gemini, Grok, and custom agents). Razent natively supports **Google Agent Payment Protocol (AP2)**, **Agentic Commerce Protocol (ACP)**, **Universal Commerce Protocol (UCP)**, **Model Context Protocol (MCP 2026-07-28)**, and **NPCI / RBI payment regulatory compliance wrappers**.
 
 ---
 
@@ -20,10 +22,10 @@ Razent is an **Agentic Commerce and Instant Retail Platform**. It bridges tradit
 - [2. High-Level Architecture](#2-high-level-architecture)
 - [3. Core Platform Capabilities](#3-core-platform-capabilities)
   - [3.1 Customer Storefront (`StoreHome`)](#31-customer-storefront-storehome)
-  - [3.2 Dedicated Full-Screen AI Shopping Assistant](#32-dedicated-full-screen-ai-shopping-assistant)
-  - [3.3 Delegated AI Wallet & NPCI/RBI Regulatory Wrapper](#33-delegated-ai-wallet--npcirbi-regulatory-wrapper)
-  - [3.4 Agentic Protocols & Discovery Endpoints (A2A / AP2 / ACP / UCP)](#34-agentic-protocols--discovery-endpoints-a2a--ap2--acp--ucp)
-  - [3.5 Merchant Operations & Intelligence Hub](#35-merchant-operations--intelligence-hub)
+  - [3.2 Dedicated Full-Screen AI Shopping Assistant & Floating Widget](#32-dedicated-full-screen-ai-shopping-assistant--floating-widget)
+  - [3.3 Customer Wallet, Agent Passkeys & NPCI/RBI Regulatory Wrapper](#33-customer-wallet-agent-passkeys--npcirbi-regulatory-wrapper)
+  - [3.4 Agentic Protocols & Discovery Endpoints (A2A / AP2 / ACP / UCP / MCP)](#34-agentic-protocols--discovery-endpoints-a2a--ap2--acp--ucp--mcp)
+  - [3.5 Merchant Operations & Intelligence Hub (9 Screens)](#35-merchant-operations--intelligence-hub-9-screens)
   - [3.6 Cryptographic Audit Trail System](#36-cryptographic-audit-trail-system)
 - [4. Transaction & Execution Flows](#4-transaction--execution-flows)
   - [Flow 1: Human Shopper Instant Storefront Checkout](#flow-1-human-shopper-instant-storefront-checkout)
@@ -43,9 +45,9 @@ Razent is an **Agentic Commerce and Instant Retail Platform**. It bridges tradit
 Modern e-commerce is rapidly transforming from manual browsing to **delegated agentic purchasing**, where humans instruct AI assistants to source, negotiate, and purchase items autonomously. 
 
 Razent solves the three fundamental challenges of agentic retail:
-1. **Agent Discovery & Protocol Interoperability**: Autonomous agents can inspect standard `.well-known` endpoints (`agent.json`, `acp.json`, `ap2.json`, `ucp.json`) to understand product catalogs, fees, delivery SLAs, and payment mandates.
-2. **Financial Safety & Regulatory Governance**: Enforces **Reserve Bank of India (RBI) e-mandate rules** and **NPCI UPI AutoPay guidelines**, including delegated spending caps, cooling-off periods, zero secret ingestion (CVV/OTP protection), and mandate lifecycles.
-3. **Unified Retail Infrastructure**: Both human shoppers and autonomous agents interact with the exact same real-time product inventory, pricing, order fulfillment pipeline, and merchant intelligence back-office.
+1. **Agent Discovery & Protocol Interoperability**: Autonomous agents can inspect standard `.well-known` endpoints (`agent.json`, `acp.json`, `ap2.json`, `ucp.json`, `mcp.json`, `openapi.json`) to understand product catalogs, fees, delivery SLAs, and payment mandates.
+2. **Financial Safety & Regulatory Governance**: Enforces **Reserve Bank of India (RBI) e-mandate rules** and **NPCI UPI AutoPay guidelines**, including delegated spending caps, cooling-off periods, zero secret ingestion (CVV/OTP protection), mandate lifecycles, and a strict **₹15,000 transaction ceiling** (`NPCI_TRANSACTION_LIMIT_PAISE`).
+3. **Unified Retail Infrastructure**: Both human shoppers and autonomous agents interact with the exact same real-time product inventory, pricing in paise, order fulfillment pipeline, and merchant intelligence back-office.
 
 ---
 
@@ -54,48 +56,56 @@ Razent solves the three fundamental challenges of agentic retail:
 ```mermaid
 flowchart TD
     subgraph Clients["Clients & Autonomous Agents"]
-        HumanCustomer["Human Shopper\n(Storefront / Assistant)"]
+        HumanCustomer["Human Shopper\n(Storefront / Assistant / Wallet)"]
         ExternalAgent["Autonomous AI Agent\n(ChatGPT, Claude, Gemini, ADK)"]
         MerchantUser["Merchant Operator\n(Back-office Dashboard)"]
     end
 
     subgraph Discovery["Agent Discovery Layer"]
-        WellKnown["/.well-known/\n- agent.json (A2A)\n- acp.json (ACP)\n- ap2.json (AP2)\n- ucp.json (UCP)"]
+        WellKnown["/.well-known/\n- agent.json (A2A)\n- acp.json (ACP)\n- ap2.json (AP2)\n- ucp.json (UCP)\n- mcp.json (MCP 2026-07-28)\n- openapi.json (OpenAPI 3.1)"]
     end
 
     subgraph Security["Regulatory & Security Layer"]
         RegWrapper["regulatoryWrapper.ts\n- RBI Mandate Limits\n- NPCI Cooling-Off Rules\n- Secret Sanitization (No CVV/OTP)"]
-        Wallet["WalletSettingsModal\n- Delegated AI Daily/Order Caps\n- Mandate Lifecycle (Active/Paused)"]
+        Wallet["WalletPage (/wallet) & useCustomerWallet\n- Delegated AI Daily/Order Caps\n- Agent Passkeys (rz_agt_live_...)\n- NPCI ₹15,000 AutoPay Ceiling\n- Balise UX Writing Guidelines"]
     end
 
     subgraph AppLayer["Application Layer (React 19 + Vite 8)"]
-        Router["AppRouter.tsx (HashRouter)"]
-        StoreHome["StoreHome (Storefront & Cart)"]
-        AIAssistant["AIAssistantScreen (Full-Screen AI)"]
-        MerchantPortal["Merchant Portal\n(Dashboard, Products, Orders, Audit, etc.)"]
+        Router["AppRouter.tsx (BrowserRouter + Subdomain Isolation)"]
+        StoreHome["StoreHome (/ & /checkout)"]
+        AIAssistant["AIAssistantPage (/assistant)\n& AIAssistantWidget"]
+        MerchantPortal["Merchant Portal (9 Screens)\n(Dashboard, Products, Import, Orders, Analytics, AI Agent, Audit, Protocols, Settings)"]
+        ClerkAuth["Clerk Customer Auth\n(/login, /signup)"]
     end
 
     subgraph Backend["Backend & Edge Infrastructure"]
         DataSeam["Unified Data Seam (client.ts)"]
-        EdgeFunction["Supabase Edge Function\n(/ragent-chat SSE Stream)"]
-        SupabaseDB[("Supabase Postgres\n- products\n- orders\n- audit_sessions\n- conversations")]
+        EdgeFunctions["10 Supabase Edge Functions\n(mcp, a2a, execute-agent-checkout, uap-verifier, x402-challenge, n8n-chat-proxy, ragent-chat, razorpay-webhook, clerk-profile, create-merchant)"]
+        N8nEngine["n8n Workflow Engine\n(LangChain Agent + Memory + Tools)"]
+        AISDKEngine["Vercel AI SDK + OpenRouter / Gemini Flash\n(In-Browser Vector Search Fallback)"]
+        SupabaseDB[("Supabase Postgres\n- products, orders, audit_sessions, conversations, customer_wallets, merchants")]
         MockFallback["In-Memory Mock Fallback\n(Offline Resilience)"]
     end
 
     HumanCustomer --> Router
     ExternalAgent --> Discovery
+    ExternalAgent --> EdgeFunctions
     Discovery --> RegWrapper
     Router --> StoreHome
     Router --> AIAssistant
+    Router --> Wallet
+    Router --> ClerkAuth
     Router --> MerchantPortal
-    AIAssistant <--> EdgeFunction
+    AIAssistant <--> N8nEngine
+    AIAssistant <--> AISDKEngine
+    N8nEngine <--> EdgeFunctions
     AIAssistant <--> Wallet
     Wallet --> RegWrapper
     StoreHome --> DataSeam
     MerchantPortal --> DataSeam
     DataSeam --> SupabaseDB
     DataSeam -.->|Fallback on offline| MockFallback
-    EdgeFunction --> SupabaseDB
+    EdgeFunctions --> SupabaseDB
 ```
 
 ---
@@ -103,42 +113,47 @@ flowchart TD
 ## 3. Core Platform Capabilities
 
 ### 3.1 Customer Storefront (`StoreHome`)
-- **Route**: `/#/`
-- **Catalog Browsing**: Rich product grid with instant search across titles, descriptions, and tags. Filter by categories: *Groceries, Fruits, Vegetables, Dairy & Bakery, Snacks & Munchies, Beverages, Household*.
+- **Routes**: `/`, `/checkout`, `/checkout/success`
+- **Catalog Browsing**: Rich product grid with instant search across titles, descriptions, and tags. Filter by categories: *Grocery & Staples, Beverages, Electronics, Beauty & Personal Care, Home Care, Decor, Kids, Kitchen Appliances, Office & Stationery*.
 - **Stock Indicators & Badges**: Dynamic badges for *In Stock*, *Low Stock (< 10 units)*, *Out of Stock*, and *Bestseller*.
 - **Interactive Product Quick View**: Slide-out drawer displaying high-resolution gallery thumbnails, itemized nutritional/product specs, price in paise formatted to INR (`₹`), and real-time inventory count.
-- **Cart & Persistence**: Cart items stay synchronized across tabs and refreshes via `orderStore` (LocalStorage) and React state.
-- **Integrated AI Split Workspace**: On desktop, users can toggle a persistent right-hand AI shopping drawer while browsing products side-by-side.
-- **Instant Checkout Flow**: 3-step checkout with delivery address entry, contact validation, payment method selector (Cards, UPI, Netbanking, COD), order summary, and breakdown (Subtotal, Delivery Fee, 18% GST).
+- **Cart & Persistence**: Cart items stay synchronized across tabs and refreshes via `orderStore` (LocalStorage) and React state (`useCart.ts`).
+- **Floating AI Assistant Widget**: On all store pages, shoppers can toggle an interactive popover widget (`AIAssistantWidget.tsx`) to chat and add recommended items to cart without leaving their shopping flow.
+- **Instant Checkout Flow**: 3-step checkout with delivery address entry, contact validation, payment method selector (Razorpay Cards, UPI, Netbanking, COD), order summary, and breakdown (Subtotal, Delivery Fee, 18% GST).
 - **Automated Tax Invoice Generation**: Built-in modal rendering a professional, downloadable GST Tax Invoice (`INV-XXXXXX`) with merchant GSTIN, HSN codes, and itemized tax breakdowns.
+- **Clerk Customer Authentication**: Clean login and signup screens (`/login/*`, `/signup/*`, `/customer/auth/*`) backed by `@clerk/react` and synchronized with Supabase customer records.
 
-### 3.2 Dedicated Full-Screen AI Shopping Assistant
-- **Route**: `/#/assistant`
-- **Distraction-Free Conversational UI**: Dedicated full-screen ChatGPT/Gemini-style workspace adhering to modern dark/light system tokens with zero chat history clutter.
-- **SSE Streaming & Catalog Grounding**: Communicates with the Supabase Edge Function `ragent-chat` via Server-Sent Events (SSE). Queries are resolved against the active inventory database to prevent hallucinations.
-- **Dynamic In-Chat Product Cards**: The assistant streams structured JSON tool results into interactive product carousels with product images, prices, stock levels, and instant *"Add to Cart"* buttons.
-- **In-Chat Order Review & Approval Cards**: When the user asks to purchase items, the assistant computes itemized pricing, checks stock availability, verifies spending bounds, and renders an embedded **Order Review Card**.
+### 3.2 Dedicated Full-Screen AI Shopping Assistant & Floating Widget
+- **Routes**: `/assistant` (full-page) & storewide floating widget (`AIAssistantWidget.tsx`).
+- **Multi-Tier AI Engine**:
+  1. **n8n Orchestration** (`razent-ai-assistant-webhook.json`): Production LangChain agent with conversation memory, NPCI guardrails, and Supabase search tools.
+  2. **`n8n-chat-proxy` Edge Function**: Secure server-side proxy protecting upstream webhooks with `X-Razent-Token` authentication.
+  3. **Vercel AI SDK + OpenRouter / Gemini Flash** (`src/lib/agent/chatAgent.ts`): High-speed streaming client fallback with tool execution and in-browser semantic vector embeddings (`vectorSearch.ts`).
+  4. **`ragent-chat` Edge Function**: Direct SSE streaming fallback with database grounding.
+- **Dynamic In-Chat Product Cards**: Structured tool results render as interactive product cards with images, prices, stock levels, and instant *"Add to Cart"* buttons.
 - **Autonomous Checkout**: Clicking *"Approve & Pay"* triggers payment authorization, generates an invoice, assigns hyperlocal logistics delivery, logs audit events, and transitions to order tracking without leaving the conversation.
-- **Voice & Quick Prompts**: Quick prompt chips (*"Find fresh fruits under ₹500"*, *"Need dinner ingredients for 4"*, *"Healthy snacks"*) and microphone speech input simulation.
+- **Voice & Quick Prompts**: Quick prompt chips (*"Show me grocery deals"*, *"Best electronics under ₹5000"*, *"Track my order"*) and microphone speech input simulation.
 
-### 3.3 Delegated AI Wallet & NPCI/RBI Regulatory Wrapper
-- **Accessible via**: AI Assistant Header (*Wallet Button*) or direct settings.
+### 3.3 Customer Wallet, Agent Passkeys & NPCI/RBI Regulatory Wrapper
+- **Accessible via**: Dedicated full-page route at **`/wallet`** (`WalletPage.tsx`, `useCustomerWallet.ts`) and modal triggers.
+- **Razent Wallet Balance & Top-Up**: Real-time balance tracker with instant sandboxed top-ups for autonomous purchasing.
 - **Delegated Autonomous Spending Limits**:
   - Max per-transaction limit (default: ₹2,000; configurable up to ₹15,000).
   - Daily spending cap (default: ₹5,000; configurable up to ₹50,000).
-  - Explicit customer gating: orders exceeding the cap require immediate step-up manual PIN/OTP authorization.
-- **RBI e-Mandate Compliance**:
-  - Enforces minimum 24-hour cooling-off periods for recurring automated debit registrations.
+  - Explicit customer gating: orders exceeding the cap require immediate step-up manual authorization.
+- **Agent Passkey Management (`agent_auth_token`)**:
+  - Generates secure customer-scoped tokens (e.g., `rz_agt_live_...`).
+  - Allows external AI assistants (ChatGPT, Claude, Gemini, Cursor) to act on behalf of the customer via `auth_token` tool arguments or `RAZENT_CUSTOMER_TOKEN` environment variables.
+- **NPCI UPI AutoPay & RBI e-Mandate Framework**:
+  - Strictly enforces the **NPCI regulatory limit of ₹15,000** (`NPCI_TRANSACTION_LIMIT_PAISE = 1500000`) for automated debits without Additional Factor of Authentication (AFA).
+  - Minimum 24-hour cooling-off periods for recurring execution.
   - Granular mandate states: `ACTIVE`, `PAUSED`, `REVOKED`.
-  - Immediate mandate revocation with instant audit logging.
-- **NPCI UPI AutoPay Framework**:
-  - Validates merchant Category Code (MCC 5411 for Groceries/Supermarkets).
-  - Handles auto-debit registration tokens and recurring execution windows.
+- **Balise UX Writing Recovery Guidelines**:
+  - When limits or balances are exceeded, the agent provides standardized 3-choice recovery options: (1) Update limit in wallet, (2) Top up balance, (3) Complete order via manual checkout link.
 - **Zero-Secret Ingestion Security Guardrail**:
-  - `regulatoryWrapper.sanitizePromptForSecurity()` actively intercepts any prompt containing CVV numbers (3-4 digits), full credit/debit card numbers (15-16 digits matching Luhn algorithm), banking PINs, or OTPs.
-  - Refuses transmission of sensitive payment credentials to LLMs or third-party gateways.
+  - `regulatoryWrapper.sanitizePromptForSecurity()` actively intercepts any prompt containing CVV numbers, full card numbers, banking PINs, or OTPs, refusing transmission to LLMs.
 
-### 3.4 Agentic Protocols & Discovery Endpoints (A2A / AP2 / ACP / UCP)
+### 3.4 Agentic Protocols & Discovery Endpoints (A2A / AP2 / ACP / UCP / MCP)
 Razent exposes standardized JSON manifests in `public/.well-known/` for cross-platform agentic commerce:
 
 | Endpoint | Protocol | Description |
@@ -147,19 +162,22 @@ Razent exposes standardized JSON manifests in `public/.well-known/` for cross-pl
 | `/.well-known/acp.json` | **Agentic Commerce Protocol (ACP)** | Protocol discovery describing catalog endpoints, payment schemes (`razorpay_uap`, `ap2_mandate`), supported currencies (`INR`), and webhook hooks. |
 | `/.well-known/ap2.json` | **Google AP2** | AP2 specification configuration: supported payment mandate versions (`v1`, `v2`), cryptographic signature schemes (`Ed25519`, `ECDSA_P256`), and X-402 challenge mechanisms. |
 | `/.well-known/ucp.json` | **Universal Commerce Protocol** | Capability discovery for multi-agent retail networks and cross-store federations. |
+| `/.well-known/mcp.json` | **Model Context Protocol (MCP)** | Streamable HTTP discovery manifest for MCP 2026-07-28 clients (Claude, ChatGPT, Gemini, Cursor). |
+| `/.well-known/openapi.json` | **OpenAPI 3.1 Specification** | Machine-readable API schema for direct ChatGPT Custom GPT Actions and Grok function calling. |
 
-### 3.5 Merchant Operations & Intelligence Hub
-- **Route**: `/#/merchant/*` (Protected by role verification and session management)
+### 3.5 Merchant Operations & Intelligence Hub (9 Screens)
+- **Route**: `/merchant/*` (or top-level paths `/dashboard`, `/products`, etc. when on merchant subdomain, protected by role verification).
 - **Merchant Navigation Shell (`AppShell`)**: Slim fixed sidebar (`14.5rem`), breadcrumbs, theme switcher, and instant role toggle.
-- **8 Dedicated Merchant Screens**:
-  1. **Dashboard (`/#/merchant/dashboard`)**: KPI metric cards with deltas (*Monthly Revenue, Orders Today, Active Conversations, Conversion Rate, Low Stock Alerts*), sales revenue area chart, category share donut chart, conversion funnel, recent orders table, and CSV report export.
-  2. **Products (`/#/merchant/products`)**: Filterable product inventory table with image preview, stock status, category filters, quick stock adjust, and 560px `ProductDrawer` with 4 tabs (*Overview, Inventory, AI & Visibility, Activity*).
-  3. **Product Import (`/#/merchant/product-import`)**: Bulk file ingestion supporting `.csv` and `.xlsx` formats with validation preview, downloadable sample templates, and manual row-by-row item builder.
-  4. **Orders (`/#/merchant/orders`)**: Complete orders ledger with status pills (`created`, `paid`, `refunded`, `failed`), shipping status (`pending`, `packed`, `shipped`, `delivered`), search by customer/ID, and 560px `OrderDrawer` with 7 inspection sections.
-  5. **Analytics (`/#/merchant/analytics`)**: Deep business intelligence with daily revenue trajectories, order status distributions, average order value (AOV) tracking, and AI-assisted vs direct purchase comparison.
-  6. **AI Agent Operations (`/#/merchant/ai-agent`)**: Live conversation monitor showing real-time customer dialogues, agent intents, sentiment analysis, product suggestion rates, and conversation reset controls.
-  7. **Audit Trail (`/#/merchant/audit-trail`)**: Immutable audit session table with actor badges (*Customer, AI Assistant, Merchant, System*), source indicators, and 560px `AuditDrawer` with cryptographic event payloads.
-  8. **Settings (`/#/merchant/settings`)**: Merchant store configuration covering store identity, business details, tax GSTIN, AI agent operational constraints, shipping SLAs, and notification preferences.
+- **9 Dedicated Merchant Screens**:
+  1. **Dashboard (`/dashboard`)**: KPI metric cards with deltas (*Monthly Revenue, Orders Today, Active Conversations, Conversion Rate, Low Stock Alerts*), sales revenue area chart, category share donut chart, conversion funnel, recent orders table, and CSV report export.
+  2. **Products (`/products`)**: Filterable product inventory table with image preview, stock status, category filters, quick stock adjust, and 560px `ProductDrawer` with 4 tabs (*Overview, Inventory, AI & Visibility, Activity*).
+  3. **Product Import (`/products` / `ProductImport`)**: Bulk file ingestion supporting `.csv` and `.xlsx` formats with validation preview, downloadable sample templates, and manual row-by-row item builder.
+  4. **Orders (`/orders`)**: Complete orders ledger with status pills (`created`, `paid`, `refunded`, `failed`), shipping status (`pending`, `packed`, `shipped`, `delivered`), search by customer/ID, and 560px `OrderDrawer` with 7 inspection sections.
+  5. **Analytics (`/analytics`)**: Deep business intelligence with daily revenue trajectories, order status distributions, average order value (AOV) tracking, and AI-assisted vs direct purchase comparison.
+  6. **AI Agent Operations (`/ai_agent`)**: Live conversation monitor showing real-time customer dialogues, agent intents, sentiment analysis, product suggestion rates, and conversation reset controls.
+  7. **Audit Trail (`/audit_trail`)**: Immutable audit session table with actor badges (*Customer, AI Assistant, Merchant, System*), source indicators, and 560px `AuditDrawer` with cryptographic event payloads.
+  8. **Protocol Manager (`/protocols`)**: Complete protocol command center (`ProtocolManagerPage.tsx`) inspecting active Merchant JWK keys (ECDSA P-256), live ACP checkout sessions, settled agentic orders, interactive AP2 mandate chain verifier, Razorpay test order dispatcher, and webhook HMAC signature inspectors.
+  9. **Settings (`/settings`)**: Merchant store configuration covering store identity, business details, tax GSTIN, AI agent operational constraints, shipping SLAs, and notification preferences.
 
 ### 3.6 Cryptographic Audit Trail System
 - Every transaction, agent prompt, tool execution, payment status transition, and administrative refund is logged via `logAuditEvent()` in `src/lib/api/client.ts`.
@@ -316,36 +334,52 @@ Razent/
 │   │   ├── agent.json                  # Agent-to-Agent (A2A) protocol manifest
 │   │   ├── acp.json                    # Agentic Commerce Protocol discovery
 │   │   ├── ap2.json                    # Google AP2 protocol configuration
-│   │   └── ucp.json                    # Universal Commerce Protocol discovery
+│   │   ├── ucp.json                    # Universal Commerce Protocol discovery
+│   │   ├── mcp.json                    # Streamable HTTP MCP server manifest
+│   │   └── openapi.json                # OpenAPI 3.1 spec for GPT Actions & Grok
 │   ├── product-import-template.csv    # Sample CSV for bulk product import
 │   └── product-import-template.xlsx   # Sample Excel for bulk product import
+├── n8n/
+│   ├── README.md                       # n8n setup, production webhook & proxy guide
+│   ├── razent-ai-assistant-webhook.json# Production n8n workflow with Header Auth
+│   └── razent-ai-assistant-workflow.json# Development n8n workflow (no auth)
 ├── supabase/
-│   ├── functions/
-│   │   └── ragent-chat/
-│   │       └── index.ts               # Deno Edge Function: SSE AI streaming & RAG
-│   └── migrations/                    # SQL schema definitions and migrations
+│   ├── functions/                      # 10 Supabase Edge Functions
+│   │   ├── mcp/index.ts                # Streamable HTTP MCP 2026-07-28 server (7 tools)
+│   │   ├── a2a/index.ts                # Agent-to-Agent UCP/ACP/AP2 gateway
+│   │   ├── execute-agent-checkout/     # Unified checkout & limit evaluator
+│   │   ├── uap-verifier/               # NPCI UAP cryptographic verifier
+│   │   ├── x402-challenge/             # HTTP 402 payment required challenge
+│   │   ├── n8n-chat-proxy/index.ts     # Server-side proxy for n8n with secret auth
+│   │   ├── ragent-chat/index.ts        # Direct SSE AI streaming & RAG
+│   │   ├── razorpay-webhook/index.ts   # Razorpay payment confirmation webhook
+│   │   ├── clerk-profile/index.ts      # Clerk customer profile sync to Supabase
+│   │   └── create-merchant/index.ts    # Merchant onboarding function
+│   └── migrations/                     # SQL schema definitions and migrations
+├── scripts/
+│   ├── mcp-server.mjs                  # Local/Stdio/HTTP standalone MCP server
+│   ├── deploy-functions.mjs            # Supabase functions deployment automator
+│   ├── run_acceptance_suite.mjs        # End-to-end protocol acceptance test runner
+│   └── test-protocol-stack.mjs         # Test suite for AP2/ACP/UCP protocols
 ├── src/
-│   ├── main.tsx                       # Application entrypoint & ThemeProvider
-│   ├── AppRouter.tsx                  # HashRouter routing table
-│   ├── App.tsx                        # Legacy root screen renderer
+│   ├── main.tsx                       # Application entrypoint, ThemeProvider & ClerkProvider
+│   ├── AppRouter.tsx                  # BrowserRouter routing table with subdomain isolation
 │   ├── index.css                      # Global theme tokens, variables & typography
 │   ├── components/
 │   │   ├── ui/                        # shadcn/ui primitives (base-mira)
-│   │   │   ├── button.tsx, card.tsx, sheet.tsx, table.tsx, dialog.tsx, etc.
 │   │   ├── shared/
 │   │   │   ├── AppShell.tsx           # Dual-role shell: Store vs Merchant sidebar
 │   │   │   ├── ThemeToggle.tsx        # Light/Dark/System theme switcher
+│   │   │   ├── Toaster.tsx            # Sonner toast provider
 │   │   │   └── PageHeader.tsx         # Standardized page title & action bar
 │   │   ├── auth/
 │   │   │   └── SignInScreen.tsx       # Merchant authentication & role manager
 │   │   ├── customer/
-│   │   │   ├── StoreHome/             # Customer storefront
-│   │   │   │   ├── index.tsx          # Store catalog, cart drawer & instant checkout
-│   │   │   │   └── InvoiceModal.tsx   # Printable GST Tax Invoice generator
-│   │   │   └── AIAssistant/
-│   │   │       ├── AIAssistantScreen.tsx # Standalone full-screen AI assistant
-│   │   │       └── WalletSettingsModal.tsx # Delegated limits & NPCI wallet settings
-│   │   └── merchant/                  # Back-office administration screens
+│   │   │   ├── StoreHome/             # Customer storefront (/ & /checkout)
+│   │   │   ├── AIAssistant/           # AIAssistantPage (/assistant) & AIAssistantWidget
+│   │   │   ├── Wallet/WalletPage.tsx  # Customer wallet, limits & passkeys (/wallet)
+│   │   │   └── auth/CustomerAuthPage.tsx # Clerk customer sign-in/sign-up screen
+│   │   └── merchant/                  # Back-office administration screens (9 screens)
 │   │       ├── Dashboard/             # Merchant KPIs, charts & funnel analysis
 │   │       ├── Products/              # Product catalog table & ProductDrawer
 │   │       ├── ProductImport/         # CSV/Excel drag-and-drop batch importer
@@ -353,33 +387,48 @@ Razent/
 │   │       ├── Analytics/             # Advanced business intelligence & charts
 │   │       ├── AIAgent/               # Live customer conversation inspector
 │   │       ├── AuditTrail/            # Regulatory & AP2 audit session explorer
+│   │       ├── Protocol/              # ProtocolManagerPage (JWKs, ACP, AP2 verifier)
 │   │       └── Settings/              # Store identity, AI policies, shipping rules
 │   ├── lib/
+│   │   ├── utils.ts                   # cn helper (clsx + twMerge)
+│   │   ├── utils/subdomain.ts         # isMerchantSubdomain & getMerchantUrl helpers
+│   │   ├── agent/
+│   │   │   ├── chatAgent.ts           # AI SDK OpenRouter / Gemini Flash engine
+│   │   │   └── vectorSearch.ts        # In-browser semantic vector embeddings
 │   │   ├── api/
 │   │   │   ├── client.ts              # UNIFIED API SEAM (all UI calls flow here)
-│   │   │   └── supabase.ts            # Supabase database & authentication client
+│   │   │   ├── supabase.ts            # Supabase database & authentication client
+│   │   │   ├── razorpayClient.ts      # Direct Razorpay Orders & Verification client
+│   │   │   └── clerkProxy.ts          # Clerk server proxy helper
 │   │   ├── protocol/
 │   │   │   ├── ap2Types.ts            # AP2, ACP & UCP protocol type definitions
+│   │   │   ├── ap2Crypto.ts           # WebCrypto ECDSA P-256 signing & HMAC verifier
 │   │   │   ├── agenticCommerce.ts     # Mandate validation & X-402 challenge flow
-│   │   │   └── regulatoryWrapper.ts   # NPCI AutoPay & RBI compliance wrapper
+│   │   │   ├── regulatoryWrapper.ts   # NPCI AutoPay & RBI compliance wrapper
+│   │   │   └── canonicalize.ts        # RFC-8785 JSON canonicalizer
 │   │   ├── types/                     # TypeScript entity models
 │   │   │   ├── product.ts             # Product & ProductStatus
 │   │   │   ├── order.ts               # Order, OrderStatus & ShippingStatus
+│   │   │   ├── wallet.ts              # CustomerWallet, spend limits, NPCI constants
 │   │   │   ├── conversation.ts        # Conversation, ChatMessage & AIMsg
 │   │   │   ├── audit.ts               # AuditSession & AuditEvent
 │   │   │   ├── kpi.ts                 # KPI & DashboardData
 │   │   │   └── analytics.ts           # RevenuePoint & CategoryShare
 │   │   ├── mock/                      # Resilient in-memory fallback datasets
-│   │   │   ├── products.ts, orders.ts, conversations.ts, audit.ts, kpis.ts
-│   │   └── storage/
-│   │       └── orderStore.ts          # LocalStorage sync for client cart and orders
+│   │   └── storage/orderStore.ts      # LocalStorage sync for client cart and orders
 │   └── state/
 │       ├── useUI.ts                   # Screen states, active roles, drawer controls
+│       ├── useCart.ts                 # Customer shopping cart & badge counter
+│       ├── useCustomerAuth.ts         # Clerk customer session state & token sync
+│       ├── useCustomerWallet.ts       # Customer wallet, spend limits, passkeys, address
 │       ├── useTheme.ts                # Light / Dark theme persistence
 │       ├── useSettings.ts             # Merchant settings & storeProfile
 │       ├── useMerchant.ts             # Authenticated merchant profile
 │       └── useError.ts                # Toast notification & error interceptor
 ├── AI_BLUEPRINT.md                    # Engineering design document & single source of truth
+├── MCP_CONNECTOR.md                   # Authoritative MCP server integration specification
+├── RAZENT_MCP_CHEAT_SHEET.md          # Multi-platform connection cheat sheet
+├── MCP_INTEGRATIONS_GUIDE.md          # Complete multi-platform integration guide
 ├── package.json                       # Dependencies and scripts
 ├── tsconfig.json                      # TypeScript compiler configuration
 └── vite.config.ts                     # Vite build configuration
@@ -400,6 +449,10 @@ The application avoids tight coupling between UI components and the database. Ev
 - `updateOrderStatus(orderId, status)`: Transitions order status (`paid`, `shipped`, `refunded`).
 - `refundOrder(orderId)`: Issues refund and automatically logs a merchant audit event.
 - `trackOrder(query)`: Public customer lookup by Order ID or phone number.
+- `getOrCreateCustomerWallet(input)`: Loads or provisions customer wallet with Clerk identity sync.
+- `updateCustomerWallet(input)`: Updates spend limits, auto-purchasing switch, or default address.
+- `topUpCustomerWallet(input)`: Adds funds to customer wallet balance.
+- `regenerateAgentAuthToken(customerId)`: Generates a new `rz_agt_live_...` Agent Passkey.
 - `subscribeToProducts(callback)`: Real-time Supabase channel updating stock live across connected clients.
 - `logAuditEvent(input)`: Cryptographic session logger for customer, merchant, and AI agent actions.
 - `listAuditSessions(args)`: Retrieves audit logs for the regulatory inspector.
@@ -421,12 +474,15 @@ All currency is strictly stored and calculated in **paise** (1 INR = 100 paise) 
 1. **Zero Secret Ingestion**:
    - The platform strictly enforces automated prompt sanitization (`regulatoryWrapper.ts`).
    - CVV codes, bank PINs, OTPs, and complete card PANs are immediately intercepted and stripped before queries reach AI models or network logs.
-2. **Autonomous Spending Safeguards**:
-   - The AI assistant cannot execute orders exceeding the customer's configured `perTransactionLimit` or `dailyLimit` without explicit manual confirmation.
-3. **RBI e-Mandate Compliance**:
+2. **NPCI ₹15,000 Regulatory e-Mandate Cap**:
+   - Automated machine-to-machine wallet purchases are hard-capped at **₹15,000** (`1,500,000 paise`) in compliance with NPCI and RBI AutoPay directives.
+3. **Autonomous Spending Safeguards & Balise UX**:
+   - The AI assistant cannot execute orders exceeding the customer's configured `spend_limit_paise` without explicit customer confirmation.
+   - When limits or balances are exceeded, the UI provides standardized 3-option recovery choices.
+4. **RBI e-Mandate Compliance**:
    - Automated recurring payments require advance pre-debit notifications and a 24-hour cooling-off window.
    - Mandates can be paused or revoked with a single click in the customer's wallet.
-4. **Audit Immutability**:
+5. **Audit Immutability**:
    - All critical actions generate an immutable trace containing actor, source, result, timestamp, and payload summary.
 
 ---
@@ -448,10 +504,12 @@ npm install
 ```
 
 ### 9.3 Environment Configuration (Optional)
-Create a `.env` file in the project root if connecting to a live Supabase backend:
+Create a `.env` file in the project root if connecting to live backend services:
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+VITE_OPENROUTER_API_KEY=sk-or-v1-...
 ```
 *(Note: If omitted, Razent runs in resilient offline sandbox mode using in-memory mock data).*
 
@@ -466,12 +524,15 @@ npx vite --port 8443 --host 0.0.0.0
 Open your browser at `http://localhost:8443`.
 
 ### 9.5 Key Application Routes
-- `http://localhost:8443/#/` — Customer Grocery & Retail Storefront
-- `http://localhost:8443/#/assistant` — Dedicated Full-Screen AI Shopping Assistant
-- `http://localhost:8443/#/signin` — Merchant Back-Office Login
-- `http://localhost:8443/#/merchant/dashboard` — Merchant KPI & Operations Dashboard
-- `http://localhost:8443/#/merchant/orders` — Orders Management & Fulfillment
-- `http://localhost:8443/#/merchant/audit-trail` — Regulatory & Protocol Audit Log Explorer
+- `http://localhost:8443/` — Customer Grocery & Retail Storefront
+- `http://localhost:8443/assistant` — Dedicated Full-Screen AI Shopping Assistant
+- `http://localhost:8443/wallet` — Customer Wallet, Delivery Address & Agent Passkeys
+- `http://localhost:8443/login` — Customer Clerk Authentication
+- `http://localhost:8443/signin` — Merchant Back-Office Login
+- `http://localhost:8443/merchant/dashboard` — Merchant KPI & Operations Dashboard
+- `http://localhost:8443/merchant/orders` — Orders Management & Fulfillment
+- `http://localhost:8443/merchant/protocols` — Protocol Manager & Live Mandate Verifier
+- `http://localhost:8443/merchant/audit-trail` — Regulatory & Protocol Audit Log Explorer
 
 ### 9.6 Type Checking & Production Build
 ```bash

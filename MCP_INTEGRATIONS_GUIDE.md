@@ -44,7 +44,10 @@ Open or create `claude_desktop_config.json` and paste:
         "-y",
         "mcp-remote",
         "https://razent.vercel.app/mcp"
-      ]
+      ],
+      "env": {
+        "RAZENT_CUSTOMER_TOKEN": "rz_agt_live_YOUR_TOKEN_FROM_WALLET_PAGE"
+      }
     }
   }
 }
@@ -54,12 +57,16 @@ Open or create `claude_desktop_config.json` and paste:
 1. Completely quit Claude Desktop (check system tray / menu bar).
 2. Relaunch Claude Desktop.
 3. Click the 🔌 hammer/plug icon at the bottom right of the chat window.
-4. You should see **5 Razent Commerce Tools**:
-   - `search_catalog`
-   - `create_checkout_session`
-   - `get_checkout_session`
-   - `track_orders`
-   - `ap2_execute_autonomous_checkout`
+4. You should see **7 Razent Commerce Tools**:
+   - `search_catalog` (UCP 10-aisle product discovery)
+   - `create_checkout_session` (ACP in-app checkout session)
+   - `get_checkout_session` (ACP live payment & order status)
+   - `track_orders` (UCP/ACP delivery tracking & invoice)
+   - `ap2_execute_autonomous_checkout` (Google AP2 protocol purchase)
+   - `execute_autonomous_purchase` (Direct wallet debit with Agent Passkey)
+   - `get_customer_wallet_status` (Live wallet balance & spend caps)
+   - **Resources**: `razent://store/aisles`
+   - **Prompts**: `shopping_assistant`
 
 ---
 
@@ -133,20 +140,21 @@ ChatGPT interacts with remote services via **Custom GPT Actions** (powered by Op
 
 #### Step 2: Set Name, Description & Instructions
 - **Name**: `Razent Quick Commerce Assistant`
-- **Description**: `10-15 minute grocery & essentials delivery from Razent Superstore.`
+- **Description**: `10-15 minute grocery & essentials delivery from Razent Superstore with autonomous wallet purchasing.`
 - **Instructions**:
 ```text
 You are Razent AI, the official shopping and checkout assistant for the Razent Storefront (https://razent.vercel.app).
-Your job is to help customers discover products, compare options, build carts, prepare checkout, and track orders. Use only real catalog data and real order data from the Razent API.
+Your job is to help customers discover products, compare options, check wallet balances, prepare checkout sessions, and track orders. Use only real catalog data and real order data from the Razent API.
 
-Core Rules:
-1. Always search the catalog using searchUCPCatalog before stating prices or stock.
-2. When customer wants to buy, use createACPSession to prepare checkout.
-3. NEVER claim an order is placed or paid until payment is verified.
-4. Format all payment and tracking links strictly as clean markdown buttons:
+Core Protocols:
+1. Always call searchUCPCatalog across the 10 store aisles before answering product queries.
+2. NEVER ORDER WITHOUT ASKING: When customer selects an item, first inspect their wallet status and spend limits. Present the item and total clearly, then ask: "Would you like me to pay using your Razent Wallet (Balance: ₹X), or would you prefer a checkout link to pay with UPI/Card yourself?"
+3. AUTONOMOUS WALLET PURCHASING: If customer confirms wallet payment and has configured an Agent Passkey, execute the purchase directly. All automated orders are hard-capped at ₹15,000 per NPCI guidelines. If limits are exceeded, present Balise UX recovery options clearly.
+4. MANUAL CHECKOUT SESSIONS: If customer prefers manual payment or order exceeds limits, collect their full delivery address (full name, phone, line1, city, pincode) and call createACPSession.
+5. Format all payment and tracking links strictly as clean markdown buttons:
    [Click here to Pay on Razorpay](url)
    [Click here to Track Live Delivery](url)
-5. Never show raw URLs.
+6. Never show raw URLs.
 ```
 
 #### Step 3: Add the Action
@@ -376,7 +384,55 @@ print(f"Arguments: {tool_call.function.arguments}")
 
 ---
 
-## 5. 🧪 Verification & Health Check
+## 5. 🔄 Local n8n Stdio MCP Server (`razent-n8n-mcp-server`)
+
+For orchestrating Razent catalog search and order tracking directly inside local n8n nodes or background agents:
+
+```json
+{
+  "mcpServers": {
+    "razent-n8n": {
+      "command": "node",
+      "args": [
+        "c:/Users/hemal/Ragent/razent-n8n-mcp-server/dist/index.js"
+      ],
+      "env": {
+        "N8N_SUPABASE_KEY": "<YOUR_SUPABASE_SERVICE_ROLE_OR_ANON_KEY>"
+      }
+    }
+  }
+}
+```
+
+Provides:
+- `razent_search_catalog`: Fast product discovery via Supabase REST query.
+- `razent_track_order`: Live order shipping status lookup by `order_id`.
+
+---
+
+## 6. 🛡️ Merchant Protocol Manager Console
+
+Store administrators and developers can inspect live MCP sessions, active ECDSA P-256 merchant signing JWKs, live orders, and test AP2 signature verification directly in the Razent Merchant Console:
+- **Production URL**: `https://merchant.razent.vercel.app/protocols` (or `http://localhost:8443/protocols` on dev)
+- **Features**:
+  - Live ACP checkout session inspector.
+  - Active ECDSA P-256 public JWK keys.
+  - Interactive AP2 Mandate Chain Verifier.
+  - Razorpay live order test generation.
+  - Webhook HMAC SHA-256 signature verifier.
+
+---
+
+## 7. 🔑 Customer Agent Passkey & Regulatory Caps
+
+Customers manage autonomous purchasing and spending caps at **`https://razent.vercel.app/wallet`**:
+- **Agent Passkey**: Generated token (`agent_auth_token`, e.g. `rz_agt_live_...`) allowing external AI agents to debit the wallet within bounds.
+- **Regulatory Ceiling**: All autonomous debits are hard-capped at **₹15,000** (`1,500,000 paise`) per NPCI AutoPay guidelines.
+- **Balise UX Recovery**: Standardized 3-option recovery path when balances or limits are exceeded.
+
+---
+
+## 8. 🧪 Verification & Health Check
 
 You can test the connectivity from your terminal at any time:
 
@@ -401,7 +457,35 @@ curl -s -X POST https://razent.vercel.app/mcp \
   }'
 ```
 
-### Verify Checkout Links Point to Storefront
+### Test Search Catalog (`search_catalog`)
+```bash
+curl -s -X POST https://razent.vercel.app/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_catalog","arguments":{"query":"peanut butter"},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}'
+```
+
+### Test Wallet Status (`get_customer_wallet_status`)
+```bash
+curl -s -X POST https://razent.vercel.app/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_customer_wallet_status","arguments":{"auth_token":"rz_agt_live_demo"},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}'
+```
+
+### Read Store Aisles (`razent://store/aisles`)
+```bash
+curl -s -X POST https://razent.vercel.app/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"razent://store/aisles","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}'
+```
+
+### Fetch Shopping Assistant Prompt (`shopping_assistant`)
+```bash
+curl -s -X POST https://razent.vercel.app/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"shopping_assistant","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}'
+```
+
+### Verify In-App Checkout Links
 When `create_checkout_session` is called:
 - **Payment Link**: Resolves to secure Razorpay or `https://razent.vercel.app/checkout?session=acp_...`
 - **Callback**: Redirects to `https://razent.vercel.app/checkout/success?session=acp_...`
