@@ -976,7 +976,7 @@ export default function StoreHome() {
         <div className="w-full px-2 sm:px-4 lg:px-[10%] flex items-center gap-3 py-3">
           {/* logo + name */}
           <div className="flex items-center gap-2">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-card border border-border/40 overflow-hidden shadow-xs">
               {storeProfile.logo ? (
                 <img
                   src={storeProfile.logo}
@@ -984,7 +984,11 @@ export default function StoreHome() {
                   className="size-9 rounded-lg object-cover"
                 />
               ) : (
-                <span className="text-xs font-bold">{initials}</span>
+                <img
+                  src="/favicon.png"
+                  alt="Razent"
+                  className="size-9 rounded-lg object-contain"
+                />
               )}
             </div>
             <span className="hidden text-sm font-semibold tracking-tight sm:inline">

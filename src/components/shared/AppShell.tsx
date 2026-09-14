@@ -148,9 +148,11 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
       >
         <SidebarHeader className="border-b border-sidebar-border px-3 py-3">
           <div className="flex items-center gap-2 px-1">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-              <Shield className="size-4" />
-            </div>
+            <img
+              src="/favicon.png"
+              alt="Razent"
+              className="size-8 rounded-lg object-contain shadow-sm border border-sidebar-border/50"
+            />
             <div className="leading-none">
               <div className="text-sm font-semibold text-sidebar-foreground">
                 Razent

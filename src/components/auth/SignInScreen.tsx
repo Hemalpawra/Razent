@@ -61,9 +61,11 @@ export default function SignInScreen() {
       <Card className="w-full max-w-md rounded-2xl bg-card shadow-xl border-border/80">
         <CardContent className="p-6 sm:p-8 flex flex-col gap-6">
           <div className="flex flex-col gap-1.5 text-center">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md mb-3">
-              <Store className="size-6" />
-            </div>
+            <img
+              src="/favicon.png"
+              alt="Razent"
+              className="mx-auto size-12 rounded-2xl object-contain shadow-md mb-3 border border-border/40"
+            />
             <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
               Merchant Sign In
             </h1>
