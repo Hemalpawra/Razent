@@ -27,11 +27,39 @@ Built according to the authoritative **Model Context Protocol (MCP) 2026-07-28 s
 
 | Tool Name | Protocol | Description |
 |---|---|---|
-| `ap2_execute_autonomous_checkout` | **AP2** | Execute autonomous Human-Not-Present purchase under Google AP2 protocol with real Razorpay test settlement. Verifies delegated spending cap. |
-| `create_checkout_session` | **ACP** | Creates an Agentic Commerce Protocol (ACP) checkout session and generates a verified Razorpay payment link. **Strict Human-in-the-loop: user must click to pay.** |
+| `search_catalog` | **UCP** | Search products in Razent 10-15 min quick grocery delivery catalog across 10 aisles via Universal Commerce Protocol (UCP). Features typo tolerance, category filtering, plural stemming, and price ceilings. Returns matching items with price in rupees, stock, and high-res images. |
+| `create_checkout_session` | **ACP** | Creates an in-app Agentic Commerce Protocol (ACP) checkout session and generates a verified payment link. **Mandatory: Requires customer delivery address (full name, phone, line1, city, pincode).** Human-in-the-loop: user reviews and pays. |
 | `get_checkout_session` | **ACP** | Checks live payment and order settlement status. Polls Razorpay in real time: when customer completes payment, automatically settles the order and generates tracking and invoice links. |
-| `search_catalog` | **UCP** | Search products in Razent 10-15 min quick grocery delivery catalog via Universal Commerce Protocol (UCP). Features typo tolerance, category filtering, plural stemming, and price ceilings. Returns matching items with price in rupees, stock, and high-res images. |
 | `track_orders` | **UCP / ACP** | Track live order delivery and history by Order ID (e.g. `RAZ-A2A-MTY6O735`), customer mobile phone, or email. Returns delivery timeline stage, items, address, and downloadable tax invoice link. |
+| `ap2_execute_autonomous_checkout` | **AP2** | Execute autonomous Human-Not-Present purchase under Google AP2 protocol with real Razorpay test settlement. Verifies delegated spending cap and creates authoritative orders. |
+| `execute_autonomous_purchase` | **AutoPay / Wallet** | Execute an autonomous purchase directly inside the AI agent using the customer's Razent Wallet. Requires customer Agent Passkey (`auth_token` or `RAZENT_CUSTOMER_TOKEN`). Strictly enforces NPCI regulatory e-Mandate cap (₹15,000 max) and customer spend limits. Returns Balise UX recovery options if exceeded. |
+| `get_customer_wallet_status` | **AutoPay / Wallet** | Inspect customer's live wallet balance, autonomous AI spend limit, NPCI compliance cap (₹15,000), default delivery address, and permission status using their Agent Passkey. |
+
+---
+
+## 📚 MCP Resources & Prompts
+
+### Resources
+- **`razent://store/aisles`**: Returns the list of 10 live store departments (`Grocery & Staples`, `Beverages`, `Electronics`, `Beauty & Personal Care`, `Home Care`, `Decor`, `Kids`, `Kitchen Appliances`, `Office & Stationery`), delivery SLA (`10-15 minutes`), and operational parameters. Read via `resources/read`.
+
+### Prompts
+- **`shopping_assistant`**: System prompt providing retail expertise, mandatory confirmation protocol ("Never Order Without Asking"), Balise UX writing recovery guidelines, and assistant identification rules (`chatgpt`, `gemini`, `claude`, `store_agent`). Retrieve via `prompts/get`.
+
+---
+
+## 🔑 Customer Agent Passkey & Autonomous Purchasing
+
+Customers manage autonomous AI permissions and spending caps at **`https://razent.vercel.app/wallet`**:
+1. **Wallet Balance & Auto-Top-Up**: Fund customer wallet for machine-to-machine checkout.
+2. **Autonomous AI Purchasing Switch**: Explicit master toggle (ON / OFF).
+3. **Spend Limits**: User-configured per-order cap (e.g. ₹2,000) hard-bounded by the **NPCI regulatory e-Mandate cap of ₹15,000** (`1,500,000 paise`).
+4. **Agent Passkey (`agent_auth_token`)**: Unique secret token (e.g., `rz_agt_live_...`) generated on the wallet page. External AI agents can pass this token in:
+   - Tool argument: `{ "auth_token": "rz_agt_live_..." }`
+   - Environment variable: `RAZENT_CUSTOMER_TOKEN="rz_agt_live_..."`
+5. **Balise UX Writing Recovery**: If a purchase exceeds available wallet balance or the ₹15,000 NPCI limit, the agent automatically provides 3 standard recovery choices:
+   - *Option 1*: Update spend limit in wallet settings (`/wallet`).
+   - *Option 2*: Top up wallet balance.
+   - *Option 3*: Complete order with manual checkout link.
 
 ---
 
@@ -82,7 +110,7 @@ Add this block to your Claude Desktop configuration:
 }
 ```
 
-#### Option B: Local Repository (Stdio)
+#### Option B: Local Standalone Server (Stdio)
 ```json
 {
   "mcpServers": {
@@ -91,6 +119,23 @@ Add this block to your Claude Desktop configuration:
       "args": [
         "c:/Users/hemal/Ragent/Razent/scripts/mcp-server.mjs"
       ]
+    }
+  }
+}
+```
+
+#### Option C: Local n8n Stdio MCP Server (`razent-n8n-mcp-server`)
+```json
+{
+  "mcpServers": {
+    "razent-n8n": {
+      "command": "node",
+      "args": [
+        "c:/Users/hemal/Ragent/razent-n8n-mcp-server/dist/index.js"
+      ],
+      "env": {
+        "N8N_SUPABASE_KEY": "<YOUR_SUPABASE_SERVICE_ROLE_OR_ANON_KEY>"
+      }
     }
   }
 }
@@ -147,6 +192,13 @@ In the ChatGPT GPT Builder:
 
 ---
 
+### 6. Merchant Protocol Manager Console
+
+Store operators can monitor all live MCP tools, ACP checkout sessions, active ECDSA P-256 merchant signing JWKs, and test protocol requests live on the Merchant Console:
+- **URL**: `https://merchant.razent.vercel.app/protocols` (or `/#/protocols` on localhost)
+
+---
+
 ## 🧪 Testing the Live MCP Server (2026-07-28 Spec)
 
 ### A. Health & Well-Known Info (GET)
@@ -193,7 +245,7 @@ fetch("https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp", {
 '
 ```
 
-### D. `tools/call` with `structuredContent`
+### D. `tools/call` — Search Catalog
 ```bash
 node -e '
 fetch("https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp", {
@@ -213,11 +265,71 @@ fetch("https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp", {
 '
 ```
 
+### E. `tools/call` — Check Wallet Balance & Spend Limits
+```bash
+node -e '
+fetch("https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    jsonrpc: "2.0",
+    id: 4,
+    method: "tools/call",
+    params: {
+      name: "get_customer_wallet_status",
+      arguments: { auth_token: "rz_agt_live_test_token" },
+      _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" }
+    }
+  })
+}).then(r => r.json()).then(d => console.log(JSON.stringify(d, null, 2)))
+'
+```
+
+### F. `resources/read` — Store Aisles
+```bash
+node -e '
+fetch("https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    jsonrpc: "2.0",
+    id: 5,
+    method: "resources/read",
+    params: {
+      uri: "razent://store/aisles",
+      _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" }
+    }
+  })
+}).then(r => r.json()).then(d => console.log(JSON.stringify(d, null, 2)))
+'
+```
+
+### G. `prompts/get` — Shopping Assistant Prompt
+```bash
+node -e '
+fetch("https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    jsonrpc: "2.0",
+    id: 6,
+    method: "prompts/get",
+    params: {
+      name: "shopping_assistant",
+      _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" }
+    }
+  })
+}).then(r => r.json()).then(d => console.log(JSON.stringify(d, null, 2)))
+'
+```
+
 ---
 
 ## 🔒 Security & Protocols Compliance
 - **MCP 2026-07-28 Architecture**: Self-contained stateless requests, deterministic caching (`ttlMs: 300000`, `cacheScope: "public"`), and `resultType: "complete"`.
-- **Universal Commerce Protocol (UCP)**: Semantic search, aisle categorization, stock verification, and Indian quick-commerce SLA (10-15 min).
+- **Universal Commerce Protocol (UCP)**: Semantic search, 10-aisle categorization, stock verification, and Indian quick-commerce SLA (10-15 min).
 - **Agentic Commerce Protocol (ACP)**: Secure checkout session tokens (`acp_...`) and real Razorpay test rails integration.
-- **Google Agent Payments Protocol (AP2)**: Autonomous delegated purchase safeguards with spending caps.
-- **Strict Human-In-The-Loop**: No payment is ever finalized without the human customer reviewing the amount on Razorpay's verified hosted payment link.
+- **Google Agent Payments Protocol (AP2)**: Autonomous delegated purchase safeguards with ECDSA P-256 cryptographic mandates and spending caps.
+- **NPCI Regulatory e-Mandate Cap**: All automated purchases hard-capped at **₹15,000** (`1,500,000 paise`) without additional factor authentication.
+- **Strict Human-In-The-Loop vs Delegated AutoPay**: Clear separation between explicit customer wallet authorization and manual Razorpay checkout handoff.
+- **Balise UX Writing**: Standardized clear recovery prompts for limit adjustments, wallet top-ups, and manual checkout handoffs when autonomous limits are exceeded.
