@@ -131,7 +131,14 @@ export interface CreateOrderOutput {
   orderId?: string
   totalPaise?: number
   phoneVerified: boolean
-  status: "pending_payment" | "pending_otp" | "failed" | "paid" | "blocked_permission"
+  status:
+    | "pending_payment"
+    | "pending_otp"
+    | "failed"
+    | "paid"
+    | "blocked_permission"
+    | "blocked_npci_limit"
+    | "blocked_limit_exceeded"
   errorMessage?: string
 }
 

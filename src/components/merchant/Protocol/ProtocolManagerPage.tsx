@@ -240,77 +240,87 @@ export default function ProtocolManagerPage() {
       </div>
 
       {/* Protocol Metrics KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-card">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="rounded-xl bg-card p-2.5 sm:p-3 shadow-sm border">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground truncate uppercase">
               UCP Federation
-            </CardTitle>
-            <Globe className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">2026-01-16</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Transports: REST, A2A, MCP Active
-            </p>
-          </CardContent>
+            </span>
+            <div className="flex size-6 sm:size-6.5 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0 [&>svg]:size-3.5">
+              <Globe className="size-3.5" />
+            </div>
+          </div>
+          <div className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
+            2026-01-16
+          </div>
+          <p className="mt-0.5 text-[10px] sm:text-[11px] text-muted-foreground truncate">
+            Transports: REST, A2A, MCP Active
+          </p>
         </Card>
 
-        <Card className="bg-card">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+        <Card className="rounded-xl bg-card p-2.5 sm:p-3 shadow-sm border">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground truncate uppercase">
               ACP Sessions
-            </CardTitle>
-            <Radio className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">{sessions.length} recorded</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Idempotency: 24h RFC-8785 cache
-            </p>
-          </CardContent>
+            </span>
+            <div className="flex size-6 sm:size-6.5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500 shrink-0 [&>svg]:size-3.5">
+              <Radio className="size-3.5" />
+            </div>
+          </div>
+          <div className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
+            {sessions.length} recorded
+          </div>
+          <p className="mt-0.5 text-[10px] sm:text-[11px] text-muted-foreground truncate">
+            Idempotency: 24h RFC-8785 cache
+          </p>
         </Card>
 
-        <Card className="bg-card">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+        <Card className="rounded-xl bg-card p-2.5 sm:p-3 shadow-sm border">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground truncate uppercase">
               AP2 Cryptography
-            </CardTitle>
-            <Key className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">WebCrypto ES256</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              kid: merchant-key-p256-primary
-            </p>
-          </CardContent>
+            </span>
+            <div className="flex size-6 sm:size-6.5 items-center justify-center rounded-md bg-amber-500/10 text-amber-500 shrink-0 [&>svg]:size-3.5">
+              <Key className="size-3.5" />
+            </div>
+          </div>
+          <div className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
+            WebCrypto ES256
+          </div>
+          <p className="mt-0.5 text-[10px] sm:text-[11px] text-muted-foreground truncate">
+            kid: merchant-key-p256-primary
+          </p>
         </Card>
 
-        <Card className="bg-card">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+        <Card className="rounded-xl bg-card p-2.5 sm:p-3 shadow-sm border">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground truncate uppercase">
               Razorpay Settlement
-            </CardTitle>
-            <Zap className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">rzp_test_TXey...</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Authoritative Test Network Online
-            </p>
-          </CardContent>
+            </span>
+            <div className="flex size-6 sm:size-6.5 items-center justify-center rounded-md bg-blue-500/10 text-blue-500 shrink-0 [&>svg]:size-3.5">
+              <Zap className="size-3.5" />
+            </div>
+          </div>
+          <div className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
+            rzp_test_TXey...
+          </div>
+          <p className="mt-0.5 text-[10px] sm:text-[11px] text-muted-foreground truncate">
+            Authoritative Test Network Online
+          </p>
         </Card>
       </div>
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="bg-muted/60 p-1">
-          <TabsTrigger value="overview">Live ACP Sessions</TabsTrigger>
-          <TabsTrigger value="ap2">AP2 Mandate Verifier</TabsTrigger>
-          <TabsTrigger value="razorpay">Razorpay Live Rails</TabsTrigger>
-          <TabsTrigger value="manifests">Discovery Manifests</TabsTrigger>
-          <TabsTrigger value="webhooks">Webhook Signatures</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-1">
+          <TabsList className="bg-muted/60 p-1 flex w-max min-w-full sm:w-auto h-auto">
+            <TabsTrigger value="overview">Live ACP Sessions</TabsTrigger>
+            <TabsTrigger value="ap2">AP2 Mandate Verifier</TabsTrigger>
+            <TabsTrigger value="razorpay">Razorpay Live Rails</TabsTrigger>
+            <TabsTrigger value="manifests">Discovery Manifests</TabsTrigger>
+            <TabsTrigger value="webhooks">Webhook Signatures</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* TAB 1: Live ACP Sessions */}
         <TabsContent value="overview" className="space-y-4">

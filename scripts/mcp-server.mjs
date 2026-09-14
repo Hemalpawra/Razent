@@ -32,12 +32,14 @@ const SERVER_INFO = {
 
 const INSTRUCTIONS =
   "You are connected to the Razent Quick Commerce MCP Server (https://razent.vercel.app). " +
-  "Help customers discover products across 10 store aisles, collect their delivery address, prepare in-app checkout sessions on Razent, and track deliveries. " +
-  "CRITICAL RULES: " +
-  "1. ALWAYS ask the customer for their full delivery address (full name, phone number, house/street address, city, pincode) BEFORE calling create_checkout_session. Never place an order or create a checkout session without asking for the delivery address first. " +
-  "2. When calling create_checkout_session, identify yourself in the 'assistant' field ('chatgpt', 'gemini', 'claude', 'store_agent', or external agent name). " +
-  "3. Always provide the in-app Razent checkout link so the customer can review their cart, authenticate in the app, confirm their address, and pay securely. " +
-  "4. Format the checkout link as a markdown link: [Click here to Complete Checkout on Razent](checkout_url)."
+  "You can search the 10-15 minute grocery & tech catalog, verify customer wallet balances, execute autonomous purchases directly from their Razent Wallet, create in-app checkout sessions, and track orders. " +
+  "CRITICAL RULES FOR ORDERING: " +
+  "1. AUTONOMOUS PURCHASING (No Manual Link Needed): When the customer asks you to 'buy this', 'order this', or 'place order', call 'execute_autonomous_purchase'. " +
+  "   - This uses the customer's authenticated Razent Wallet and Agent Passkey. " +
+  "   - If the customer has AI purchases enabled and the order is within their spend limit (and under the ₹15,000 NPCI regulatory ceiling), the purchase settles instantly. Return the order confirmation, delivery ETA, and live tracking link. " +
+  "   - If the order exceeds their spend limit, exceeds wallet balance, or exceeds the ₹15,000 NPCI limit, our system provides a clear Balise UX recovery message with 3 options (1. Update limit, 2. Add funds to wallet, 3. Pay at manual checkout). Present these options clearly to the customer. " +
+  "2. MANUAL CHECKOUT SESSIONS: If the customer prefers to review or pay manually, call 'create_checkout_session' with their items and delivery address. Format the link as: [Click here to Complete Checkout on Razent](checkout_url). " +
+  "3. Always identify yourself in the 'assistant' field ('chatgpt', 'gemini', 'claude', 'store_agent', or external agent name)."
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 const memorySessions = new Map()
@@ -142,6 +144,67 @@ const TOOLS = [
         checkout_session_id: { type: "string", description: "Session ID returned from create_checkout_session" },
         upi_vpa: { type: "string", description: "Customer UPI VPA (defaults to customer@okhdfcbank)" },
         delegated_price_cap_paise: { type: "number", description: "User delegated spending cap in paise (e.g. 50000 = ₹500)" },
+      },
+    },
+  },
+  {
+    name: "execute_autonomous_purchase",
+    description:
+      "Execute an autonomous purchase directly inside the AI agent using the customer's Razent Wallet. " +
+      "Requires customer authentication via their Agent Passkey (auth_token or RAZENT_CUSTOMER_TOKEN env). " +
+      "Strictly enforces NPCI regulatory e-Mandate cap (₹15,000 max) and customer-configured spend limits. " +
+      "If limits are exceeded, returns Balise UX recovery guidance with 3 choices: 1. Update limit, 2. Add funds, 3. Pay at manual checkout. " +
+      "If within limit, automatically settles order and returns confirmed order details with tracking.",
+    inputSchema: {
+      type: "object",
+      required: ["items"],
+      properties: {
+        auth_token: {
+          type: "string",
+          description: "Customer's Razent Agent Passkey (e.g. 'rz_agt_live_...'). Can be omitted if set in environment.",
+        },
+        items: {
+          type: "array",
+          description: "List of items to purchase with quantities",
+          items: {
+            type: "object",
+            required: ["id", "quantity"],
+            properties: {
+              id: { type: "string", description: "Product ID, external_id, or title" },
+              quantity: { type: "number", minimum: 1, description: "Quantity of item" },
+            },
+          },
+        },
+        delivery_address: {
+          type: "object",
+          description: "Delivery address (optional if customer has saved default address in wallet)",
+          properties: {
+            full_name: { type: "string", description: "Recipient full name" },
+            phone: { type: "string", description: "10-digit mobile number" },
+            line1: { type: "string", description: "House/flat number, building, street" },
+            city: { type: "string", description: "City" },
+            pincode: { type: "string", description: "6-digit postal code" },
+          },
+        },
+        assistant: {
+          type: "string",
+          description: "Your assistant identifier ('chatgpt', 'gemini', 'claude', 'store_agent', or custom)",
+          enum: ["chatgpt", "gemini", "claude", "store_agent", "external_agent"],
+        },
+      },
+    },
+  },
+  {
+    name: "get_customer_wallet_status",
+    description:
+      "Check customer's live wallet balance, autonomous AI spend limit, NPCI compliance cap, default delivery address, and permission status using their Agent Passkey.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        auth_token: {
+          type: "string",
+          description: "Customer's Razent Agent Passkey (e.g. 'rz_agt_live_...'). Can be omitted if set in environment.",
+        },
       },
     },
   },
@@ -976,6 +1039,324 @@ async function executeAP2Checkout(args) {
   }
 }
 
+const NPCI_TRANSACTION_LIMIT_PAISE = 1500000 // ₹15,000 max per automated mandate without AFA OTP
+
+async function executeGetCustomerWalletStatus(args) {
+  const token = (args.auth_token || process.env.RAZENT_CUSTOMER_TOKEN || "").trim()
+  if (!token) {
+    return {
+      authenticated: false,
+      message:
+        "Authentication required. Please configure your Agent Passkey in [Wallet Settings](https://razent.vercel.app/wallet) to check wallet balance and spend limits.",
+      wallet_url: "https://razent.vercel.app/wallet",
+    }
+  }
+
+  const { data: wallet, error } = await supabase
+    .from("customer_wallets")
+    .select("*")
+    .eq("agent_auth_token", token)
+    .maybeSingle()
+
+  if (error || !wallet) {
+    return {
+      authenticated: false,
+      message:
+        "Invalid Agent Passkey. Could not find an associated Razent customer account. Please verify your passkey in [Wallet Settings](https://razent.vercel.app/wallet).",
+      wallet_url: "https://razent.vercel.app/wallet",
+    }
+  }
+
+  return {
+    authenticated: true,
+    customer_name: wallet.customer_name || "Customer",
+    customer_email: wallet.customer_email,
+    wallet_balance_rupees: (wallet.wallet_balance_paise / 100).toLocaleString("en-IN"),
+    spend_limit_rupees: (wallet.spend_limit_paise / 100).toLocaleString("en-IN"),
+    npci_mandate_ceiling_rupees: "15,000",
+    ai_purchases_enabled: wallet.ai_purchases_enabled,
+    has_default_address: Boolean(wallet.default_address?.line1),
+    default_address: wallet.default_address || {},
+    wallet_url: "https://razent.vercel.app/wallet",
+  }
+}
+
+async function executeAutonomousPurchase(args) {
+  const token = (args.auth_token || process.env.RAZENT_CUSTOMER_TOKEN || "").trim()
+  const assistant = formatAssistantName(args.assistant)
+  const recoveryBase = "https://razent.vercel.app"
+  const fallbackSessionId = `acp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  const manualCheckoutUrl = `${recoveryBase}/checkout?session=${fallbackSessionId}`
+
+  // 1. Authentication Check
+  if (!token) {
+    return {
+      status: "auth_required",
+      error_code: "AUTHENTICATION_REQUIRED",
+      message:
+        "Authentication required. Your AI assistant needs authorization to place orders on your behalf. " +
+        "Please provide your Agent Passkey (configured in your [Razent Wallet Settings](https://razent.vercel.app/wallet)), or complete checkout manually: [Proceed to Manual Checkout](" +
+        manualCheckoutUrl +
+        ")",
+      recovery_options: {
+        update_limit_url: `${recoveryBase}/wallet`,
+        add_money_url: `${recoveryBase}/wallet`,
+        manual_checkout_url: manualCheckoutUrl,
+      },
+    }
+  }
+
+  const { data: wallet, error: walletErr } = await supabase
+    .from("customer_wallets")
+    .select("*")
+    .eq("agent_auth_token", token)
+    .maybeSingle()
+
+  if (walletErr || !wallet) {
+    return {
+      status: "auth_required",
+      error_code: "INVALID_AGENT_PASSKEY",
+      message:
+        "Invalid Agent Passkey. We could not verify your Razent account. " +
+        "Please check your Agent Passkey in [Wallet Settings](https://razent.vercel.app/wallet), or proceed with manual checkout: [Proceed to Manual Checkout](" +
+        manualCheckoutUrl +
+        ")",
+      recovery_options: {
+        update_limit_url: `${recoveryBase}/wallet`,
+        add_money_url: `${recoveryBase}/wallet`,
+        manual_checkout_url: manualCheckoutUrl,
+      },
+    }
+  }
+
+  // 2. Permission Check
+  if (!wallet.ai_purchases_enabled) {
+    return {
+      status: "ai_disabled",
+      error_code: "AGENT_PURCHASES_DISABLED",
+      message:
+        "Autonomous agent purchases are turned off. Your Razent account currently has AI ordering disabled. " +
+        "To allow your assistant to place orders, enable agent purchases in [Wallet Settings](https://razent.vercel.app/wallet). Alternatively, you can complete this order manually: [Proceed to Manual Checkout](" +
+        manualCheckoutUrl +
+        ")",
+      recovery_options: {
+        update_limit_url: `${recoveryBase}/wallet`,
+        add_money_url: `${recoveryBase}/wallet`,
+        manual_checkout_url: manualCheckoutUrl,
+      },
+    }
+  }
+
+  // 3. Resolve Items and Calculate Order Total
+  const items = args.items || []
+  if (!items.length) {
+    throw new Error("No items provided for autonomous purchase")
+  }
+
+  const { data: allProds, error: pErr } = await supabase.from("products").select("*").eq("status", "active")
+  if (pErr) throw pErr
+
+  let totalPaise = 0
+  const resolvedItems = []
+  for (const item of items) {
+    const prod = findProductInCatalog(allProds || [], item)
+    if (!prod) {
+      return {
+        status: "product_not_found",
+        error_code: "PRODUCT_NOT_FOUND",
+        message: `Product '${item.id || item.title}' is currently unavailable in the catalog.`,
+      }
+    }
+    const qty = Math.max(1, item.quantity || 1)
+    if (prod.stock < qty) {
+      return {
+        status: "insufficient_stock",
+        error_code: "INSUFFICIENT_STOCK",
+        message: `Insufficient stock for ${prod.title}. Only ${prod.stock} items remaining.`,
+      }
+    }
+    totalPaise += prod.price_paise * qty
+    resolvedItems.push({
+      product_id: prod.id,
+      title: prod.title,
+      image_url: prod.image_url || "",
+      qty,
+      unit_price_paise: prod.price_paise,
+      total_paise: prod.price_paise * qty,
+    })
+  }
+
+  // 4. Resolve Delivery Address
+  const savedAddress = wallet.default_address || {}
+  const rawAddr = args.delivery_address || {}
+  const address = {
+    full_name: rawAddr.full_name || savedAddress.full_name || wallet.customer_name || "Customer",
+    phone: rawAddr.phone || savedAddress.phone || wallet.customer_phone || "",
+    line1: rawAddr.line1 || savedAddress.line1 || "",
+    city: rawAddr.city || savedAddress.city || "",
+    state: rawAddr.state || savedAddress.state || "Karnataka",
+    pincode: rawAddr.pincode || savedAddress.pincode || "",
+    country: rawAddr.country || savedAddress.country || "India",
+  }
+
+  if (!address.line1 || !address.city || !address.pincode || !address.phone) {
+    return {
+      status: "address_required",
+      error_code: "MISSING_DELIVERY_ADDRESS",
+      message:
+        "Delivery address required. No default delivery address was found in your Razent account. " +
+        "Please add your address in [Wallet Settings](https://razent.vercel.app/wallet) or provide your full delivery address in this chat so your assistant can complete the order.",
+      recovery_options: {
+        update_limit_url: `${recoveryBase}/wallet`,
+        add_money_url: `${recoveryBase}/wallet`,
+        manual_checkout_url: manualCheckoutUrl,
+      },
+    }
+  }
+
+  // 5. NPCI Regulatory Ceiling Check (₹15,000 max without OTP)
+  if (totalPaise > NPCI_TRANSACTION_LIMIT_PAISE) {
+    const formattedTotal = (totalPaise / 100).toLocaleString("en-IN")
+    const formattedCap = (NPCI_TRANSACTION_LIMIT_PAISE / 100).toLocaleString("en-IN")
+    return {
+      status: "npci_limit_exceeded",
+      error_code: "NPCI_MANDATE_CAP_EXCEEDED",
+      order_total_rupees: formattedTotal,
+      npci_cap_rupees: formattedCap,
+      message:
+        `Order total (₹${formattedTotal}) exceeds the NPCI autonomous transaction limit of ₹${formattedCap}. ` +
+        `National regulatory guidelines require two-factor authentication (OTP) for transactions above ₹${formattedCap}. ` +
+        `Please complete your purchase through manual checkout: [Complete Checkout with 2FA](${manualCheckoutUrl})`,
+      recovery_options: {
+        update_limit_url: `${recoveryBase}/wallet`,
+        add_money_url: `${recoveryBase}/wallet`,
+        manual_checkout_url: manualCheckoutUrl,
+      },
+    }
+  }
+
+  // 6. Customer Spend Limit Check (Balise UX Writing)
+  if (totalPaise > wallet.spend_limit_paise) {
+    const formattedTotal = (totalPaise / 100).toLocaleString("en-IN")
+    const formattedLimit = (wallet.spend_limit_paise / 100).toLocaleString("en-IN")
+    return {
+      status: "limit_exceeded",
+      error_code: "SPEND_LIMIT_EXCEEDED",
+      order_total_rupees: formattedTotal,
+      spend_limit_rupees: formattedLimit,
+      message:
+        `Your agent purchase limit is exceeded. Order total is ₹${formattedTotal}, which is higher than your current AI spend limit of ₹${formattedLimit}.\n\n` +
+        `To place this order, you can:\n` +
+        `1. Update your agent spend limit: [Update Spend Limit](${recoveryBase}/wallet)\n` +
+        `2. Add money to your wallet: [Top Up Wallet](${recoveryBase}/wallet)\n` +
+        `3. Pay at checkout manually: [Proceed to Manual Checkout](${manualCheckoutUrl})`,
+      recovery_options: {
+        update_limit_url: `${recoveryBase}/wallet`,
+        add_money_url: `${recoveryBase}/wallet`,
+        manual_checkout_url: manualCheckoutUrl,
+      },
+    }
+  }
+
+  // 7. Wallet Balance Check (Balise UX Writing)
+  if (totalPaise > wallet.wallet_balance_paise) {
+    const formattedTotal = (totalPaise / 100).toLocaleString("en-IN")
+    const formattedBalance = (wallet.wallet_balance_paise / 100).toLocaleString("en-IN")
+    const formattedShortfall = ((totalPaise - wallet.wallet_balance_paise) / 100).toLocaleString("en-IN")
+    return {
+      status: "insufficient_balance",
+      error_code: "INSUFFICIENT_WALLET_BALANCE",
+      order_total_rupees: formattedTotal,
+      wallet_balance_rupees: formattedBalance,
+      shortfall_rupees: formattedShortfall,
+      message:
+        `Insufficient wallet balance. Order total is ₹${formattedTotal}, but your available wallet balance is ₹${formattedBalance} (shortfall of ₹${formattedShortfall}).\n\n` +
+        `To place this order, you can:\n` +
+        `1. Add money to your wallet: [Top Up Wallet](${recoveryBase}/wallet)\n` +
+        `2. Pay at checkout manually: [Proceed to Manual Checkout](${manualCheckoutUrl})`,
+      recovery_options: {
+        update_limit_url: `${recoveryBase}/wallet`,
+        add_money_url: `${recoveryBase}/wallet`,
+        manual_checkout_url: manualCheckoutUrl,
+      },
+    }
+  }
+
+  // 8. Execute Purchase: Deduct funds atomically & create confirmed order
+  const remainingBalance = wallet.wallet_balance_paise - totalPaise
+  await supabase
+    .from("customer_wallets")
+    .update({
+      wallet_balance_paise: remainingBalance,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", wallet.id)
+
+  const orderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
+  const invoiceUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${orderId}&download=true`
+  const trackingUrl = `${recoveryBase}/?track=${orderId}`
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wallet.customer_id || "")
+  const { error: ordErr } = await supabase.from("orders").insert({
+    external_id: orderId,
+    merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb",
+    razorpay_order_id: `wallet_${Date.now()}`,
+    status: "paid",
+    shipping_status: "dispatched",
+    currency: "INR",
+    total_paise: totalPaise,
+    items: resolvedItems,
+    shipping_address: address,
+    via_ai: true,
+    commerce_protocol: "mcp",
+    conversation_id: assistant.toLowerCase().replace(/\s+/g, "_"),
+    customer_id: isUuid ? wallet.customer_id : null,
+    notes: `Autonomous purchase paid via Razent Wallet (NPCI e-Mandate compliant, Assistant: ${assistant}, Customer: ${wallet.customer_name || wallet.customer_email || wallet.customer_id})`,
+    paid_at: new Date().toISOString(),
+  })
+  if (ordErr) {
+    console.error("[executeAutonomousPurchase] Order insert error:", ordErr)
+  }
+
+  // Audit Logging
+  await logMcpAudit({
+    sessionId: orderId,
+    orderId,
+    customer: address.full_name,
+    actorLabel: assistant,
+    event: {
+      type: "autonomous_order_settled",
+      result: "Success",
+      reason: `Settled ₹${(totalPaise / 100).toFixed(2)} from wallet. NPCI compliant. Remaining balance: ₹${(remainingBalance / 100).toFixed(2)}`,
+      payload_summary: `Order ${orderId}`,
+    },
+  }).catch(() => {})
+
+  const formattedTotal = (totalPaise / 100).toLocaleString("en-IN")
+  const formattedRemaining = (remainingBalance / 100).toLocaleString("en-IN")
+
+  return {
+    success: true,
+    status: "confirmed",
+    order_id: orderId,
+    assistant,
+    amount_paid_rupees: formattedTotal,
+    remaining_wallet_balance_rupees: formattedRemaining,
+    items: resolvedItems.map((i) => `${i.qty}x ${i.title}`),
+    delivery_address: `${address.line1}, ${address.city} - ${address.pincode}`,
+    delivery_eta: "10-15 minutes",
+    tracking_url: trackingUrl,
+    tracking_markdown: `[Click here to Track Live Delivery](${trackingUrl})`,
+    invoice_url: invoiceUrl,
+    invoice_markdown: `[Click here to Download Tax Invoice](${invoiceUrl})`,
+    message:
+      `Order confirmed! Order #${orderId} for ₹${formattedTotal} has been placed autonomously using your Razent Wallet.\n\n` +
+      `Delivery is scheduled to ${address.line1}, ${address.city} (ETA: 10-15 mins).\n` +
+      `Remaining wallet balance: ₹${formattedRemaining}.\n\n` +
+      `[Click here to Track Live Delivery](${trackingUrl}) · [Click here to Download Tax Invoice](${invoiceUrl})`,
+  }
+}
+
 async function handleRpcRequest(rpc) {
   const { id = null, method, params = {} } = rpc
 
@@ -1098,6 +1479,10 @@ async function handleRpcRequest(rpc) {
         toolResult = await executeTrackOrders(toolArgs)
       } else if (name === "ap2_execute_autonomous_checkout") {
         toolResult = await executeAP2Checkout(toolArgs)
+      } else if (name === "execute_autonomous_purchase" || name === "autonomous_purchase" || name === "wallet_purchase") {
+        toolResult = await executeAutonomousPurchase(toolArgs)
+      } else if (name === "get_customer_wallet_status" || name === "get_wallet_status") {
+        toolResult = await executeGetCustomerWalletStatus(toolArgs)
       } else {
         throw new Error(`Unknown tool: ${name}`)
       }

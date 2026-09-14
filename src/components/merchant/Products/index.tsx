@@ -53,6 +53,7 @@ import ProductDrawer from "./ProductDrawer"
 import { useUI } from "@/state/useUI"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { toast } from "sonner"
+import { SortableTableHead } from "@/components/merchant/shared/SortableTableHead"
 
 import { useMerchant } from "@/state/useMerchant"
 
@@ -90,6 +91,18 @@ export default function ProductsScreen() {
   const [importOpen, setImportOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [sortKey, setSortKey] = useState<string>("title")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+    } else {
+      setSortKey(key)
+      setSortDirection(key === "price" || key === "stock" ? "desc" : "asc")
+    }
+    setPage(1)
+  }
 
   const loadProducts = async (isManual = false) => {
     if (isManual) setIsRefreshing(true)
@@ -353,31 +366,47 @@ export default function ProductsScreen() {
     return { success, errors }
   }
 
-  const filtered = useMemo(
-    () =>
-      products.filter((p) => {
-        if (statusFilter !== "all" && p.status !== statusFilter) return false
-        if (categoryFilter !== "all" && p.category !== categoryFilter) return false
-        const threshold = p.stock_threshold ?? 10
-        if (inventoryFilter === "in_stock" && p.stock <= threshold) return false
-        if (inventoryFilter === "low_stock" && (p.stock <= 0 || p.stock > threshold)) return false
-        if (inventoryFilter === "out_of_stock" && p.stock > 0) return false
+  const filtered = useMemo(() => {
+    const list = products.filter((p) => {
+      if (statusFilter !== "all" && p.status !== statusFilter) return false
+      if (categoryFilter !== "all" && p.category !== categoryFilter) return false
+      const threshold = p.stock_threshold ?? 10
+      if (inventoryFilter === "in_stock" && p.stock <= threshold) return false
+      if (inventoryFilter === "low_stock" && (p.stock <= 0 || p.stock > threshold)) return false
+      if (inventoryFilter === "out_of_stock" && p.stock > 0) return false
 
-        if (!q.trim()) return true
-        const needle = q.toLowerCase()
-        const sku = getSku(p).toLowerCase()
-        const brand = (p.brand || "").toLowerCase()
-        return (
-          p.title.toLowerCase().includes(needle) ||
-          p.category.toLowerCase().includes(needle) ||
-          p.tags.some((t) => t.toLowerCase().includes(needle)) ||
-          p.description.toLowerCase().includes(needle) ||
-          brand.includes(needle) ||
-          sku.includes(needle)
-        )
-      }),
-    [products, q, statusFilter, categoryFilter, inventoryFilter],
-  )
+      if (!q.trim()) return true
+      const needle = q.toLowerCase()
+      const sku = getSku(p).toLowerCase()
+      const brand = (p.brand || "").toLowerCase()
+      return (
+        p.title.toLowerCase().includes(needle) ||
+        p.category.toLowerCase().includes(needle) ||
+        p.tags.some((t) => t.toLowerCase().includes(needle)) ||
+        p.description.toLowerCase().includes(needle) ||
+        brand.includes(needle) ||
+        sku.includes(needle)
+      )
+    })
+
+    return list.sort((a, b) => {
+      let comparison = 0
+      if (sortKey === "title") {
+        comparison = a.title.localeCompare(b.title)
+      } else if (sortKey === "sku") {
+        comparison = getSku(a).localeCompare(getSku(b))
+      } else if (sortKey === "category") {
+        comparison = (a.category || "").localeCompare(b.category || "")
+      } else if (sortKey === "price") {
+        comparison = (a.price_paise || 0) - (b.price_paise || 0)
+      } else if (sortKey === "stock") {
+        comparison = (a.stock || 0) - (b.stock || 0)
+      } else if (sortKey === "status") {
+        comparison = (a.status || "").localeCompare(b.status || "")
+      }
+      return sortDirection === "asc" ? comparison : -comparison
+    })
+  }, [products, q, statusFilter, categoryFilter, inventoryFilter, sortKey, sortDirection])
 
   useEffect(() => {
     setPage(1)
@@ -415,9 +444,9 @@ export default function ProductsScreen() {
           <Skeleton className="h-9 w-48 rounded-lg" />
           <Skeleton className="h-4 w-72 mt-1 rounded" />
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
+            <Skeleton key={i} className={cn("h-20 rounded-xl", i === 4 && "col-span-2 sm:col-span-1")} />
           ))}
         </div>
         <Card className="rounded-xl bg-card p-4 space-y-4">
@@ -448,7 +477,7 @@ export default function ProductsScreen() {
       </div>
 
       {/* KPI strip — 5 cards */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard
           icon={<Package className="size-4" />}
           label="Total Products"
@@ -478,6 +507,7 @@ export default function ProductsScreen() {
           label="Draft Products"
           value={String(kpi.draft)}
           sub="Unpublished"
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 
@@ -486,7 +516,7 @@ export default function ProductsScreen() {
         {/* Toolbar — left: search + filters + refresh + more, right: Export + Add Product, flex-wrap gap-2 */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-card p-3">
           <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
-            <div className="relative w-full max-w-[240px] min-w-[160px] flex-1 sm:flex-none">
+            <div className="relative w-full sm:w-auto sm:min-w-[200px] lg:min-w-[240px] flex-1">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search name, category, tags..."
@@ -498,8 +528,10 @@ export default function ProductsScreen() {
 
             {/* Category Filter Dropdown */}
             <Select value={categoryFilter} onValueChange={(val) => setCategoryFilter(val || "all")}>
-              <SelectTrigger className="h-9 text-xs w-[140px] bg-card">
-                <SelectValue placeholder="All Categories" />
+              <SelectTrigger className="h-9 text-xs w-full sm:w-[150px] bg-card flex-1 sm:flex-none">
+                <SelectValue placeholder="All Categories">
+                  {categoryFilter === "all" ? "All Categories" : categoryFilter}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
@@ -513,11 +545,19 @@ export default function ProductsScreen() {
 
             {/* Stock Status Filter Dropdown */}
             <Select value={inventoryFilter} onValueChange={(val: any) => setInventoryFilter(val)}>
-              <SelectTrigger className="h-9 text-xs w-[135px] bg-card">
-                <SelectValue placeholder="All Stock" />
+              <SelectTrigger className="h-9 text-xs w-full sm:w-[135px] bg-card flex-1 sm:flex-none">
+                <SelectValue placeholder="All Stock">
+                  {inventoryFilter === "all"
+                    ? "All Stock"
+                    : inventoryFilter === "in_stock"
+                    ? "In Stock"
+                    : inventoryFilter === "low_stock"
+                    ? "Low Stock"
+                    : "Out of Stock"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Inventory</SelectItem>
+                <SelectItem value="all">All Stock</SelectItem>
                 <SelectItem value="in_stock" className="text-emerald-600 font-medium">
                   In Stock (Green)
                 </SelectItem>
@@ -532,8 +572,16 @@ export default function ProductsScreen() {
 
             {/* Status Filter */}
             <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
-              <SelectTrigger className="h-9 text-xs w-[110px] bg-card">
-                <SelectValue placeholder="Status" />
+              <SelectTrigger className="h-9 text-xs w-full sm:w-[120px] bg-card flex-1 sm:flex-none">
+                <SelectValue placeholder="Status">
+                  {statusFilter === "all"
+                    ? "All Status"
+                    : statusFilter === "active"
+                    ? "Active"
+                    : statusFilter === "draft"
+                    ? "Draft"
+                    : "Archived"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
@@ -573,30 +621,30 @@ export default function ProductsScreen() {
               </Button>
             )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             {canImport && (
               <Button
                 variant="outline"
-                className="h-9 rounded-md gap-1.5 hidden md:inline-flex"
+                className="h-9 rounded-md gap-1.5 px-2.5 sm:px-3 text-xs"
                 onClick={() => setImportOpen(true)}
               >
                 <Upload className="size-4" />
-                Import
+                <span className="hidden sm:inline">Import</span>
               </Button>
             )}
             <Button
               variant="outline"
               disabled={!canExport || products.length === 0}
-              className="h-9 rounded-md border-primary text-primary hover:bg-primary/5 hover:text-primary gap-1.5"
+              className="h-9 rounded-md border-primary text-primary hover:bg-primary/5 hover:text-primary gap-1.5 px-2.5 sm:px-3 text-xs"
               onClick={handleExport}
             >
               <Download className="size-4" />
-              Export
+              <span className="hidden sm:inline">Export</span>
             </Button>
             {canEdit && (
-              <Button className="h-9 rounded-md" onClick={() => setIsAddOpen(true)}>
+              <Button className="h-9 rounded-md gap-1.5 px-2.5 sm:px-3 text-xs" onClick={() => setIsAddOpen(true)}>
                 <Plus className="size-4" />
-                Add Product
+                <span>Add Product</span>
               </Button>
             )}
           </div>
@@ -640,24 +688,50 @@ export default function ProductsScreen() {
                     onClick={(e) => e.stopPropagation()}
                   />
                 </TableHead>
-                <TableHead className="px-2.5 py-2 text-xs font-semibold text-foreground">
-                  Product
-                </TableHead>
-                <TableHead className="px-2.5 py-2 text-xs font-semibold text-foreground">
-                  SKU
-                </TableHead>
-                <TableHead className="px-2.5 py-2 text-xs font-semibold text-foreground">
-                  Category
-                </TableHead>
-                <TableHead className="px-2.5 py-2 text-right text-xs font-semibold text-foreground">
-                  Price
-                </TableHead>
-                <TableHead className="px-2.5 py-2 text-center text-xs font-semibold text-foreground">
-                  Stock
-                </TableHead>
-                <TableHead className="px-2.5 py-2 text-xs font-semibold text-foreground">
-                  Status
-                </TableHead>
+                <SortableTableHead
+                  label="Product"
+                  sortKey="title"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="SKU"
+                  sortKey="sku"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Category"
+                  sortKey="category"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Price"
+                  sortKey="price"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                  align="right"
+                />
+                <SortableTableHead
+                  label="Stock"
+                  sortKey="stock"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                  align="center"
+                />
+                <SortableTableHead
+                  label="Status"
+                  sortKey="status"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
                 <TableHead className="px-2.5 py-2 text-right text-xs font-semibold text-foreground">
                   Actions
                 </TableHead>

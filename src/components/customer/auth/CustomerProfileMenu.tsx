@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useClerk, useUser } from "@clerk/react"
-import { User, LogOut, PackageCheck, Shield, ChevronDown } from "lucide-react"
+import { User, LogOut, PackageCheck, Shield, ChevronDown, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -119,6 +119,18 @@ export function CustomerProfileMenu({ onOpenTrackOrder }: CustomerProfileMenuPro
             >
               <PackageCheck className="size-4 text-primary" />
               <span>Track My Orders</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false)
+                navigate("/wallet")
+              }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-xs text-foreground rounded-lg hover:bg-accent transition-colors text-left font-medium"
+            >
+              <Wallet className="size-4 text-primary" />
+              <span>Wallet & AI Authorization</span>
             </button>
 
             <button

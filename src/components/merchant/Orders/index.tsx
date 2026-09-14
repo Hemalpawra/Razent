@@ -28,6 +28,7 @@ import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRa
 import { matchesDateFilter } from "@/lib/utils/dateFilter"
 import { KpiCard } from "@/components/merchant/shared/KpiCard"
 import { ImportModal } from "@/components/merchant/shared/ImportModal"
+import { SortableTableHead } from "@/components/merchant/shared/SortableTableHead"
 import { cn } from "@/lib/utils"
 import { useMerchant } from "@/state/useMerchant"
 import { toast } from "sonner"
@@ -199,6 +200,18 @@ export default function OrdersScreen() {
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE_DEFAULT)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [sortKey, setSortKey] = useState<string>("date")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+    } else {
+      setSortKey(key)
+      setSortDirection(key === "date" || key === "price" ? "desc" : "asc")
+    }
+    setPage(1)
+  }
 
   const dateFilteredOrders = useMemo(() => {
     return (orders || []).filter((o: Order) => matchesDateFilter(o.created_at, dateFilter))
@@ -225,8 +238,28 @@ export default function OrdersScreen() {
           o.items.some((it) => it.title.toLowerCase().includes(term))
         )
       })
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [dateFilteredOrders, q, filterStatus, assistantFilter])
+      .sort((a, b) => {
+        let comparison = 0
+        if (sortKey === "id") {
+          comparison = a.id.localeCompare(b.id)
+        } else if (sortKey === "product") {
+          const titleA = a.items?.[0]?.title || ""
+          const titleB = b.items?.[0]?.title || ""
+          comparison = titleA.localeCompare(titleB)
+        } else if (sortKey === "source") {
+          const srcA = getOrderAgentSource(a).name
+          const srcB = getOrderAgentSource(b).name
+          comparison = srcA.localeCompare(srcB)
+        } else if (sortKey === "price") {
+          comparison = (a.total_paise || 0) - (b.total_paise || 0)
+        } else if (sortKey === "status") {
+          comparison = (a.status || "").localeCompare(b.status || "")
+        } else if (sortKey === "date") {
+          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        }
+        return sortDirection === "asc" ? comparison : -comparison
+      })
+  }, [dateFilteredOrders, q, filterStatus, assistantFilter, sortKey, sortDirection])
 
   const handleExport = () => {
     if (!canExport) {
@@ -380,9 +413,9 @@ export default function OrdersScreen() {
             <Skeleton className="h-9 w-24 rounded-lg" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
+            <Skeleton key={i} className={cn("h-20 rounded-xl", i === 4 && "col-span-2 sm:col-span-1")} />
           ))}
         </div>
         <Card className="rounded-xl bg-card p-4 flex flex-col gap-4">
@@ -416,7 +449,7 @@ export default function OrdersScreen() {
       </div>
 
       {/* KPI row — 5 cards */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard
           icon={<ShoppingCart className="size-4" />}
           label="Total Orders"
@@ -449,33 +482,36 @@ export default function OrdersScreen() {
           value={formatPrice(kpis.revenuePaise)}
           sub="Paid revenue"
           valueIsAmount
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 
       {/* Table Card */}
-      <Card className="overflow-hidden rounded-xl bg-card py-0">        {/* Clean Single Toolbar */}
-        <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full max-w-[320px]">
-            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value)
-                setPage(1)
-              }}
-              placeholder="Search by order id or customer…"
-              className="h-9 bg-card pl-9"
-            />
-          </div>
+      <Card className="overflow-hidden rounded-xl bg-card py-0">
+        {/* Clean Single Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
+          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
+            <div className="relative w-full sm:w-auto sm:min-w-[220px] lg:min-w-[280px] flex-1">
+              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value)
+                  setPage(1)
+                }}
+                placeholder="Search by order id or customer…"
+                className="h-9 bg-card pl-9 text-xs"
+              />
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="icon"
-              className="h-9 w-9 bg-card"
+              className="size-9 bg-card shrink-0"
               aria-label="Refresh"
               disabled={isRefreshing}
               onClick={() => fetchOrders()}
+              title="Refresh orders"
             >
               <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
             </Button>
@@ -488,8 +524,22 @@ export default function OrdersScreen() {
                 }
               }}
             >
-              <SelectTrigger className="h-9 w-[135px] rounded-lg text-xs bg-card">
-                <SelectValue placeholder="All Channels" />
+              <SelectTrigger className="h-9 w-full sm:w-[145px] rounded-lg text-xs bg-card flex-1 sm:flex-none">
+                <SelectValue placeholder="All Channels">
+                  {assistantFilter === "all"
+                    ? "All Channels"
+                    : assistantFilter === "claude"
+                    ? "Claude"
+                    : assistantFilter === "gemini"
+                    ? "Google Gemini"
+                    : assistantFilter === "chatgpt"
+                    ? "ChatGPT"
+                    : assistantFilter === "store_agent"
+                    ? "Store Agent"
+                    : assistantFilter === "external_agent"
+                    ? "External Agent"
+                    : "Direct Customer"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Channels</SelectItem>
@@ -502,14 +552,16 @@ export default function OrdersScreen() {
               </SelectContent>
             </Select>
             <DateRangePicker value={dateFilter} onChange={setDateFilter} />
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             {canExport && (
               <Button
                 variant="outline"
-                className="h-9 rounded-lg bg-card gap-1.5"
+                className="h-9 rounded-lg bg-card gap-1.5 px-2.5 sm:px-3 text-xs"
                 onClick={handleExport}
               >
                 <Download className="size-4" />
-                <span>Export</span>
+                <span className="hidden sm:inline">Export</span>
               </Button>
             )}
           </div>
@@ -547,24 +599,49 @@ export default function OrdersScreen() {
                     aria-label="Select all"
                   />
                 </TableHead>
-                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
-                  Order ID
-                </TableHead>
-                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
-                  Product
-                </TableHead>
-                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
-                  Source
-                </TableHead>
-                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
-                  Price
-                </TableHead>
-                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
-                  Status
-                </TableHead>
-                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
-                  Last updated
-                </TableHead>
+                <SortableTableHead
+                  label="Order ID"
+                  sortKey="id"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Product"
+                  sortKey="product"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Source"
+                  sortKey="source"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Price"
+                  sortKey="price"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                  align="right"
+                />
+                <SortableTableHead
+                  label="Status"
+                  sortKey="status"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Last updated"
+                  sortKey="date"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
                 <TableHead className="h-10 px-3 text-right text-xs font-semibold text-foreground">
                   Actions
                 </TableHead>

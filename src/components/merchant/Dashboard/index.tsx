@@ -260,18 +260,18 @@ export default function DashboardScreen() {
           {canExport && (
             <Button
               variant="outline"
-              className="h-9 rounded-lg bg-card"
+              className="h-9 rounded-lg bg-card gap-1.5 px-2.5 sm:px-3 text-xs"
               onClick={handleExport}
             >
               <Download className="size-4" />
-              Export
+              <span className="hidden sm:inline">Export</span>
             </Button>
           )}
         </div>
       </div>
 
       {/* KPI strip — 5 cards — unified KpiCard */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard
           icon={<IndianRupee className="size-4" />}
           label="Revenue Generated"
@@ -301,6 +301,7 @@ export default function DashboardScreen() {
           label="Avg. Order Value"
           value={formatPrice(calculatedAovPaise)}
           sub="Per completed order"
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 

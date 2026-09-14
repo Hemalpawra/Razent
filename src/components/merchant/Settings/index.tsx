@@ -149,7 +149,7 @@ export default function SettingsScreen() {
 
   if (page !== "hub") {
     return (
-      <div className="space-y-4 bg-muted/30 -m-6 p-6">
+      <div className="space-y-4">
         {page === "store" && <StoreProfilePage onBack={() => setPage("hub")} canEdit={canEdit} />}
         {page === "ai" && <AIDefaultsPage onBack={() => setPage("hub")} canEdit={canEdit} />}
         {page === "business" && (
@@ -166,7 +166,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <div className="space-y-4 bg-muted/30 -m-6 p-6">
+    <div className="space-y-4">
       <div>
         <h1 className="font-heading text-[32px] font-semibold leading-[38px] tracking-tight text-foreground">
           Settings

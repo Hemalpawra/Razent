@@ -9,6 +9,7 @@ export interface KpiCardProps {
   sub?: string
   delta?: string
   valueIsAmount?: boolean
+  tone?: "default" | "success" | "destructive"
   className?: string
 }
 
@@ -19,35 +20,41 @@ export function KpiCard({
   sub,
   delta,
   valueIsAmount,
+  tone,
   className,
 }: KpiCardProps) {
   const isPositive = delta?.startsWith("+") || delta?.startsWith("↑")
   const isNegative = delta?.startsWith("-") || delta?.startsWith("↓")
 
   return (
-    <Card className={cn("rounded-xl bg-card p-3.5 sm:p-4 shadow-sm border transition-colors", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs sm:text-[13px] font-medium text-muted-foreground truncate">
+    <Card className={cn("rounded-xl bg-card p-2.5 sm:p-3 shadow-sm border transition-colors", className)}>
+      <div className="flex items-center justify-between gap-1.5">
+        <span className="text-xs font-medium text-muted-foreground truncate">
           {label}
         </span>
-        <div className="flex size-7 sm:size-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+        <div className="flex size-6 sm:size-6.5 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0 [&>svg]:size-3.5">
           {icon}
         </div>
       </div>
 
       <div
         className={cn(
-          "mt-2 font-semibold text-foreground tracking-tight tabular-nums truncate",
+          "mt-1 font-semibold tracking-tight tabular-nums truncate",
+          tone === "success"
+            ? "text-emerald-600 dark:text-emerald-400"
+            : tone === "destructive"
+            ? "text-destructive"
+            : "text-foreground",
           valueIsAmount || value.startsWith("₹")
             ? "text-lg sm:text-xl"
-            : "font-heading text-xl sm:text-2xl"
+            : "font-heading text-lg sm:text-xl"
         )}
       >
         {value}
       </div>
 
       {(sub || delta) && (
-        <div className="mt-1 flex items-center gap-1.5 text-[10px] sm:text-[11px] leading-3 text-muted-foreground truncate">
+        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] sm:text-[11px] leading-tight text-muted-foreground truncate">
           {delta ? (
             <>
               <span

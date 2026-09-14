@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,17 +13,22 @@ import {
   User,
   ShieldCheck,
   ShieldAlert,
-  ChevronRight,
   Loader2,
   Sparkles,
+  Wallet,
+  LogIn,
+  AlertCircle,
+  ExternalLink,
 } from "lucide-react"
 import type { Product } from "@/lib/types/product"
 import { formatPrice } from "@/lib/types/product"
-import { executeA2ACheckout } from "@/lib/api/client"
+import { executeAutonomousWalletPurchase } from "@/lib/api/client"
 import { useCart } from "@/state/useCart"
-import { useAgentPurchase } from "@/state/useAgentPurchase"
+import { useCustomerWallet } from "@/state/useCustomerWallet"
+import { useUser } from "@clerk/react"
 import { toast } from "sonner"
 import type { Order } from "@/lib/types/order"
+import { NPCI_TRANSACTION_LIMIT_PAISE } from "@/lib/types/wallet"
 
 interface AICheckoutConfirmationCardProps {
   products: Product[]
@@ -44,20 +49,41 @@ export function AICheckoutConfirmationCard({
   onOrderPlaced,
   onOpenTrackOrder,
 }: AICheckoutConfirmationCardProps) {
+  const navigate = useNavigate()
+  const { user, isSignedIn } = useUser()
+  const { wallet, isLoading: isWalletLoading } = useCustomerWallet()
+  const clearCart = useCart((s) => s.clearCart)
+
   const [isPlacing, setIsPlacing] = useState(false)
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null)
+  const [placedOrderDetails, setPlacedOrderDetails] = useState<any>(null)
+
   const [name, setName] = useState(customerName || "")
   const [email, setEmail] = useState(customerEmail || "")
   const [phone, setPhone] = useState(customerPhone || "")
-  const [addressLine, setAddressLine] = useState(savedAddress?.line1 || "")
-  const [city, setCity] = useState(savedAddress?.city || "")
-  const [postalCode, setPostalCode] = useState(savedAddress?.postalCode || "")
+  const [addressLine, setAddressLine] = useState("")
+  const [city, setCity] = useState("")
+  const [postalCode, setPostalCode] = useState("")
   const [isEditingAddress, setIsEditingAddress] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | "cod">("upi")
 
-  const clearCart = useCart((s) => s.clearCart)
-  const navigate = useNavigate()
-  const { agentPurchaseEnabled } = useAgentPurchase()
+  // Recovery error state for Balise UX
+  const [recoveryError, setRecoveryError] = useState<{
+    status: string
+    title: string
+    description: string
+    shortfall?: number
+  } | null>(null)
+
+  // Sync saved address from wallet or props
+  useEffect(() => {
+    const addr = wallet?.default_address || savedAddress || {}
+    if (addr.line1) setAddressLine(addr.line1)
+    if (addr.city) setCity(addr.city)
+    if (addr.pincode || addr.postalCode) setPostalCode(addr.pincode || addr.postalCode)
+    if (wallet?.customer_name || customerName) setName(wallet?.customer_name || customerName || "")
+    if (wallet?.customer_phone || customerPhone) setPhone(wallet?.customer_phone || customerPhone || "")
+    if (wallet?.customer_email || customerEmail) setEmail(wallet?.customer_email || customerEmail || "")
+  }, [wallet, savedAddress, customerName, customerPhone, customerEmail])
 
   const items = products.length > 0 ? products : []
   const subtotalPaise = items.reduce((acc, p) => acc + (p.price_paise || 0), 0)
@@ -65,91 +91,116 @@ export function AICheckoutConfirmationCard({
   const totalPaise = subtotalPaise + deliveryPaise
 
   const handleConfirmOrder = async () => {
-    if (!agentPurchaseEnabled) {
-      toast.error("Agent purchases are disabled", {
-        description: "Please enable Agent Purchases in your Wallet to allow placing orders via AI Assistant.",
+    setRecoveryError(null)
+
+    if (!isSignedIn || !user) {
+      toast.error("Authentication required", {
+        description: "Please sign in to your Razent account to place orders.",
+      })
+      navigate("/login?redirect_url=/assistant")
+      return
+    }
+
+    if (!wallet?.ai_purchases_enabled) {
+      setRecoveryError({
+        status: "ai_disabled",
+        title: "Autonomous Agent Purchases Disabled",
+        description: "Ordering is turned off in your Razent Wallet settings. Enable agent purchasing or pay at manual checkout.",
       })
       return
     }
 
     if (items.length === 0) {
-      toast.error("No items to checkout")
+      toast.error("No items selected")
       return
     }
 
-    if (!addressLine.trim()) {
+    if (!addressLine.trim() || !city.trim() || !postalCode.trim() || !phone.trim()) {
       setIsEditingAddress(true)
-      toast.error("Please enter your delivery address")
+      toast.error("Please provide your delivery address and phone number.")
       return
     }
-    setIsPlacing(true)
 
+    // NPCI Regulatory Cap Check (₹15,000)
+    if (totalPaise > NPCI_TRANSACTION_LIMIT_PAISE) {
+      setRecoveryError({
+        status: "npci_limit_exceeded",
+        title: "NPCI Regulatory Limit Exceeded (₹15,000 Cap)",
+        description: `Order total is ${formatPrice(totalPaise)}, which exceeds the NPCI autonomous transaction limit of ₹15,000. Regulatory guidelines mandate two-factor authentication for this purchase.`,
+      })
+      return
+    }
+
+    // Spend Limit Check
+    if (totalPaise > (wallet?.spend_limit_paise || 200000)) {
+      setRecoveryError({
+        status: "limit_exceeded",
+        title: "Agent Spend Limit Exceeded",
+        description: `Order total is ${formatPrice(totalPaise)}, which is higher than your configured AI spend limit of ${formatPrice(wallet?.spend_limit_paise || 200000)}.`,
+      })
+      return
+    }
+
+    // Wallet Balance Check
+    if (totalPaise > (wallet?.wallet_balance_paise || 0)) {
+      const shortfall = totalPaise - (wallet?.wallet_balance_paise || 0)
+      setRecoveryError({
+        status: "insufficient_balance",
+        title: "Insufficient Wallet Balance",
+        description: `Order total is ${formatPrice(totalPaise)}, but your available wallet balance is ${formatPrice(wallet?.wallet_balance_paise || 0)}. Shortfall: ${formatPrice(shortfall)}.`,
+        shortfall,
+      })
+      return
+    }
+
+    setIsPlacing(true)
     try {
-      // Execute live A2A checkout with genuine Razorpay test rails
-      const a2aResult = await executeA2ACheckout({
+      const result = await executeAutonomousWalletPurchase({
+        customer_id: user.id,
         items: items.map((p) => ({
           id: p.id,
           quantity: 1,
         })),
-        deliveryAddress: {
+        delivery_address: {
           full_name: name,
           phone,
           line1: addressLine,
           city,
           pincode: postalCode,
+          state: "Karnataka",
+          country: "India",
         },
+        assistant: "store_agent",
       })
 
-      const placedOrderObj: Order = {
-        id: a2aResult.order_id,
-        razorpay_order_id: a2aResult.razorpay_order_id,
-        total_paise: totalPaise,
-        shipping_paise: deliveryPaise,
-        currency: "INR",
-        status: "paid",
-        shipping_status: "shipped",
-        via_ai: true,
-        items: items.map((p) => ({
-          product_id: p.id,
-          title: p.title,
-          image_url: p.image_url || "",
-          qty: 1,
-          unit_price_paise: p.price_paise,
-        })),
-        shipping_address: {
-          full_name: name,
-          phone,
-          email,
-          line1: addressLine,
-          city,
-          state: "Karnataka",
-          pincode: postalCode,
-          country: "India",
-          phone_verified: true,
-        },
-        commerce_protocol: "ap2",
-        created_at: new Date().toISOString(),
-        paid_at: new Date().toISOString(),
-        notes: `Autonomous AI Assistant order via ${a2aResult.settlement_rail}`,
+      if (!result.success) {
+        setRecoveryError({
+          status: result.status,
+          title: "Order Authorization Notice",
+          description: result.message,
+        })
+        return
       }
 
-      setPlacedOrder(placedOrderObj)
+      setPlacedOrderDetails(result)
+      setPlacedOrder(result.order)
       clearCart()
-      toast.success(`Order ${a2aResult.order_id} confirmed!`, {
-        description: `Razorpay Reference: ${a2aResult.razorpay_order_id}`,
+      toast.success(`Order ${result.order_id} confirmed!`, {
+        description: `Settled autonomously via Razent Wallet. ETA: 10-15 mins.`,
       })
-      if (onOrderPlaced) {
-        onOrderPlaced(a2aResult.order_id)
+      if (onOrderPlaced && result.order_id) {
+        onOrderPlaced(result.order_id)
       }
     } catch (err: any) {
-      console.error("[AICheckoutCard] error placing order via A2A:", err)
-      toast.error(err?.message || "Failed to place order via Agentic Protocol. Please try again.")
+      console.error("[AICheckoutCard] error placing order:", err)
+      toast.error(err?.message || "Failed to place order. Please try again.")
     } finally {
       setIsPlacing(false)
     }
   }
 
-  if (placedOrder) {
+  // 1. CONFIRMED ORDER VIEW
+  if (placedOrder && placedOrderDetails) {
     return (
       <Card className="w-full border-border bg-card shadow-sm">
         <CardHeader className="pb-3 text-left">
@@ -159,10 +210,10 @@ export function AICheckoutConfirmationCard({
             </div>
             <div>
               <CardTitle className="text-sm font-semibold text-foreground">
-                Order Placed & Settled via Razorpay!
+                Order Confirmed & Settled via Wallet!
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Order ID: <span className="font-mono font-semibold text-foreground">{placedOrder.id}</span>
+                Order ID: <span className="font-mono font-semibold text-foreground">{placedOrderDetails.order_id}</span>
               </CardDescription>
             </div>
           </div>
@@ -178,62 +229,76 @@ export function AICheckoutConfirmationCard({
               <span className="font-semibold text-foreground">{formatPrice(totalPaise)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Razorpay Ref:</span>
-              <span className="font-mono font-medium text-foreground">{placedOrder.razorpay_order_id}</span>
+              <span className="text-muted-foreground">Remaining Wallet Balance:</span>
+              <span className="font-semibold text-primary">{formatPrice(placedOrderDetails.balance_remaining_paise || 0)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Settlement Rail:</span>
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">NPCI UPI AutoPay / Razorpay</span>
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">Razent Wallet (NPCI e-Mandate)</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Delivery To:</span>
+              <span className="text-muted-foreground">Delivery Address:</span>
               <span className="font-medium text-foreground truncate max-w-[200px]">{city}, {postalCode}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Estimated Delivery:</span>
-              <span className="font-medium text-foreground">10-15 mins (Express)</span>
+              <span className="font-medium text-foreground">10-15 mins (Express Delivery)</span>
             </div>
           </div>
         </CardContent>
-        <CardFooter className="pt-0">
+        <CardFooter className="flex items-center gap-2 pt-0">
           <Button
             size="sm"
-            className="w-full text-xs font-semibold"
+            className="flex-1 text-xs font-semibold"
             onClick={() => {
-              if (onOpenTrackOrder) {
-                onOpenTrackOrder(placedOrder.id)
+              if (onOpenTrackOrder && placedOrderDetails.order_id) {
+                onOpenTrackOrder(placedOrderDetails.order_id)
               } else {
-                window.location.href = `/?track=${placedOrder.id}`
+                window.location.href = `/?track=${placedOrderDetails.order_id}`
               }
             }}
           >
-            <PackageCheck data-icon="inline-start" />
+            <PackageCheck className="size-3.5 mr-1" />
             Track Live Delivery
           </Button>
+
+          {placedOrderDetails.invoice_url && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs font-medium"
+              onClick={() => window.open(placedOrderDetails.invoice_url, "_blank")}
+            >
+              <ExternalLink className="size-3.5 mr-1" />
+              Invoice
+            </Button>
+          )}
         </CardFooter>
       </Card>
     )
   }
 
+  // 2. CHECKOUT PREPARATION VIEW
   return (
     <Card className="w-full border-border bg-card shadow-sm">
       <CardHeader className="pb-3 text-left">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-muted text-foreground">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Sparkles className="size-4" />
             </div>
             <div>
               <CardTitle className="text-sm font-semibold text-foreground">
-                Order Summary & Checkout
+                Autonomous Order Checkout
               </CardTitle>
               <CardDescription className="text-[11px] text-muted-foreground">
-                Prepared by AI Assistant · Human in the loop
+                Settles directly from your Razent Wallet
               </CardDescription>
             </div>
           </div>
-          <Badge variant="outline" className="text-[10px] text-foreground border-border">
-            Instant Ready
+          <Badge variant="outline" className="text-[10px] text-foreground border-border gap-1">
+            <Wallet className="size-3 text-primary" />
+            {formatPrice(wallet?.wallet_balance_paise || 0)}
           </Badge>
         </div>
       </CardHeader>
@@ -267,28 +332,7 @@ export function AICheckoutConfirmationCard({
           </div>
         </div>
 
-        {/* Pre-filled Customer Details */}
-        <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1.5 font-semibold text-foreground">
-              <User className="size-3.5 text-foreground" />
-              Customer Details
-            </span>
-            <Badge variant="secondary" className="text-[10px]">Auto-filled</Badge>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-muted-foreground">
-            <div>
-              <span className="text-[10px] text-muted-foreground/80">Name</span>
-              <p className="font-medium text-foreground truncate">{name}</p>
-            </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground/80">Email</span>
-              <p className="font-medium text-foreground truncate">{email}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Pre-filled Shipping Address */}
+        {/* Customer & Address Details */}
         <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 font-semibold text-foreground">
@@ -321,89 +365,103 @@ export function AICheckoutConfirmationCard({
                 <Input
                   value={postalCode}
                   onChange={(e) => setPostalCode(e.target.value)}
-                  placeholder="Postal Code"
+                  placeholder="PIN Code"
                   className="h-7 text-xs"
                 />
               </div>
+              <Input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="10-digit mobile number"
+                className="h-7 text-xs"
+              />
             </div>
           ) : (
             <p className="font-medium text-foreground">
-              {addressLine}{city ? `, ${city}` : ""}{postalCode ? ` - ${postalCode}` : ""}
+              {addressLine}{city ? `, ${city}` : ""}{postalCode ? ` - ${postalCode}` : ""} ({phone})
             </p>
           )}
         </div>
 
-        {/* Payment Method Information */}
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="size-7 rounded-md bg-muted text-foreground flex items-center justify-center shrink-0">
-              <ShieldCheck className="size-4" />
-            </div>
-            <div>
-              <span className="font-semibold text-foreground block text-[11px]">
-                Razorpay Secure Checkout
-              </span>
-              <span className="text-[10px] text-muted-foreground">
-                UPI, Cards & NetBanking manual selection in modal
-              </span>
-            </div>
-          </div>
-          <Badge variant="outline" className="text-[9px] py-0 px-1.5 text-muted-foreground border-border">
-            PCI-DSS Verified
-          </Badge>
-        </div>
-      </CardContent>
-
-      <CardFooter className="flex flex-col gap-2 pt-0">
-        {!agentPurchaseEnabled && (
-          <div className="w-full flex items-center justify-between gap-2 p-2.5 rounded-lg border border-border bg-muted/60 text-xs">
-            <div className="flex items-center gap-2 min-w-0">
-              <ShieldAlert className="size-4 shrink-0 text-amber-500" />
-              <div className="text-left">
-                <p className="font-semibold text-foreground text-[11px]">Agent Purchases Disabled</p>
-                <p className="text-[10px] text-muted-foreground">Ordering is turned off in your Wallet settings.</p>
+        {/* BALISE UX RECOVERY BOX (Whenever limits or balance are exceeded) */}
+        {recoveryError && (
+          <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 flex flex-col gap-2 text-xs">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-destructive text-[11px]">{recoveryError.title}</p>
+                <p className="text-muted-foreground text-[11px] mt-0.5 leading-relaxed">
+                  {recoveryError.description}
+                </p>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-[11px] shrink-0 font-medium"
-              onClick={() => navigate("/wallet")}
-            >
-              Open Wallet
-            </Button>
+
+            <div className="pt-2 border-t border-destructive/20 flex items-center gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] font-semibold"
+                onClick={() => navigate("/wallet")}
+              >
+                Update Spend Limit
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] font-semibold"
+                onClick={() => navigate("/wallet")}
+              >
+                Add Money to Wallet
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-7 text-[11px] font-semibold"
+                onClick={() => navigate("/checkout")}
+              >
+                Pay at Checkout Manual
+              </Button>
+            </div>
           </div>
         )}
 
+        {/* Unauthenticated State */}
+        {!isSignedIn && (
+          <div className="flex items-center justify-between p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5 text-xs">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="size-4 text-amber-500" />
+              <span>Sign in required for autonomous order execution.</span>
+            </div>
+            <Button
+              size="sm"
+              className="h-7 text-xs font-semibold"
+              onClick={() => navigate("/login?redirect_url=/assistant")}
+            >
+              Sign In
+            </Button>
+          </div>
+        )}
+      </CardContent>
+
+      <CardFooter className="flex flex-col gap-2 pt-0">
         <Button
           type="button"
-          className="w-full font-semibold gap-2 shadow-xs text-xs h-9 bg-foreground text-background hover:bg-foreground/90 disabled:opacity-40"
-          disabled={isPlacing || items.length === 0 || !agentPurchaseEnabled}
+          className="w-full text-xs font-semibold h-9 gap-1.5"
           onClick={handleConfirmOrder}
+          disabled={isPlacing || isWalletLoading || items.length === 0}
         >
           {isPlacing ? (
             <>
-              <Loader2 className="animate-spin" data-icon="inline-start" />
-              <span>Confirming Order...</span>
-            </>
-          ) : !agentPurchaseEnabled ? (
-            <>
-              <ShieldAlert data-icon="inline-start" />
-              <span>Ordering Blocked (Enable in Wallet)</span>
+              <Loader2 className="size-3.5 animate-spin" />
+              Debiting Wallet & Confirming Order...
             </>
           ) : (
             <>
-              <ShieldCheck data-icon="inline-start" />
-              <span>Confirm & Place Order ({formatPrice(totalPaise)})</span>
+              <Wallet className="size-3.5" />
+              Pay {formatPrice(totalPaise)} with Razent Wallet
             </>
           )}
         </Button>
-        <p className="text-[10px] text-muted-foreground/70 text-center">
-          {agentPurchaseEnabled
-            ? "Human verification step: You can review and modify all details before final confirmation."
-            : "To allow the AI Assistant to confirm and place this order, enable Agent Purchases in your Wallet."}
-        </p>
       </CardFooter>
     </Card>
   )

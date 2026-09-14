@@ -4,7 +4,7 @@ export type OrderStatus = "created" | "paid" | "failed" | "refunded"
 
 export type ShippingStatus = "pending" | "packed" | "shipped" | "out_for_delivery" | "delivered" | "returned"
 
-export type CommerceProtocol = "ncpi_uap" | "acp" | "ap2" | "x402" | "direct_web"
+export type CommerceProtocol = "ncpi_uap" | "acp" | "ap2" | "x402" | "direct_web" | "mcp"
 
 export type OrderItem = {
   product_id: string

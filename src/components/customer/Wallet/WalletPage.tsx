@@ -1,16 +1,18 @@
 /**
- * WalletPage - Customer Wallet & Autonomous AI Purchasing Settings
+ * WalletPage - Customer Wallet, Delivery Address & Autonomous AI Agent Authorization
  * Accessible at /wallet
- * 
- * Features:
- * 1. Autonomous Agent Purchase Permission (Toggle ON / OFF)
- *    - When ON: AI Assistant can draft and confirm orders within limits.
- *    - When OFF: AI ordering is strictly blocked across the entire app.
- * 2. Auto-Spend Limit & Fund Cap (Quick Presets + Custom Limit)
- * 3. Secure Razorpay Payment Gateway Overview (Zero raw credential storage)
- * 4. RBI & NPCI Autonomous Agent Commerce Guardrails
+ *
+ * Implements:
+ * 1. Customer Authentication via Clerk
+ * 2. Razent Wallet Balance & Instant Top-Up
+ * 3. Default Delivery Address Management
+ * 4. Autonomous AI Purchasing Switch (ON / OFF)
+ * 5. Auto-Spend Limit with strict NPCI ₹15,000 regulatory e-Mandate cap
+ * 6. MCP Agent Passkey (Token generation, copyable snippets for ChatGPT, Claude, Gemini)
+ * 7. Balise UX Writing guidelines for all status and recovery messaging
  */
-import { useState } from "react"
+
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Card,
@@ -23,26 +25,35 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ThemeToggle } from "@/components/shared/ThemeToggle"
-import { useAgentPurchase } from "@/state/useAgentPurchase"
+import { useCustomerWallet } from "@/state/useCustomerWallet"
 import { formatPrice } from "@/lib/types/product"
-import { Input } from "@/components/ui/input"
+import { NPCI_TRANSACTION_LIMIT_PAISE } from "@/lib/types/wallet"
 import {
   ArrowLeft,
   Bot,
   Check,
+  Copy,
   CreditCard,
+  Key,
   Lock,
+  MapPin,
+  PlusCircle,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
   Sparkles,
-  Building2,
-  Banknote,
   Sliders,
   ShoppingCart,
   Shield,
+  Wallet as WalletIcon,
+  UserCheck,
+  AlertCircle,
+  LogIn,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -50,26 +61,96 @@ import { cn } from "@/lib/utils"
 const SPEND_LIMIT_PRESETS = [
   { label: "₹500", value: 50000 },
   { label: "₹1,000", value: 100000 },
-  { label: "₹2,000", value: 200000, recommended: true, note: "NPCI Cap" },
+  { label: "₹2,000", value: 200000, recommended: true, note: "Recommended" },
   { label: "₹5,000", value: 500000 },
   { label: "₹10,000", value: 1000000 },
+  { label: "₹15,000", value: 1500000, note: "NPCI Max Cap" },
+]
+
+const TOP_UP_PRESETS = [
+  { label: "+₹500", value: 50000 },
+  { label: "+₹1,000", value: 100000 },
+  { label: "+₹2,000", value: 200000 },
+  { label: "+₹5,000", value: 500000 },
 ]
 
 export default function WalletPage() {
   const navigate = useNavigate()
-  const { agentPurchaseEnabled, spendLimitPaise, setSpendLimitPaise, toggle } = useAgentPurchase()
-  const [customLimit, setCustomLimit] = useState("")
+  const {
+    wallet,
+    isLoading,
+    isSignedIn,
+    topUp,
+    updateSpendLimit,
+    toggleAIPurchasing,
+    updateAddress,
+    regenerateToken,
+  } = useCustomerWallet()
 
-  const handleSetCustomLimit = () => {
+  const [customLimit, setCustomLimit] = useState("")
+  const [copiedToken, setCopiedToken] = useState(false)
+  const [isEditingAddress, setIsEditingAddress] = useState(false)
+
+  // Address form state
+  const [fullName, setFullName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [line1, setLine1] = useState("")
+  const [city, setCity] = useState("")
+  const [state, setState] = useState("Karnataka")
+  const [pincode, setPincode] = useState("")
+
+  // Sync address form when wallet loads
+  useEffect(() => {
+    if (wallet?.default_address) {
+      const addr = wallet.default_address
+      setFullName(addr.full_name || wallet.customer_name || "")
+      setPhone(addr.phone || wallet.customer_phone || "")
+      setLine1(addr.line1 || "")
+      setCity(addr.city || "")
+      setState(addr.state || "Karnataka")
+      setPincode(addr.pincode || "")
+    }
+  }, [wallet])
+
+  const handleCopyToken = () => {
+    if (!wallet?.agent_auth_token) return
+    navigator.clipboard.writeText(wallet.agent_auth_token)
+    setCopiedToken(true)
+    toast.success("Agent Passkey copied to clipboard")
+    setTimeout(() => setCopiedToken(false), 2500)
+  }
+
+  const handleSaveAddress = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!line1.trim() || !city.trim() || !pincode.trim() || !phone.trim()) {
+      toast.error("Please fill in all address fields (address line, city, pincode, phone).")
+      return
+    }
+    await updateAddress({
+      full_name: fullName.trim(),
+      phone: phone.trim(),
+      line1: line1.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      pincode: pincode.trim(),
+      country: "India",
+    })
+    setIsEditingAddress(false)
+  }
+
+  const handleSetCustomLimit = async () => {
     const num = parseFloat(customLimit)
     if (isNaN(num) || num <= 0) {
       toast.error("Please enter a valid amount in ₹")
       return
     }
     const paise = Math.round(num * 100)
-    setSpendLimitPaise(paise)
+    if (paise > NPCI_TRANSACTION_LIMIT_PAISE) {
+      toast.error(`Limit cannot exceed NPCI regulatory ceiling of ₹${NPCI_TRANSACTION_LIMIT_PAISE / 100}`)
+      return
+    }
+    await updateSpendLimit(paise)
     setCustomLimit("")
-    toast.success(`AI Assistant spend limit set to ${formatPrice(paise)}`)
   }
 
   return (
@@ -86,7 +167,7 @@ export default function WalletPage() {
                 if (window.history.length > 1) {
                   navigate(-1)
                 } else {
-                  navigate("/assistant")
+                  navigate("/")
                 }
               }}
               title="Back"
@@ -98,7 +179,7 @@ export default function WalletPage() {
                 Wallet & Agent Authorization
               </h1>
               <p className="text-[11px] text-muted-foreground">
-                Autonomous AI Purchasing & Spend Controls
+                Autonomous AI Purchasing, Spend Controls & NPCI Compliance
               </p>
             </div>
           </div>
@@ -106,9 +187,10 @@ export default function WalletPage() {
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
-              className="text-[10px] hidden sm:inline-flex border-border bg-muted"
+              className="text-[10px] hidden sm:inline-flex border-border bg-muted/50 gap-1"
             >
-              RBI & NPCI Verified
+              <ShieldCheck className="size-3 text-emerald-600 dark:text-emerald-400" />
+              NPCI e-Mandate Compliant
             </Badge>
             <ThemeToggle />
           </div>
@@ -117,11 +199,89 @@ export default function WalletPage() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-4xl mx-auto w-full p-4 sm:p-6 flex flex-col gap-6">
-        {/* HERO CARD: Agent Purchases Toggle */}
+        {/* UNAUTHENTICATED NOTICE */}
+        {!isSignedIn && (
+          <Card className="border-amber-500/40 bg-amber-500/5 shadow-xs">
+            <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Sign In to Authorize AI Purchases</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Your AI assistants (ChatGPT, Claude, Gemini, and in-app assistant) require an authenticated customer account, saved delivery address, and configured spend limits to place orders.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="gap-2 shrink-0 font-semibold text-xs"
+                onClick={() => navigate("/login?redirect_url=/wallet")}
+              >
+                <LogIn className="size-4" />
+                <span>Sign In / Register</span>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 1. WALLET BALANCE & INSTANT TOP-UP */}
+        <Card className="border border-border/80 bg-card shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <WalletIcon className="size-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold">Razent Wallet Balance</CardTitle>
+                  <CardDescription className="text-xs">
+                    Pre-authorized customer funds for autonomous AI agent ordering and 1-click checkout.
+                  </CardDescription>
+                </div>
+              </div>
+
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black tracking-tight text-foreground">
+                  {formatPrice(wallet?.wallet_balance_paise || 0)}
+                </span>
+                <span className="text-xs text-muted-foreground font-medium">available</span>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-0 flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/20">
+              <div className="text-xs">
+                <p className="font-semibold text-foreground">Add Money to Wallet</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Instant balance top-up using test payment rails.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {TOP_UP_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.value}
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs font-semibold hover:border-primary"
+                    disabled={!isSignedIn}
+                    onClick={() => topUp(preset.value)}
+                  >
+                    <PlusCircle className="size-3.5 mr-1 text-primary" />
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 2. AUTONOMOUS PURCHASING TOGGLE */}
         <Card
           className={cn(
             "border transition-all shadow-sm",
-            agentPurchaseEnabled
+            wallet?.ai_purchases_enabled
               ? "border-emerald-500/40 bg-card"
               : "border-destructive/40 bg-card"
           )}
@@ -132,12 +292,12 @@ export default function WalletPage() {
                 <div
                   className={cn(
                     "size-10 rounded-xl flex items-center justify-center shrink-0",
-                    agentPurchaseEnabled
+                    wallet?.ai_purchases_enabled
                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                       : "bg-destructive/10 text-destructive"
                   )}
                 >
-                  {agentPurchaseEnabled ? (
+                  {wallet?.ai_purchases_enabled ? (
                     <ShieldCheck className="size-6" />
                   ) : (
                     <ShieldAlert className="size-6" />
@@ -148,7 +308,7 @@ export default function WalletPage() {
                     <CardTitle className="text-base font-bold">
                       Autonomous AI Purchasing Permission
                     </CardTitle>
-                    {agentPurchaseEnabled ? (
+                    {wallet?.ai_purchases_enabled ? (
                       <Badge
                         variant="outline"
                         className="text-[11px] border-emerald-500/40 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 gap-1 font-semibold"
@@ -165,28 +325,21 @@ export default function WalletPage() {
                     )}
                   </div>
                   <CardDescription className="text-xs mt-1">
-                    Control whether the AI Shopping Assistant has permission to autonomously confirm and execute orders.
+                    Control whether connected MCP agents and the in-app AI assistant have permission to place confirmed orders.
                   </CardDescription>
                 </div>
               </div>
 
-              {/* The Toggle */}
               <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
                 <Switch
                   id="agent-purchase-toggle"
-                  checked={agentPurchaseEnabled}
-                  onCheckedChange={async () => {
-                    const next = await toggle()
-                    toast(
-                      next
-                        ? "Agent purchases enabled: The AI assistant is now authorized to place orders."
-                        : "Agent purchases disabled: The AI assistant is strictly blocked from placing orders."
-                    )
-                  }}
+                  disabled={!isSignedIn}
+                  checked={wallet?.ai_purchases_enabled ?? false}
+                  onCheckedChange={toggleAIPurchasing}
                   aria-label="Toggle autonomous agent purchases"
                 />
                 <span className="text-[10px] text-muted-foreground font-medium">
-                  {agentPurchaseEnabled ? "Enabled" : "Disabled"}
+                  {wallet?.ai_purchases_enabled ? "Enabled" : "Disabled"}
                 </span>
               </div>
             </div>
@@ -196,46 +349,34 @@ export default function WalletPage() {
             <div
               className={cn(
                 "p-3 rounded-xl border flex flex-col gap-1.5",
-                agentPurchaseEnabled
+                wallet?.ai_purchases_enabled
                   ? "bg-emerald-500/5 border-emerald-500/20 text-foreground"
                   : "bg-destructive/5 border-destructive/20 text-foreground"
               )}
             >
               <div className="flex items-center gap-2 font-semibold text-[11px]">
-                {agentPurchaseEnabled ? (
+                {wallet?.ai_purchases_enabled ? (
                   <>
                     <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>Active Guardrail: Automated Order Execution Allowed</span>
+                    <span>Guardrail Active: Autonomous Order Placement Allowed within Limit</span>
                   </>
                 ) : (
                   <>
                     <ShieldAlert className="size-3.5 text-destructive" />
-                    <span>Enforced Guardrail: Automated Order Execution Blocked</span>
+                    <span>Guardrail Enforced: Autonomous Order Placement Strictly Blocked</span>
                   </>
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {agentPurchaseEnabled
-                  ? "When enabled, you can ask the AI Assistant to 'place order' or 'buy this'. The assistant will prepare items and allow instant 1-click confirmation using your saved credentials."
-                  : "When disabled, the AI Assistant is strictly blocked from creating or placing orders. All checkout attempts within the AI Assistant will show a lock screen until you re-enable this toggle."}
+                {wallet?.ai_purchases_enabled
+                  ? "When enabled, your connected MCP assistants (ChatGPT, Claude, Gemini) and the in-app assistant can autonomously settle orders up to your spend limit without manual checkout links."
+                  : "When disabled, any attempt by an AI agent to place an order is blocked. The assistant will return a clear message with a manual checkout link."}
               </p>
             </div>
           </CardContent>
-
-          <CardFooter className="pt-0 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>Enforced via RBI multi-factor guardrails</span>
-            <Button
-              variant="link"
-              size="sm"
-              className="p-0 h-auto text-xs"
-              onClick={() => navigate("/assistant")}
-            >
-              Test in Assistant →
-            </Button>
-          </CardFooter>
         </Card>
 
-        {/* FUND SETTINGS CARD: AI Assistant Auto-Spend Limit */}
+        {/* 3. AI SPEND LIMIT & NPCI CEILING */}
         <Card className="border border-border/80 bg-card shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-4">
@@ -246,14 +387,14 @@ export default function WalletPage() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <CardTitle className="text-base font-bold">
-                      AI Assistant Auto-Spend Limit & Fund Cap
+                      Autonomous Spend Limit & Fund Cap
                     </CardTitle>
                     <Badge variant="secondary" className="font-semibold text-[11px] text-primary bg-primary/10">
-                      Cap: {formatPrice(spendLimitPaise)}
+                      Cap: {formatPrice(wallet?.spend_limit_paise || 0)}
                     </Badge>
                   </div>
                   <CardDescription className="text-xs mt-1">
-                    Maximum order value the AI Shopping Assistant can automatically approve and settle. Orders above this threshold require manual 2FA / OTP step-up.
+                    Maximum order value an AI Agent can execute automatically. Orders above this require manual checkout or 2FA step-up.
                   </CardDescription>
                 </div>
               </div>
@@ -264,19 +405,17 @@ export default function WalletPage() {
             {/* Presets */}
             <div>
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                Quick Limit Presets
+                Quick Limit Presets (Max ₹15,000 per NPCI Framework)
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
                 {SPEND_LIMIT_PRESETS.map((preset) => {
-                  const isSelected = spendLimitPaise === preset.value
+                  const isSelected = wallet?.spend_limit_paise === preset.value
                   return (
                     <button
                       key={preset.value}
                       type="button"
-                      onClick={() => {
-                        setSpendLimitPaise(preset.value)
-                        toast.success(`AI spend limit set to ${preset.label}`)
-                      }}
+                      disabled={!isSignedIn}
+                      onClick={() => updateSpendLimit(preset.value)}
                       className={cn(
                         "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
                         isSelected
@@ -301,7 +440,7 @@ export default function WalletPage() {
               <div className="flex-1">
                 <p className="text-xs font-medium text-foreground">Custom Spending Limit</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Set any maximum spend ceiling in INR for autonomous shopping turns.
+                  Enter any custom limit up to ₹15,000 (NPCI regulatory ceiling).
                 </p>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -312,10 +451,12 @@ export default function WalletPage() {
                   <Input
                     type="number"
                     min="1"
-                    step="50"
+                    max="15000"
+                    step="100"
+                    disabled={!isSignedIn}
                     value={customLimit}
                     onChange={(e) => setCustomLimit(e.target.value)}
-                    placeholder={(spendLimitPaise / 100).toString()}
+                    placeholder={((wallet?.spend_limit_paise || 200000) / 100).toString()}
                     className="h-8 pl-6 text-xs"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -327,6 +468,7 @@ export default function WalletPage() {
                 </div>
                 <Button
                   size="sm"
+                  disabled={!isSignedIn}
                   className="h-8 text-xs font-medium shrink-0"
                   onClick={handleSetCustomLimit}
                 >
@@ -335,129 +477,258 @@ export default function WalletPage() {
               </div>
             </div>
 
+            {/* NPCI Notice */}
             <div className="p-2.5 rounded-lg border border-border bg-muted/30 flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Orders ≤ {formatPrice(spendLimitPaise)}: Instant Auto-Debit</span>
-              <span className="text-foreground font-medium">Orders &gt; {formatPrice(spendLimitPaise)}: Human Approval Required</span>
+              <span>Orders ≤ {formatPrice(wallet?.spend_limit_paise || 0)}: Instant Wallet Auto-Debit</span>
+              <span className="text-foreground font-medium">Orders &gt; {formatPrice(wallet?.spend_limit_paise || 0)}: Manual Checkout Link</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* PAYMENT EXPERIENCE CARD: Direct Razorpay Modal Checkout */}
+        {/* 4. DEFAULT DELIVERY ADDRESS */}
         <Card className="border border-border/80 bg-card shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <ShieldCheck className="size-5" />
+                  <MapPin className="size-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-base font-bold">
-                    Direct Payment via Razorpay Gateway
-                  </CardTitle>
+                  <CardTitle className="text-base font-bold">Default Delivery Address</CardTitle>
                   <CardDescription className="text-xs">
-                    Choose any payment method on-demand during checkout
+                    Autonomous orders are automatically dispatched to this location without asking on every turn.
                   </CardDescription>
                 </div>
               </div>
-              <Badge variant="outline" className="text-[10px] font-mono">
-                PCI-DSS Level 1
-              </Badge>
+
+              {isSignedIn && !isEditingAddress && wallet?.default_address?.line1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setIsEditingAddress(true)}
+                >
+                  Edit Address
+                </Button>
+              )}
             </div>
           </CardHeader>
 
-          <CardContent className="pt-0 flex flex-col gap-4 text-xs">
+          <CardContent className="pt-0 text-xs">
+            {!isEditingAddress && wallet?.default_address?.line1 ? (
+              <div className="p-3 rounded-xl border border-border/70 bg-card flex flex-col gap-1">
+                <div className="flex items-center justify-between font-semibold text-foreground">
+                  <span>{wallet.default_address.full_name || "Recipient"}</span>
+                  <span className="text-muted-foreground text-[11px] font-normal">
+                    {wallet.default_address.phone}
+                  </span>
+                </div>
+                <p className="text-muted-foreground">
+                  {wallet.default_address.line1}, {wallet.default_address.city} - {wallet.default_address.pincode},{" "}
+                  {wallet.default_address.state || "Karnataka"}, India
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveAddress} className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-[11px]">Full Name</Label>
+                    <Input
+                      required
+                      placeholder="Recipient Full Name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">Phone Number</Label>
+                    <Input
+                      required
+                      placeholder="10-digit mobile number"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-[11px]">Address Line (House / Flat, Street)</Label>
+                  <Input
+                    required
+                    placeholder="e.g. Flat 402, Greenfield Heights, 12th Main"
+                    value={line1}
+                    onChange={(e) => setLine1(e.target.value)}
+                    className="h-8 text-xs mt-1"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-[11px]">City</Label>
+                    <Input
+                      required
+                      placeholder="e.g. Bangalore"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">State</Label>
+                    <Input
+                      required
+                      placeholder="e.g. Karnataka"
+                      value={state}
+                      onChange={(e) => setState(e.target.value)}
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">PIN Code</Label>
+                    <Input
+                      required
+                      placeholder="e.g. 560038"
+                      value={pincode}
+                      onChange={(e) => setPincode(e.target.value)}
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  {wallet?.default_address?.line1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => setIsEditingAddress(false)}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <Button type="submit" size="sm" className="h-8 text-xs font-semibold" disabled={!isSignedIn}>
+                    Save Default Address
+                  </Button>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 5. MCP AGENT AUTHORIZATION PASSKEY */}
+        <Card className="border border-border/80 bg-card shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Key className="size-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold">Connected MCP Agent Passkey</CardTitle>
+                  <CardDescription className="text-xs">
+                    Authorize ChatGPT, Claude Desktop, or Gemini to act on your behalf using your personal delegation key.
+                  </CardDescription>
+                </div>
+              </div>
+
+              {isSignedIn && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1.5"
+                  onClick={regenerateToken}
+                >
+                  <RefreshCw className="size-3" />
+                  Regenerate Key
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-0 flex flex-col gap-3 text-xs">
             <p className="text-muted-foreground leading-relaxed">
-              Razent does not store your credit/debit card numbers or bank credentials. Whenever an order is initiated, the official Razorpay payment popup opens where you can choose your preferred method and enter details manually.
+              When using ChatGPT, Claude, or Google Gemini via MCP, configure your Agent Passkey so the AI model can verify your wallet balance and place orders autonomously without manual steps.
             </p>
 
-            {/* Methods Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl border border-border/70 bg-card flex items-start gap-2.5">
-                <Smartphone className="size-4 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-foreground text-xs block">UPI Apps & VPA</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    Google Pay, PhonePe, Paytm, BHIM, or enter any personal UPI ID manually.
-                  </span>
-                </div>
+            <div className="p-3 rounded-xl border border-border/80 bg-muted/30 flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block mb-1">
+                  Your Personal Agent Passkey
+                </span>
+                <code className="text-xs font-mono font-bold text-primary truncate block select-all">
+                  {wallet?.agent_auth_token || "rz_agt_live_..."}
+                </code>
               </div>
 
-              <div className="p-3 rounded-xl border border-border/70 bg-card flex items-start gap-2.5">
-                <CreditCard className="size-4 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-foreground text-xs block">Credit & Debit Cards</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    Visa, Mastercard, RuPay with zero server credential retention.
-                  </span>
-                </div>
-              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-8 text-xs gap-1.5 shrink-0"
+                disabled={!isSignedIn || !wallet?.agent_auth_token}
+                onClick={handleCopyToken}
+              >
+                {copiedToken ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                <span>{copiedToken ? "Copied" : "Copy Passkey"}</span>
+              </Button>
+            </div>
 
-              <div className="p-3 rounded-xl border border-border/70 bg-card flex items-start gap-2.5">
-                <Building2 className="size-4 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-foreground text-xs block">NetBanking & Wallets</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    Direct netbanking across 50+ banks, plus Mobikwik and Paytm wallets.
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl border border-border/70 bg-card flex items-start gap-2.5">
-                <Banknote className="size-4 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-foreground text-xs block">Cash on Delivery</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    Optional doorstep settlement via cash or delivery partner UPI QR.
-                  </span>
-                </div>
-              </div>
+            {/* MCP Config Example */}
+            <div className="rounded-xl border border-border/70 bg-zinc-950 p-3 text-zinc-300 font-mono text-[11px] overflow-x-auto">
+              <p className="text-[10px] text-zinc-500 uppercase font-sans font-bold tracking-wider mb-1">
+                MCP Configuration Snippet
+              </p>
+              <pre className="text-[11px] leading-relaxed">
+{`{
+  "mcpServers": {
+    "razent": {
+      "command": "node",
+      "args": ["scripts/mcp-server.mjs"],
+      "env": {
+        "RAZENT_CUSTOMER_TOKEN": "${wallet?.agent_auth_token || "YOUR_AGENT_PASSKEY"}"
+      }
+    }
+  }
+}`}
+              </pre>
             </div>
           </CardContent>
         </Card>
 
-        {/* COMPLIANCE & SAFETY CARD */}
+        {/* 6. NPCI REGULATORY COMPLIANCE BANNER */}
         <Card className="border border-border/80 bg-card shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Shield className="size-4 text-primary" />
               <CardTitle className="text-sm font-semibold">
-                Regulatory Guardrails & Compliance
+                NPCI & RBI Autonomous Commerce Guardrails
               </CardTitle>
             </div>
             <CardDescription className="text-xs">
-              Operating under strict Reserve Bank of India (RBI) and NPCI frameworks for autonomous agent commerce.
+              Compliant with the National Payments Corporation of India (NPCI) circular for automated e-mandates.
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="pt-0 flex flex-col gap-2.5 text-xs">
-            <div className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border/70 bg-muted/20">
-              <ShieldCheck className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
-              <div>
-                <p className="font-semibold text-foreground">NPCI AutoPay Ceiling (₹15,000)</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Transactions exceeding ₹15,000 strictly require step-up Additional Factor of Authentication (AFA) via OTP.
-                </p>
-              </div>
+          <CardContent className="pt-0 flex flex-col gap-2 text-xs text-muted-foreground">
+            <div className="flex items-start gap-2">
+              <Check className="size-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+              <span>
+                <strong>₹15,000 Transaction Ceiling</strong>: Automated purchases strictly cannot exceed ₹15,000 without 2FA step-up.
+              </span>
             </div>
-
-            <div className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border/70 bg-muted/20">
-              <ShieldCheck className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
-              <div>
-                <p className="font-semibold text-foreground">Card-on-File Tokenization (COFT)</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Raw card numbers are never exposed to language model prompts. All transactions leverage standard certified tokenization.
-                </p>
-              </div>
+            <div className="flex items-start gap-2">
+              <Check className="size-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+              <span>
+                <strong>Instant Revocation</strong>: Toggling AI Agent Purchasing OFF instantly disables all autonomous ordering.
+              </span>
             </div>
-
-            <div className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border/70 bg-muted/20">
-              <ShieldCheck className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
-              <div>
-                <p className="font-semibold text-foreground">Human-in-the-Loop Override</p>
-                <p className="text-[11px] text-muted-foreground">
-                  You maintain absolute control over the Agent Purchase switch. Toggling it off immediately disallows all automated transactions.
-                </p>
-              </div>
+            <div className="flex items-start gap-2">
+              <Check className="size-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+              <span>
+                <strong>Full Auditability</strong>: Every agent authorization and wallet debit is cryptographically recorded in the transaction audit trail.
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -469,7 +740,7 @@ export default function WalletPage() {
             onClick={() => navigate("/assistant")}
           >
             <Bot className="size-4" />
-            <span>Open AI Assistant</span>
+            <span>Open In-App Shopping Assistant</span>
           </Button>
           <Button
             variant="outline"

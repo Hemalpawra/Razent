@@ -263,12 +263,12 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
         </SidebarFooter>
       </Sidebar>
 
-      <SidebarInset>
+      <SidebarInset className="min-w-0 overflow-x-hidden">
         {/* Top bar — single clean bar per screen */}
-        <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-3 sm:px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="h-6" />
-          <span className="text-sm font-medium text-foreground capitalize">
+          <span className="text-sm font-medium text-foreground capitalize truncate">
             {String(activeScreen).replace(/_/g, " ")}
           </span>
           {isViewOnly && (
@@ -281,14 +281,14 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col p-3 md:p-4">
-          <div className="mx-auto w-full max-w-[1360px]">
+        <div className="flex flex-1 flex-col p-2.5 sm:p-4 md:p-6 w-full">
+          <div className="w-full max-w-[1680px] mx-auto">
             {children || <Outlet />}
           </div>
         </div>
 
         <footer className="border-t bg-background/40 py-3 text-center text-xs text-muted-foreground">
-          <div className="mx-auto flex max-w-[1360px] flex-col items-center justify-between gap-2 px-4 md:flex-row">
+          <div className="mx-auto flex max-w-[1680px] flex-col items-center justify-between gap-2 px-3 sm:px-4 md:px-6 md:flex-row">
             <p>
               © 2026 Razent Merchant Gateway · Live Supabase Data
             </p>

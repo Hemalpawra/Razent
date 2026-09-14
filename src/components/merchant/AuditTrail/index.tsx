@@ -10,6 +10,11 @@ import {
   ChevronLeftIcon,
   ChevronDownIcon as ChevronDownSmallIcon,
   EyeIcon,
+  Activity,
+  FileText,
+  CheckCircle2,
+  AlertTriangle,
+  AlertOctagon,
 } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
@@ -22,6 +27,8 @@ import { cn } from "@/lib/utils"
 import { useMerchant } from "@/state/useMerchant"
 import { toast } from "sonner"
 import { calculateAuditTrailMetrics } from "@/lib/utils/metrics"
+import { KpiCard } from "@/components/merchant/shared/KpiCard"
+import { SortableTableHead } from "@/components/merchant/shared/SortableTableHead"
 
 import {
   Select,
@@ -76,6 +83,18 @@ export default function AuditTrailScreen() {
   })
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [sortKey, setSortKey] = useState<string>("date")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+    } else {
+      setSortKey(key)
+      setSortDirection(key === "date" || key === "event_count" ? "desc" : "asc")
+    }
+    setPage(1)
+  }
   const [loading, setLoading] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -209,8 +228,28 @@ export default function AuditTrailScreen() {
       }
 
       return true
+    }).sort((a, b) => {
+      let comparison = 0
+      if (sortKey === "session_id") {
+        comparison = a.session_id.localeCompare(b.session_id)
+      } else if (sortKey === "order_id") {
+        comparison = (a.order_id || "").localeCompare(b.order_id || "")
+      } else if (sortKey === "customer") {
+        comparison = (a.customer || "").localeCompare(b.customer || "")
+      } else if (sortKey === "event_count") {
+        comparison = (a.event_count || 0) - (b.event_count || 0)
+      } else if (sortKey === "last_event") {
+        comparison = (a.last_event || "").localeCompare(b.last_event || "")
+      } else if (sortKey === "status") {
+        comparison = (a.status || "").localeCompare(b.status || "")
+      } else if (sortKey === "severity") {
+        comparison = (a.severity || "").localeCompare(b.severity || "")
+      } else if (sortKey === "date") {
+        comparison = new Date(a.created_at || "").getTime() - new Date(b.created_at || "").getTime()
+      }
+      return sortDirection === "asc" ? comparison : -comparison
     })
-  }, [auditData, q, eventFilter, resultFilter, actorFilter, dateFilter])
+  }, [auditData, q, eventFilter, resultFilter, actorFilter, dateFilter, sortKey, sortDirection])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
   const safePage = Math.min(page, totalPages)
@@ -280,9 +319,9 @@ export default function AuditTrailScreen() {
             <Skeleton className="h-9 w-24 rounded-lg" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
+            <Skeleton key={i} className={cn("h-20 rounded-xl", i === 4 && "col-span-2 sm:col-span-1")} />
           ))}
         </div>
         <Card className="rounded-xl bg-card p-4 space-y-4">
@@ -316,56 +355,64 @@ export default function AuditTrailScreen() {
       </div>
 
       {/* KPI 5 cards */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <Kpi
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <KpiCard
+          icon={<Activity className="size-4" />}
           label="Total Sessions"
           value={String(totalSessions)}
           sub="All sessions"
         />
-        <Kpi
+        <KpiCard
+          icon={<FileText className="size-4" />}
           label="Total Events"
           value={String(totalEvents)}
           sub="Logged events"
         />
-        <Kpi
+        <KpiCard
+          icon={<CheckCircle2 className="size-4 text-emerald-500" />}
           label="Success Events"
           value={String(success)}
           sub="Completed successfully"
           tone="success"
         />
-        <Kpi
+        <KpiCard
+          icon={<AlertTriangle className="size-4 text-rose-500" />}
           label="Failed Events"
           value={String(failed)}
           sub="Need attention"
           tone="destructive"
         />
-        <Kpi
+        <KpiCard
+          icon={<AlertOctagon className="size-4 text-rose-500" />}
           label="Critical Alerts"
           value={String(critical)}
           sub="Immediate review"
           tone="destructive"
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 
       {/* Filters toolbar */}
-      <Card className="rounded-xl bg-card overflow-hidden p-0 shadow-sm">
-        <div className="flex flex-col gap-3 p-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-1 flex-wrap items-center gap-2">
-            <div className="relative w-full max-w-[320px]">
+      <Card className="rounded-xl bg-card overflow-hidden p-0 shadow-sm border">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b">
+          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
+            <div className="relative w-full sm:w-auto sm:min-w-[220px] lg:min-w-[280px] flex-1">
               <SearchIcon className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search session, order, event, product…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="h-9 rounded-lg bg-card pl-9 text-sm"
+                className="h-9 rounded-lg bg-card pl-9 text-xs"
               />
             </div>
             <Select value={eventFilter} onValueChange={(v) => setEventFilter(v ?? "all")}>
-              <SelectTrigger className="h-9 w-[160px] rounded-lg bg-card text-xs">
-                <SelectValue placeholder="Event type" />
+              <SelectTrigger className="h-9 w-full sm:w-[150px] rounded-lg bg-card text-xs flex-1 sm:flex-none">
+                <SelectValue placeholder="Event type">
+                  {eventFilter === "all" ? "All Events" : eventFilter}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All events</SelectItem>
+                <SelectItem value="all">All Events</SelectItem>
                 <SelectItem value="Razorpay Order Created">
                   Order Created
                 </SelectItem>
@@ -378,11 +425,13 @@ export default function AuditTrailScreen() {
               </SelectContent>
             </Select>
             <Select value={resultFilter} onValueChange={(v) => setResultFilter(v ?? "all")}>
-              <SelectTrigger className="h-9 w-[140px] rounded-lg bg-card text-xs">
-                <SelectValue placeholder="Result" />
+              <SelectTrigger className="h-9 w-full sm:w-[130px] rounded-lg bg-card text-xs flex-1 sm:flex-none">
+                <SelectValue placeholder="Result">
+                  {resultFilter === "all" ? "All Results" : resultFilter}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All results</SelectItem>
+                <SelectItem value="all">All Results</SelectItem>
                 <SelectItem value="Success">Success</SelectItem>
                 <SelectItem value="Warning">Warning</SelectItem>
                 <SelectItem value="Failed">Failed</SelectItem>
@@ -390,11 +439,19 @@ export default function AuditTrailScreen() {
               </SelectContent>
             </Select>
             <Select value={actorFilter} onValueChange={(v) => setActorFilter(v ?? "all")}>
-              <SelectTrigger className="h-9 w-[150px] rounded-lg bg-card text-xs">
-                <SelectValue placeholder="Actor" />
+              <SelectTrigger className="h-9 w-full sm:w-[130px] rounded-lg bg-card text-xs flex-1 sm:flex-none">
+                <SelectValue placeholder="Actor">
+                  {actorFilter === "all"
+                    ? "All Actors"
+                    : actorFilter === "customer"
+                    ? "Customer"
+                    : actorFilter === "AI Assistant"
+                    ? "AI Assistant"
+                    : "System"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All actors</SelectItem>
+                <SelectItem value="all">All Actors</SelectItem>
                 <SelectItem value="customer">Customer</SelectItem>
                 <SelectItem value="AI Assistant">AI Assistant</SelectItem>
                 <SelectItem value="system">System</SelectItem>
@@ -402,50 +459,87 @@ export default function AuditTrailScreen() {
             </Select>
             <DateRangePicker value={dateFilter} onChange={setDateFilter} />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             <Button
               variant="outline"
               size="icon"
-              className="h-9 w-9 bg-card shrink-0"
+              className="size-9 bg-card shrink-0"
               aria-label="Refresh"
               disabled={isRefreshing}
               onClick={() => loadAuditData(true)}
+              title="Refresh audit data"
             >
               <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
             </Button>
             {canExport && (
               <Button
                 variant="outline"
-                size="sm"
-                className="h-9 rounded-lg border-primary text-primary hover:bg-primary/5 gap-1.5"
+                className="h-9 rounded-lg border-primary text-primary hover:bg-primary/5 gap-1.5 px-2.5 sm:px-3 text-xs"
                 onClick={handleExportLogs}
               >
-                <DownloadIcon className="size-3.5" /> Export logs
+                <DownloadIcon className="size-3.5" />
+                <span className="hidden sm:inline">Export Logs</span>
               </Button>
             )}
           </div>
         </div>
 
         {/* Table by session — grouped */}
-        <Table>
+        <div className="overflow-x-auto">
+          <Table className="min-w-[850px]">
           <TableHeader className="bg-muted/40">
             <TableRow className="hover:bg-muted/40">
               <TableHead className="w-8 px-2" />
-              <TableHead className="text-xs font-semibold">
-                Session ID
-              </TableHead>
-              <TableHead className="text-xs font-semibold">Order ID</TableHead>
-              <TableHead className="text-xs font-semibold">
-                Customer / AI / Merchant
-              </TableHead>
-              <TableHead className="text-center text-xs font-semibold">
-                Event Count
-              </TableHead>
-              <TableHead className="text-xs font-semibold">
-                Last Event
-              </TableHead>
-              <TableHead className="text-xs font-semibold">Status</TableHead>
-              <TableHead className="text-xs font-semibold">Severity</TableHead>
+              <SortableTableHead
+                label="Session ID"
+                sortKey="session_id"
+                currentSortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableTableHead
+                label="Order ID"
+                sortKey="order_id"
+                currentSortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableTableHead
+                label="Customer / Actor"
+                sortKey="customer"
+                currentSortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableTableHead
+                label="Event Count"
+                sortKey="event_count"
+                currentSortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="center"
+              />
+              <SortableTableHead
+                label="Last Event"
+                sortKey="last_event"
+                currentSortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableTableHead
+                label="Status"
+                sortKey="status"
+                currentSortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableTableHead
+                label="Severity"
+                sortKey="severity"
+                currentSortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
               <TableHead className="text-right text-xs font-semibold">
                 Actions
               </TableHead>
@@ -580,6 +674,7 @@ export default function AuditTrailScreen() {
             ) : null}
           </TableBody>
         </Table>
+        </div>
 
         {/* Pagination Footer */}
         <div className="flex flex-col gap-3 border-t bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -649,39 +744,5 @@ export default function AuditTrailScreen() {
         event={selectedEvent}
       />
     </div>
-  )
-}
-
-function Kpi({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string
-  value: string
-  sub: string
-  tone?: "success" | "destructive"
-}) {
-  return (
-    <Card className="rounded-xl bg-card p-5 shadow-sm">
-      <CardContent className="p-0">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
-        </div>
-        <div
-          className={`mt-1 text-2xl font-semibold tabular-nums ${
-            tone === "success"
-              ? "text-emerald-600 dark:text-emerald-400"
-              : tone === "destructive"
-                ? "text-destructive"
-                : "text-foreground"
-          }`}
-        >
-          {value}
-        </div>
-        <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div>
-      </CardContent>
-    </Card>
   )
 }

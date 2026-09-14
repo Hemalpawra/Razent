@@ -7,7 +7,8 @@ import {
 } from "@/lib/api/client"
 import { formatPrice, type Product } from "@/lib/types/product"
 import { useSettings } from "@/state/useSettings"
-import { getAgentPurchaseEnabled } from "@/state/useAgentPurchase"
+import { getAgentPurchaseEnabled, getAgentSpendLimitPaise } from "@/state/useAgentPurchase"
+import { NPCI_TRANSACTION_LIMIT_PAISE } from "@/lib/types/wallet"
 import {
   SearchCatalogInput,
   SearchCatalogOutput,
@@ -264,6 +265,35 @@ export async function executeCreateOrder(
       status: "blocked_permission",
       errorMessage:
         "Agent purchases are currently turned OFF in your Wallet settings. Please turn on Agent Purchases in your Wallet to allow the assistant to place orders.",
+    }
+  }
+
+  // Enforce NPCI regulatory mandate ceiling (₹15,000 max without OTP)
+  if (totalPaise > NPCI_TRANSACTION_LIMIT_PAISE) {
+    assistantStateMachine.transition("blocked", {
+      reason: "Order exceeds NPCI ₹15,000 regulatory mandate ceiling",
+    })
+    return {
+      success: false,
+      totalPaise,
+      phoneVerified: input.shippingAddress.phoneVerified,
+      status: "blocked_npci_limit",
+      errorMessage: `Order total (${formatPrice(totalPaise)}) exceeds the NPCI autonomous transaction limit of ₹15,000. Regulatory guidelines require two-factor authentication for transactions above ₹15,000. Please complete your purchase through manual checkout: https://razent.vercel.app/checkout`,
+    }
+  }
+
+  // Enforce Customer-configured AI spend limit (Balise UX Writing)
+  const spendLimit = getAgentSpendLimitPaise()
+  if (totalPaise > spendLimit) {
+    assistantStateMachine.transition("blocked", {
+      reason: "Order exceeds customer AI spend limit",
+    })
+    return {
+      success: false,
+      totalPaise,
+      phoneVerified: input.shippingAddress.phoneVerified,
+      status: "blocked_limit_exceeded",
+      errorMessage: `Your agent purchase limit is exceeded. Order total is ${formatPrice(totalPaise)}, which is higher than your current AI spend limit of ${formatPrice(spendLimit)}.\n\nTo place this order, you can:\n1. Update your agent spend limit: https://razent.vercel.app/wallet\n2. Add money to your wallet: https://razent.vercel.app/wallet\n3. Pay at checkout manually: https://razent.vercel.app/checkout`,
     }
   }
 

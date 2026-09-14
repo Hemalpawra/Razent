@@ -34,6 +34,7 @@ import {
 import { DateRangePicker, type DateRangeValue } from "@/components/shared/DateRangePicker"
 import { matchesDateFilter } from "@/lib/utils/dateFilter"
 import { KpiCard } from "@/components/merchant/shared/KpiCard"
+import { SortableTableHead } from "@/components/merchant/shared/SortableTableHead"
 import { cn } from "@/lib/utils"
 import {
   Table,
@@ -101,6 +102,18 @@ export default function AIAgentScreen({
   })
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [sortKey, setSortKey] = useState<string>("date")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+    } else {
+      setSortKey(key)
+      setSortDirection(key === "date" || key === "order" ? "desc" : "asc")
+    }
+    setPage(1)
+  }
 
   const loadData = async (isManual = false) => {
     if (isManual) setIsRefreshing(true)
@@ -137,27 +150,49 @@ export default function AIAgentScreen({
 
   const filteredConversations = useMemo(() => {
     const term = q.trim().toLowerCase()
-    return convData.filter((c) => {
-      const active = isConversationActive(c)
-      if (statusFilter === "active" && !active) return false
-      if (statusFilter === "inactive" && active) return false
+    return convData
+      .filter((c) => {
+        const active = isConversationActive(c)
+        if (statusFilter === "active" && !active) return false
+        if (statusFilter === "inactive" && active) return false
 
-      const agentSource = getConversationAgentSource(c)
-      if (assistantFilter !== "all" && agentSource.type !== assistantFilter) return false
+        const agentSource = getConversationAgentSource(c)
+        if (assistantFilter !== "all" && agentSource.type !== assistantFilter) return false
 
-      if (!matchesDateFilter(c.created_at, dateFilter)) return false
+        if (!matchesDateFilter(c.created_at, dateFilter)) return false
 
-      if (term) {
-        const nameMatch = (c.customer_name || "").toLowerCase().includes(term)
-        const msgMatch = (c.last_message || "").toLowerCase().includes(term)
-        const idMatch = c.id.toLowerCase().includes(term)
-        const agentMatch = agentSource.name.toLowerCase().includes(term)
-        if (!nameMatch && !msgMatch && !idMatch && !agentMatch) return false
-      }
+        if (term) {
+          const nameMatch = (c.customer_name || "").toLowerCase().includes(term)
+          const msgMatch = (c.last_message || "").toLowerCase().includes(term)
+          const idMatch = c.id.toLowerCase().includes(term)
+          const agentMatch = agentSource.name.toLowerCase().includes(term)
+          if (!nameMatch && !msgMatch && !idMatch && !agentMatch) return false
+        }
 
-      return true
-    })
-  }, [convData, q, statusFilter, assistantFilter, dateFilter])
+        return true
+      })
+      .sort((a, b) => {
+        let comparison = 0
+        if (sortKey === "customer") {
+          comparison = (a.customer_name || "").localeCompare(b.customer_name || "")
+        } else if (sortKey === "source") {
+          const srcA = getConversationAgentSource(a).name
+          const srcB = getConversationAgentSource(b).name
+          comparison = srcA.localeCompare(srcB)
+        } else if (sortKey === "status") {
+          const actA = isConversationActive(a) ? 1 : 0
+          const actB = isConversationActive(b) ? 1 : 0
+          comparison = actB - actA
+        } else if (sortKey === "order") {
+          comparison = (a.amount_paise || 0) - (b.amount_paise || 0)
+        } else if (sortKey === "date") {
+          const timeA = new Date(a.updated_at || a.created_at).getTime()
+          const timeB = new Date(b.updated_at || b.created_at).getTime()
+          comparison = timeA - timeB
+        }
+        return sortDirection === "asc" ? comparison : -comparison
+      })
+  }, [convData, q, statusFilter, assistantFilter, dateFilter, sortKey, sortDirection])
 
   const dateFilteredOrders = useMemo(() => {
     return orders.filter((o) => matchesDateFilter(o.created_at, dateFilter))
@@ -251,9 +286,9 @@ export default function AIAgentScreen({
             <Skeleton className="h-9 w-24 rounded-lg" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
+            <Skeleton key={i} className={cn("h-20 rounded-xl", i === 4 && "col-span-2 sm:col-span-1")} />
           ))}
         </div>
         <Skeleton className="h-80 rounded-xl" />
@@ -286,7 +321,7 @@ export default function AIAgentScreen({
       </div>
 
       {/* KPI 5 cards */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard
           icon={<Users className="size-4" />}
           label="Customers Helped"
@@ -317,6 +352,7 @@ export default function AIAgentScreen({
           value={formatPrice(revenueToday)}
           sub="From paid AI orders"
           valueIsAmount
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 
@@ -325,13 +361,13 @@ export default function AIAgentScreen({
         {/* Single clean toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-card p-3">
           <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
-            <div className="relative w-full max-w-[280px] min-w-[180px]">
+            <div className="relative w-full sm:w-auto sm:min-w-[220px] lg:min-w-[280px] flex-1">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search customer, message, ID..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="h-9 rounded-lg bg-card pl-9 text-sm"
+                className="h-9 rounded-lg bg-card pl-9 text-xs"
               />
             </div>
             <Select
@@ -340,8 +376,14 @@ export default function AIAgentScreen({
                 if (v) setStatusFilter(v as "all" | "active" | "inactive")
               }}
             >
-              <SelectTrigger className="h-9 w-[130px] rounded-lg text-xs bg-card">
-                <SelectValue placeholder="Status" />
+              <SelectTrigger className="h-9 w-full sm:w-[130px] rounded-lg text-xs bg-card flex-1 sm:flex-none">
+                <SelectValue placeholder="Status">
+                  {statusFilter === "all"
+                    ? "All Statuses"
+                    : statusFilter === "active"
+                    ? "Active"
+                    : "Inactive"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
@@ -355,8 +397,20 @@ export default function AIAgentScreen({
                 if (v) setAssistantFilter(v)
               }}
             >
-              <SelectTrigger className="h-9 w-[135px] rounded-lg text-xs bg-card">
-                <SelectValue placeholder="AI Source" />
+              <SelectTrigger className="h-9 w-full sm:w-[135px] rounded-lg text-xs bg-card flex-1 sm:flex-none">
+                <SelectValue placeholder="AI Source">
+                  {assistantFilter === "all"
+                    ? "All AI Sources"
+                    : assistantFilter === "claude"
+                    ? "Claude"
+                    : assistantFilter === "gemini"
+                    ? "Google Gemini"
+                    : assistantFilter === "chatgpt"
+                    ? "ChatGPT"
+                    : assistantFilter === "store_agent"
+                    ? "Store Agent"
+                    : "External Agent"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All AI Sources</SelectItem>
@@ -375,43 +429,67 @@ export default function AIAgentScreen({
               aria-label="Refresh"
               disabled={isRefreshing}
               onClick={() => loadData(true)}
+              title="Refresh AI data"
             >
               <RotateCw className={cn("size-4", isRefreshing && "animate-spin text-primary")} />
             </Button>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             <Button
               variant="outline"
-              className="h-9 rounded-md border-primary text-primary hover:bg-primary/5 hover:text-primary gap-1.5"
+              className="h-9 rounded-md border-primary text-primary hover:bg-primary/5 hover:text-primary gap-1.5 px-2.5 sm:px-3 text-xs"
               onClick={handleExportConversations}
               disabled={!canExport || filteredConversations.length === 0}
             >
               <Download className="size-4" />
-              Export
+              <span className="hidden sm:inline">Export</span>
             </Button>
           </div>
         </div>
 
         {/* Live Conversation Table */}
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[800px]">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-10 px-4 text-xs font-semibold text-foreground">
-                  Customer
-                </TableHead>
-                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
-                  AI Source
-                </TableHead>
-                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground">
-                  Status
-                </TableHead>
-                <TableHead className="h-10 px-3 text-right text-xs font-semibold text-foreground">
-                  Order Placed
-                </TableHead>
-                <TableHead className="h-10 px-3 text-xs font-semibold text-foreground hidden sm:table-cell">
-                  Last Updated
-                </TableHead>
+                <SortableTableHead
+                  label="Customer"
+                  sortKey="customer"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                  className="px-4"
+                />
+                <SortableTableHead
+                  label="AI Source"
+                  sortKey="source"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Status"
+                  sortKey="status"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Order Placed"
+                  sortKey="order"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                  align="right"
+                />
+                <SortableTableHead
+                  label="Last Updated"
+                  sortKey="date"
+                  currentSortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                  className="hidden sm:table-cell"
+                />
                 <TableHead className="h-10 px-4 text-right text-xs font-semibold text-foreground">
                   Action
                 </TableHead>

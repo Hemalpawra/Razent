@@ -22,6 +22,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -378,13 +379,9 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
             <Skeleton className="h-9 w-24 rounded-xl" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i} className="rounded-xl bg-card p-5">
-              <Skeleton className="h-11 w-11 rounded-xl" />
-              <Skeleton className="mt-3 h-4 w-24" />
-              <Skeleton className="mt-2 h-6 w-20" />
-            </Card>
+            <Skeleton key={i} className={cn("h-20 rounded-xl", i === 4 && "col-span-2 sm:col-span-1")} />
           ))}
         </div>
         <div className="grid gap-3 lg:grid-cols-3">
@@ -427,7 +424,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="outline" className="h-9 rounded-xl bg-card" />}>
+            <DropdownMenuTrigger render={<Button variant="outline" className="h-9 rounded-xl bg-card text-xs" />}>
               {dateRange === "7d"
                 ? "Last 7 days"
                 : dateRange === "14d"
@@ -447,17 +444,17 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
 
           <Button
             variant="outline"
-            className="h-9 rounded-xl bg-card"
+            className="h-9 rounded-xl bg-card gap-1.5 px-2.5 sm:px-3 text-xs"
             onClick={handleExportCsv}
           >
-            <Download className="mr-1.5 size-4" />
-            Export
+            <Download className="size-4" />
+            <span className="hidden sm:inline">Export</span>
           </Button>
         </div>
       </div>
 
       {/* KPI strip — 5 cards with 100% real DB metrics */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard
           icon={<IndianRupee className="size-4" />}
           label="Revenue Generated"
@@ -487,6 +484,7 @@ export default function AnalyticsScreen({ loading = false }: AnalyticsProps) {
           label="Avg. Order Value"
           value={formatPrice(analyticsMetrics.aovPaise)}
           delta={paidOrders.length > 0 ? "Revenue / paid orders" : "No orders yet"}
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 
