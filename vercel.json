@@ -82,6 +82,10 @@
       "destination": "/api/mcp"
     },
     {
+      "source": "/invoice",
+      "destination": "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

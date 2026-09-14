@@ -1884,7 +1884,7 @@ export async function executeAutonomousWalletPurchase(
 
   const orderId = `RAZ-AGT-${Date.now().toString(36).toUpperCase()}`
   const trackingUrl = `${recoveryBase}/?track=${orderId}`
-  const invoiceUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${orderId}&download=true`
+  const invoiceUrl = `${recoveryBase}/invoice?order_id=${orderId}&download=true`
 
   const newOrder: Order = {
     id: orderId,

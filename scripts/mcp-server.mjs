@@ -1293,7 +1293,7 @@ async function executeAutonomousPurchase(args) {
     .eq("id", wallet.id)
 
   const orderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
-  const invoiceUrl = `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/a2a/invoice?order_id=${orderId}&download=true`
+  const invoiceUrl = `${recoveryBase}/invoice?order_id=${orderId}&download=true`
   const trackingUrl = `${recoveryBase}/?track=${orderId}`
 
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wallet.customer_id || "")
