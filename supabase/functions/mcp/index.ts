@@ -66,7 +66,7 @@ const TOOLS = [
         category: {
           type: "string",
           description:
-            "Aisle category: 'Grocery & Staples', 'Beverages', 'Electronics', 'Beauty & Personal Care', 'Home Care', 'Home & Kitchen', 'Decor', 'Kids', 'Kitchen Appliances', 'Office & Stationery'",
+            "Optional store department or category filter (e.g. 'Laptops', 'Mobiles', 'Electronics', 'Grocery & Staples', 'Beverages', 'Clothing', 'Shoes', 'Beauty & Personal Care', 'Home Care', 'Decor', 'Kids', 'Kitchen Appliances', 'Office & Stationery'). If unsure or searching across the store, omit this field.",
         },
         max_price_paise: { type: "number", description: "Maximum price in paise (e.g. 25000 = ₹250)" },
         in_stock_only: { type: "boolean", description: "Only return items currently in stock (default: true)" },
@@ -253,6 +253,39 @@ async function logMcpAudit({
   }
 }
 
+const CATEGORY_MAP: Record<string, string[]> = {
+  electronics: ["Electronics", "Laptops", "Mobiles", "Kitchen Appliances"],
+  electronic: ["Electronics", "Laptops", "Mobiles", "Kitchen Appliances"],
+  tech: ["Electronics", "Laptops", "Mobiles"],
+  computing: ["Laptops", "Electronics"],
+  computers: ["Laptops", "Electronics"],
+  computer: ["Laptops", "Electronics"],
+  laptops: ["Laptops"],
+  laptop: ["Laptops"],
+  mac: ["Laptops"],
+  macbook: ["Laptops"],
+  mobiles: ["Mobiles"],
+  mobile: ["Mobiles"],
+  phone: ["Mobiles"],
+  phones: ["Mobiles"],
+  smartphone: ["Mobiles"],
+  smartphones: ["Mobiles"],
+  clothing: ["Clothing"],
+  clothes: ["Clothing"],
+  apparel: ["Clothing"],
+  fashion: ["Clothing", "Shoes"],
+  shoes: ["Shoes"],
+  footwear: ["Shoes"],
+  groceries: ["Grocery & Staples"],
+  grocery: ["Grocery & Staples"],
+  "grocery & staples": ["Grocery & Staples"],
+  beverages: ["Beverages"],
+  drinks: ["Beverages"],
+  snacks: ["Snacks & Munchies", "Snacks & Drinks"],
+  "snacks & drinks": ["Snacks & Drinks", "Snacks & Munchies"],
+  "snacks & munchies": ["Snacks & Munchies", "Snacks & Drinks"],
+}
+
 function cleanSearchQuery(q: string): string {
   return q
     .replace(/(?:search\s+for|search\s+product|find\s+me|find|show\s+me|show|get\s+me|get|i\s+need|i\s+want|buy|order)\s+/gi, "")
@@ -270,30 +303,22 @@ async function executeSearchCatalog(args: any) {
   const rawQ = cleanQ.trim().toLowerCase()
 
   let dbQuery = supabase.from("products").select("*").eq("status", "active")
+  
+  // Intelligent category mapping
+  let mappedCategories: string[] | null = null
   if (category && category !== "All") {
-    dbQuery = dbQuery.eq("category", category)
+    const catKey = category.toLowerCase().trim()
+    mappedCategories = CATEGORY_MAP[catKey] || null
+    if (mappedCategories && mappedCategories.length > 0) {
+      if (mappedCategories.length === 1) {
+        dbQuery = dbQuery.ilike("category", `%${mappedCategories[0]}%`)
+      } else {
+        dbQuery = dbQuery.in("category", mappedCategories)
+      }
+    } else {
+      dbQuery = dbQuery.ilike("category", `%${category}%`)
+    }
   }
-
-  const isBroadCategorySearch = [
-    "dairy",
-    "dairy & bakery",
-    "beverage",
-    "beverages",
-    "drinks",
-    "drink",
-    "grocery",
-    "grocery & staples",
-    "electronics",
-    "beauty",
-    "beauty & personal care",
-    "home care",
-    "decor",
-    "kids",
-    "snacks",
-    "snacks & munchies",
-    "fruits",
-    "vegetables",
-  ].includes(rawQ)
 
   const terms = new Set<string>()
   if (rawQ) {
@@ -307,8 +332,18 @@ async function executeSearchCatalog(args: any) {
       if (t.endsWith("s") && t.length > 3) terms.add(t.slice(0, -1))
     })
 
-    // Targeted high-precision synonyms (never cross-pollinate unrelated grocery items)
-    if (rawQ.includes("milk")) {
+    // Targeted high-precision synonyms
+    if (rawQ.includes("mac") || rawQ.includes("macbook") || rawQ.includes("apple")) {
+      ;["mac", "macbook", "apple", "air", "pro", "laptop"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("laptop") || rawQ.includes("computer") || rawQ.includes("notebook")) {
+      ;["laptop", "notebook", "book", "macbook", "gaming"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("mobile") || rawQ.includes("phone") || rawQ.includes("smartphone")) {
+      ;["mobile", "phone", "smartphone", "galaxy", "redmi", "realme", "iphone"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("shoe") || rawQ.includes("sneaker") || rawQ.includes("footwear") || rawQ.includes("slides")) {
+      ;["shoe", "shoes", "sneaker", "sneakers", "slides", "loafers"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("cloth") || rawQ.includes("shirt") || rawQ.includes("tshirt") || rawQ.includes("jeans")) {
+      ;["clothing", "shirt", "tshirt", "jeans", "cotton", "wear"].forEach((w) => terms.add(w))
+    } else if (rawQ.includes("milk")) {
       ;["milk", "taaza", "toned milk"].forEach((w) => terms.add(w))
     } else if (rawQ.includes("curd") || rawQ.includes("dahi")) {
       ;["curd", "dahi", "yogurt"].forEach((w) => terms.add(w))
@@ -330,10 +365,7 @@ async function executeSearchCatalog(args: any) {
 
     const orClauses = []
     for (const t of Array.from(terms).slice(0, 8)) {
-      orClauses.push(`title.ilike.%${t}%`, `description.ilike.%${t}%`)
-      if (isBroadCategorySearch) {
-        orClauses.push(`category.ilike.%${t}%`)
-      }
+      orClauses.push(`title.ilike.%${t}%`, `description.ilike.%${t}%`, `category.ilike.%${t}%`)
     }
     dbQuery = dbQuery.or(orClauses.join(","))
   }
@@ -345,8 +377,30 @@ async function executeSearchCatalog(args: any) {
     dbQuery = dbQuery.gt("stock", 0)
   }
 
-  const { data, error } = await dbQuery.order("created_at", { ascending: false }).limit(40)
+  let { data, error } = await dbQuery.order("created_at", { ascending: false }).limit(40)
   if (error) throw error
+
+  // Fallback: If category filter was specified but yielded 0 results, retry query across entire catalog
+  if ((!data || data.length === 0) && category && category !== "All") {
+    let fallbackQuery = supabase.from("products").select("*").eq("status", "active")
+    if (rawQ) {
+      const orClauses = []
+      for (const t of Array.from(terms).slice(0, 8)) {
+        orClauses.push(`title.ilike.%${t}%`, `description.ilike.%${t}%`, `category.ilike.%${t}%`)
+      }
+      fallbackQuery = fallbackQuery.or(orClauses.join(","))
+    }
+    if (maxPricePaise) {
+      fallbackQuery = fallbackQuery.lte("price_paise", parseInt(maxPricePaise, 10))
+    }
+    if (inStockOnly) {
+      fallbackQuery = fallbackQuery.gt("stock", 0)
+    }
+    const fallbackRes = await fallbackQuery.order("created_at", { ascending: false }).limit(40)
+    if (fallbackRes.data && fallbackRes.data.length > 0) {
+      data = fallbackRes.data
+    }
+  }
 
   const isBeverageQuery = ["drink", "drinks", "beverage", "beverages", "juice", "cola", "soda"].some((t) => rawQ.includes(t))
 
@@ -356,6 +410,7 @@ async function executeSearchCatalog(args: any) {
     const titleLower = p.title.toLowerCase()
     const descLower = (p.description || "").toLowerCase()
     const brandLower = (p.brand || "").toLowerCase()
+    const categoryLower = (p.category || "").toLowerCase()
     const tagsLower = (p.tags || []).join(" ").toLowerCase()
 
     for (const term of terms) {
@@ -364,6 +419,7 @@ async function executeSearchCatalog(args: any) {
       else if (titleLower.includes(term)) score += 50
 
       if (brandLower.includes(term)) score += 40
+      if (categoryLower.includes(term)) score += 35
       if (regex.test(descLower)) score += 20
       else if (descLower.includes(term)) score += 10
       if (tagsLower.includes(term)) score += 15
@@ -378,12 +434,13 @@ async function executeSearchCatalog(args: any) {
     }
 
     const hasTitleMatch = Array.from(terms).some((t) => titleLower.includes(t))
-    return { product: p, score, hasTitleMatch }
+    const hasCategoryMatch = Array.from(terms).some((t) => categoryLower.includes(t))
+    return { product: p, score, hasDirectMatch: hasTitleMatch || hasCategoryMatch }
   }).filter((item: any) => item.score > 0)
 
-  // When direct title matches exist, prune items with 0 title match to avoid noise
-  const titleMatches = scored.filter((s: any) => s.hasTitleMatch)
-  const candidates = titleMatches.length > 0 ? titleMatches : scored
+  // When direct matches exist, prune noise
+  const directMatches = scored.filter((s: any) => s.hasDirectMatch)
+  const candidates = directMatches.length > 0 ? directMatches : scored
 
   candidates.sort((a: any, b: any) => {
     if (b.score !== a.score) return b.score - a.score

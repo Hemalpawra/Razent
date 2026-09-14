@@ -246,7 +246,7 @@ export async function listProducts(
 ): Promise<Product[]> {
   let q = supabase.from("products").select("*").order("created_at", {
     ascending: false,
-  })
+  }).limit(1000)
   if (args.q) q = q.or(`title.ilike.%${args.q}%,description.ilike.%${args.q}%,category.ilike.%${args.q}%`)
   if (args.category && args.category !== "All") q = q.eq("category", args.category)
   if (args.status) q = q.eq("status", args.status)

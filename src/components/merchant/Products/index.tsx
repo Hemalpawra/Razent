@@ -296,7 +296,20 @@ export default function ProductsScreen() {
           "Imported Product"
         const rawPrice = String(r.price || r.mrp || r.price_inr || r.unit_price || "100").replace(/[^0-9.]/g, "")
         const price = Math.round((parseFloat(rawPrice) || 100) * 100)
-        const id = r.id || (r.sku ? `prod_${r.sku.toLowerCase().replace(/[^a-z0-9]/g, "_")}` : `prod_${Date.now()}_${Math.floor(Math.random() * 10000)}`)
+        let id = (r.external_id || r.product_id || "").trim()
+        if (!id) {
+          if (r.sku && r.sku.trim()) {
+            id = `prod_${r.sku.trim().toLowerCase().replace(/[^a-z0-9]/g, "_")}`
+          } else if (r.id && !/^\d{1,4}$/.test(r.id.trim())) {
+            id = r.id.trim()
+          } else {
+            const titleSlug = title
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "_")
+              .slice(0, 24)
+            id = `prod_${titleSlug}_${r.id || Date.now().toString(36)}_${Math.floor(Math.random() * 1000)}`
+          }
+        }
         const rawStock = String(r.stock || r.quantity || r.qty || "50").replace(/[^0-9]/g, "")
         const stock = parseInt(rawStock || "50", 10)
         const category = (r.category || r.department || "Grocery").trim()
