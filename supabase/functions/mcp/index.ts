@@ -281,6 +281,70 @@ function resolveAssistant(args?: any, req?: Request, meta?: any): { id: string; 
   return { id: "claude", label: "Claude" }
 }
 
+// Session tracking for MCP clients to maintain conversational continuity in Audit Trails
+interface McpClientSession {
+  sessionId: string
+  lastActive: number
+  assistant: string
+  customer?: string
+}
+
+const clientSessions = new Map<string, McpClientSession>()
+let lastGlobalSession: McpClientSession | null = null
+
+function resolveMcpSessionId(args?: any, req?: Request, meta?: any): string {
+  // 1. Explicitly provided in tool arguments
+  if (args?.session_id || args?.sessionId || args?.conversation_id) {
+    return String(args.session_id || args.sessionId || args.conversation_id).trim()
+  }
+
+  // 2. Explicitly provided in MCP protocol _meta
+  if (meta?.sessionId || meta?.session_id || meta?.conversationId) {
+    return String(meta.sessionId || meta.session_id || meta.conversationId).trim()
+  }
+  if (meta?.["io.modelcontextprotocol/sessionId"]) {
+    return String(meta["io.modelcontextprotocol/sessionId"]).trim()
+  }
+
+  // 3. HTTP Header (mcp-session-id, x-session-id)
+  if (req) {
+    const hdr = req.headers.get("mcp-session-id") || req.headers.get("x-session-id") || req.headers.get("session-id")
+    if (hdr && hdr.trim()) {
+      return hdr.trim()
+    }
+  }
+
+  // 4. Derive key from client IP or assistant
+  const clientIp = req?.headers?.get?.("x-forwarded-for")?.split(",")?.[0]?.trim() || "default_client"
+  const assistantKey = (args?.assistant || meta?.assistant || "mcp_client").toLowerCase().trim()
+  const compositeKey = `${clientIp}__${assistantKey}`
+
+  const now = Date.now()
+  const SESSION_TTL_MS = 25 * 60 * 1000 // 25 minutes conversational window
+
+  const existing = clientSessions.get(compositeKey)
+  if (existing && now - existing.lastActive < SESSION_TTL_MS) {
+    existing.lastActive = now
+    return existing.sessionId
+  }
+
+  if (lastGlobalSession && now - lastGlobalSession.lastActive < SESSION_TTL_MS) {
+    lastGlobalSession.lastActive = now
+    return lastGlobalSession.sessionId
+  }
+
+  // 5. Initialize new conversational session
+  const newSessionId = `mcp_sess_${now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  const sessionEntry: McpClientSession = {
+    sessionId: newSessionId,
+    lastActive: now,
+    assistant: assistantKey,
+  }
+  clientSessions.set(compositeKey, sessionEntry)
+  lastGlobalSession = sessionEntry
+  return newSessionId
+}
+
 async function logMcpAudit({
   sessionId,
   orderId,
@@ -312,11 +376,14 @@ async function logMcpAudit({
       request_id: orderId || sessionId,
     }
 
-    const { data: existing } = await supabase
-      .from("audit_sessions")
-      .select("*")
-      .or(`external_id.eq.${sessionId},id.eq.${sessionId}`)
-      .maybeSingle()
+    // Safely query audit_sessions: 'id' is bigint, 'external_id' is text
+    let query = supabase.from("audit_sessions").select("*")
+    if (/^\d+$/.test(sessionId)) {
+      query = query.or(`id.eq.${sessionId},external_id.eq.${sessionId}`)
+    } else {
+      query = query.eq("external_id", sessionId)
+    }
+    const { data: existing } = await query.maybeSingle()
 
     if (existing) {
       const existingEvents = Array.isArray(existing.events) ? existing.events : []
@@ -363,6 +430,7 @@ async function logMcpAudit({
 
 async function recordFailedAutonomousPurchase({
   orderId,
+  mcpSessionId,
   customerName,
   customerEmail,
   customerId,
@@ -375,6 +443,7 @@ async function recordFailedAutonomousPurchase({
   errorCode,
 }: {
   orderId: string
+  mcpSessionId?: string
   customerName: string
   customerEmail?: string | null
   customerId?: string | null
@@ -446,7 +515,7 @@ async function recordFailedAutonomousPurchase({
 
     // 3. Log audit session with status: "Failed"
     await logMcpAudit({
-      sessionId: orderId,
+      sessionId: mcpSessionId || orderId,
       orderId,
       customer: customerName,
       actorLabel: assistantLabel,
@@ -502,7 +571,7 @@ function cleanSearchQuery(q: string): string {
 }
 
 // Tool execution handlers
-async function executeSearchCatalog(args: any) {
+async function executeSearchCatalog(args: any, req?: Request, meta?: any) {
   const rawInput = args.query || args.q || ""
   const category = args.category
   const maxPricePaise = args.max_price_paise
@@ -672,7 +741,7 @@ async function executeSearchCatalog(args: any) {
   // Audit trail for catalog discovery
   const assistant = (args.assistant || "external_agent").toLowerCase().trim()
   const actorLabel = formatAssistantName(assistant)
-  const searchSessionId = `search_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  const searchSessionId = resolveMcpSessionId(args, req, meta)
   logMcpAudit({
     sessionId: searchSessionId,
     actorLabel,
@@ -704,21 +773,74 @@ async function executeSearchCatalog(args: any) {
 }
 
 function findProductInCatalog(prods: any[], item: any) {
-  const rawId = String(item.id || item.product_id || item.item_id || item.title || "").trim()
-  const rawIdLower = rawId.toLowerCase()
+  if (!item) return null
+  const itemObj = typeof item === "object" ? item : { id: item }
 
-  // 1. Exact ID match (numeric or string ID, or external_id)
-  let prod = prods.find((p) => String(p.id).trim() === rawId || String(p.external_id || "").trim() === rawId)
-  if (prod) return prod
+  const explicitId = itemObj.id ?? itemObj.product_id ?? itemObj.item_id
+  const rawId = explicitId !== undefined && explicitId !== null ? String(explicitId).trim() : ""
 
-  // 2. Exact Title match
-  prod = prods.find((p) => p.title.toLowerCase().trim() === rawIdLower)
-  if (prod) return prod
+  const explicitTitle = itemObj.title ?? itemObj.name ?? itemObj.product_name ?? ""
+  const titleStr = String(explicitTitle).trim()
+  const titleLower = titleStr.toLowerCase()
 
-  // 3. Substring Title match ONLY IF NOT a pure number and at least 3 characters
-  if (!/^\d+$/.test(rawId) && rawId.length >= 3) {
-    prod = prods.find((p) => p.title.toLowerCase().includes(rawIdLower))
-    if (prod) return prod
+  // 1. Exact Title match if explicit title is provided
+  if (titleStr) {
+    const exactTitle = prods.find((p) => p.title.toLowerCase().trim() === titleLower)
+    if (exactTitle) return exactTitle
+  }
+
+  // 2. Exact Primary Key match (numeric ID)
+  // CRITICAL: Must match p.id FIRST before touching external_id to avoid ID collisions
+  // (e.g. Lenovo LOQ i5 has primary key id: 23, while Infinix Phone has external_id: "23")
+  if (rawId && /^\d+$/.test(rawId)) {
+    const numId = Number(rawId)
+    const exactPk = prods.find((p) => Number(p.id) === numId)
+    if (exactPk) {
+      // If title was also passed, verify it doesn't wildly contradict (e.g. phone vs laptop)
+      if (titleLower && !exactPk.title.toLowerCase().includes(titleLower) && !titleLower.includes(exactPk.title.toLowerCase().slice(0, 10))) {
+        const titleMatch = prods.find((p) => p.title.toLowerCase().includes(titleLower) || titleLower.includes(p.title.toLowerCase()))
+        if (titleMatch) return titleMatch
+      }
+      return exactPk
+    }
+  }
+
+  // 3. String Primary Key match (e.g. UUID)
+  if (rawId) {
+    const strPk = prods.find((p) => String(p.id).trim() === rawId)
+    if (strPk) return strPk
+  }
+
+  // 4. Substring & Token Title match if title is provided
+  if (titleStr && titleStr.length >= 3) {
+    let match = prods.find((p) => p.title.toLowerCase().includes(titleLower) || titleLower.includes(p.title.toLowerCase()))
+    if (match) return match
+
+    const searchTokens = titleLower.split(/\s+/).filter((w) => w.length > 1)
+    if (searchTokens.length > 1) {
+      const best = prods
+        .map((p) => {
+          const pLower = p.title.toLowerCase()
+          const matches = searchTokens.filter((token) => pLower.includes(token)).length
+          return { p, matches }
+        })
+        .filter((entry) => entry.matches >= Math.min(2, searchTokens.length))
+        .sort((a, b) => b.matches - a.matches)[0]
+      if (best) return best.p
+    }
+  }
+
+  // 5. External ID match (only after PK and title have been checked)
+  if (rawId) {
+    const extMatch = prods.find((p) => String(p.external_id || "").trim() === rawId)
+    if (extMatch) return extMatch
+  }
+
+  // 6. If rawId is non-numeric, try matching rawId against title
+  if (rawId && !/^\d+$/.test(rawId) && rawId.length >= 3) {
+    const rawIdLower = rawId.toLowerCase()
+    const match = prods.find((p) => p.title.toLowerCase().includes(rawIdLower) || rawIdLower.includes(p.title.toLowerCase()))
+    if (match) return match
   }
 
   return null
@@ -809,15 +931,14 @@ async function executeCreateCheckoutSession(args: any, req?: Request, meta?: any
       currency: "INR",
       line_items: lineItems,
       totals: [{ type: "total", amount: totalPaise, display_text: "Total Amount" }],
-      fulfillment_details: address,
-      delivery_address: address,
-      payment_link: checkoutUrl,
-      agent_id: assistantId,
-      metadata: {
-        assistant: actorLabel,
+      fulfillment_details: {
+        address,
+        delivery_address: address,
         agent_id: assistantId,
+        assistant: actorLabel,
         actor_label: actorLabel,
       },
+      payment_link: checkoutUrl,
       expires_at: new Date(Date.now() + 86400_000).toISOString(),
     })
     if (insErr) console.error("Insert checkout session error:", insErr)
@@ -859,9 +980,11 @@ async function executeCreateCheckoutSession(args: any, req?: Request, meta?: any
     console.warn("Exception upserting conversation:", convErr)
   }
 
-  // Log audit event
+  // Log audit event under active MCP conversation session
+  const mcpAuditSessionId = resolveMcpSessionId(args, req, meta)
   logMcpAudit({
-    sessionId,
+    sessionId: mcpAuditSessionId,
+    orderId: sessionId,
     customer: address.full_name,
     actorLabel,
     event: {
@@ -1355,6 +1478,7 @@ async function executeAutonomousPurchase(args: any, req?: Request, meta?: any) {
   const assistantInfo = resolveAssistant(args, req, meta)
   const assistant = assistantInfo.label
   const assistantId = assistantInfo.id
+  const mcpSessionId = resolveMcpSessionId(args, req, meta)
   const recoveryBase = "https://razent.vercel.app"
   const fallbackSessionId = `acp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
   const manualCheckoutUrl = `${recoveryBase}/checkout?session=${fallbackSessionId}`
@@ -1400,6 +1524,7 @@ async function executeAutonomousPurchase(args: any, req?: Request, meta?: any) {
     if (resolvedItems.length > 0) {
       await recordFailedAutonomousPurchase({
         orderId: failedOrderId,
+        mcpSessionId,
         customerName: args.delivery_address?.full_name || "AI Shopper",
         customerEmail: null,
         customerId: null,
@@ -1554,6 +1679,7 @@ async function executeAutonomousPurchase(args: any, req?: Request, meta?: any) {
     const failedOrderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
     await recordFailedAutonomousPurchase({
       orderId: failedOrderId,
+      mcpSessionId,
       customerName: address.full_name,
       customerEmail: wallet.customer_email,
       customerId: wallet.customer_id,
@@ -1591,6 +1717,7 @@ async function executeAutonomousPurchase(args: any, req?: Request, meta?: any) {
     const failedOrderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
     await recordFailedAutonomousPurchase({
       orderId: failedOrderId,
+      mcpSessionId,
       customerName: address.full_name,
       customerEmail: wallet.customer_email,
       customerId: wallet.customer_id,
@@ -1631,6 +1758,7 @@ async function executeAutonomousPurchase(args: any, req?: Request, meta?: any) {
     const failedOrderId = `RAZ-MCP-${Date.now().toString(36).toUpperCase()}`
     await recordFailedAutonomousPurchase({
       orderId: failedOrderId,
+      mcpSessionId,
       customerName: address.full_name,
       customerEmail: wallet.customer_email,
       customerId: wallet.customer_id,
@@ -1735,7 +1863,7 @@ async function executeAutonomousPurchase(args: any, req?: Request, meta?: any) {
 
   // Audit Logging
   await logMcpAudit({
-    sessionId: orderId,
+    sessionId: mcpSessionId || orderId,
     orderId,
     customer: address.full_name,
     actorLabel: assistant,
@@ -1972,7 +2100,7 @@ Deno.serve(async (req: Request) => {
         try {
           let toolResult
           if (name === "search_catalog" || name === "ucp_catalog_search") {
-            toolResult = await executeSearchCatalog(toolArgs)
+            toolResult = await executeSearchCatalog(toolArgs, req, meta)
           } else if (name === "create_checkout_session" || name === "acp_create_checkout_session") {
             toolResult = await executeCreateCheckoutSession(toolArgs, req, meta)
           } else if (name === "get_checkout_session" || name === "acp_get_checkout_session") {

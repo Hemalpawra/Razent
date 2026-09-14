@@ -1185,12 +1185,15 @@ export async function executeStorefrontPayment(
 ): Promise<ExecuteStorefrontPaymentResult> {
   const { order, paymentType, upiId, cardId, conversationId, razorpayResponse } = input
 
-  // Bounded check: basket ceiling (₹50,000)
-  if (order.total_paise > 5000000) {
+  // Bounded check: retail basket ceiling for manual storefront checkout (₹5,00,000 / 50,000,000 paise).
+  // Note: Autonomous e-Mandates without 2FA remain strictly capped at ₹15,000 by NPCI regulations.
+  // Manual storefront 2FA checkouts via Razorpay support high-ticket consumer electronics (laptops, phones, appliances).
+  const STOREFRONT_BASKET_CEILING_PAISE = 50000000 // ₹5,00,000
+  if (order.total_paise > STOREFRONT_BASKET_CEILING_PAISE) {
     return {
       success: false,
       order,
-      errorReason: "Order exceeds maximum allowed basket ceiling of ₹50,000 (5,000,000 paise).",
+      errorReason: "Order exceeds maximum allowed basket ceiling of ₹5,00,000 (50,000,000 paise).",
     }
   }
 

@@ -107,20 +107,20 @@ async function runAcceptanceTests() {
   // ─────────────────────────────────────────────────────────────
   console.log("\n--- Test Suite 3: Payment Protocol Gateway & Execution ---")
 
-  // Test 3.1: Basket ceiling enforcement (> ₹50,000)
+  // Test 3.1: Basket ceiling enforcement (> ₹5,00,000)
   const ceilingOrderId = `ORD-CEILING-${Date.now()}`
   const ceilingOrder: Order = {
     ...seededOrder,
     id: ceilingOrderId,
-    total_paise: 5500000, // ₹55,000 exceeds ceiling
+    total_paise: 55000000, // ₹5,50,000 exceeds ceiling
   }
   const ceilingRes = await executeStorefrontPayment({
     order: ceilingOrder,
     paymentType: "upi",
     upiId: "success@razorpay",
   })
-  assert(ceilingRes.success === false, "Orders exceeding ₹50,000 ceiling are blocked")
-  assert(ceilingRes.errorReason?.includes("50,000") ?? false, "Ceiling error reason is explicit")
+  assert(ceilingRes.success === false, "Orders exceeding ₹5,00,000 ceiling are blocked")
+  assert(ceilingRes.errorReason?.includes("5,00,000") ?? false, "Ceiling error reason is explicit")
 
   // Test 3.2: UPI Sandbox failure clearance
   const failOrderId = `ORD-FAIL-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`

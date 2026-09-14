@@ -345,6 +345,9 @@ export default function StoreHome() {
 
         // 1. Identify assistant
         const assistant =
+          dbSession.fulfillment_details?.agent_id ||
+          dbSession.fulfillment_details?.assistant ||
+          dbSession.fulfillment_details?.actor_label ||
           dbSession.agent_id ||
           dbSession.metadata?.assistant ||
           dbSession.metadata?.agent_id ||
@@ -353,17 +356,21 @@ export default function StoreHome() {
 
         // 2. Extract delivery address
         const addr =
-          dbSession.fulfillment_details ||
+          dbSession.fulfillment_details?.address ||
+          dbSession.fulfillment_details?.delivery_address ||
+          (dbSession.fulfillment_details?.full_name ? dbSession.fulfillment_details : null) ||
           dbSession.delivery_address ||
           dbSession.metadata?.fulfillment_details ||
           dbSession.metadata?.shipping_address ||
           null
         if (addr) setSessionAddress(addr)
 
-        // 3. Preserve cart & merge session line items
+        // 3. Clear cart of stale items and populate exclusively with session items
         const sessionLineItems = dbSession.line_items || []
         if (sessionLineItems.length > 0) {
-          const currentStoreItems = useCart.getState().items
+          // Clear any stale browser items from prior browsing/checkout sessions
+          useCart.getState().clearCart()
+
           sessionLineItems.forEach((it: any) => {
             const itId = String(it.id || it.product_id || "")
             const matchingProd = (activeProducts || []).find((p) => String(p.id) === itId) || {
@@ -372,7 +379,7 @@ export default function StoreHome() {
               price_paise: it.unit_price_paise || it.price_paise || 10000,
               mrp_paise: it.unit_price_paise || it.price_paise || 10000,
               unit: it.unit || "1 unit",
-              category: "Grocery & Staples",
+              category: "Laptops & Tech",
               stock: 50,
               image_url:
                 it.image_url ||
@@ -383,15 +390,8 @@ export default function StoreHome() {
               updated_at: new Date().toISOString(),
             }
 
-            const existing = currentStoreItems.find(
-              (c) => String(c.id) === String(matchingProd.id)
-            )
             const targetQty = it.quantity || it.qty || 1
-            if (!existing) {
-              useCart.getState().addToCart(matchingProd as any, targetQty)
-            } else if (existing.qty < targetQty) {
-              useCart.getState().updateQty(matchingProd.id, targetQty)
-            }
+            useCart.getState().addToCart(matchingProd as any, targetQty)
           })
         }
       } catch (err) {
@@ -500,10 +500,11 @@ export default function StoreHome() {
                 .from("acp_checkout_sessions")
                 .update({
                   status: "completed",
-                  metadata: {
-                    ...(dbSession.metadata || {}),
+                  updated_at: new Date().toISOString(),
+                  fulfillment_details: {
+                    ...(typeof dbSession.fulfillment_details === "object" ? dbSession.fulfillment_details : {}),
                     order_id: candidateOrderId,
-                    razorpay_payment_id: effectivePaymentId || dbSession.metadata?.razorpay_payment_id,
+                    razorpay_payment_id: effectivePaymentId,
                   },
                 })
                 .eq("id", effectiveSessionId)
@@ -4537,10 +4538,11 @@ function CheckoutView({
           try {
             await supabase.from("acp_checkout_sessions").update({
               status: "completed",
-              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
               fulfillment_details: {
                 order_id: codOrder.id,
                 shipping_address: shippingAddress,
+                completed_at: new Date().toISOString(),
               },
             }).eq("id", sessionId)
             await supabase.from("conversations").update({
@@ -4618,10 +4620,11 @@ function CheckoutView({
             try {
               await supabase.from("acp_checkout_sessions").update({
                 status: "completed",
-                completed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
                 fulfillment_details: {
                   order_id: res.order.id,
                   shipping_address: shippingAddress,
+                  completed_at: new Date().toISOString(),
                 },
               }).eq("id", sessionId)
               await supabase.from("conversations").update({
@@ -4709,10 +4712,11 @@ function CheckoutView({
                 try {
                   await supabase.from("acp_checkout_sessions").update({
                     status: "completed",
-                    completed_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
                     fulfillment_details: {
                       order_id: res.order.id,
                       shipping_address: shippingAddress,
+                      completed_at: new Date().toISOString(),
                     },
                   }).eq("id", sessionId)
                   await supabase.from("conversations").update({
