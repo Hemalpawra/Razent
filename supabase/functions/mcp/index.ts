@@ -33,13 +33,20 @@ const SERVER_INFO = {
 const INSTRUCTIONS =
   "You are connected to the Razent Quick Commerce MCP Server (https://razent.vercel.app). " +
   "You can search the 10-15 minute grocery & tech catalog, verify customer wallet balances, execute autonomous purchases directly from their Razent Wallet, create in-app checkout sessions, and track orders. " +
-  "CRITICAL RULES FOR ORDERING: " +
-  "1. AUTONOMOUS PURCHASING (No Manual Link Needed): When the customer asks you to 'buy this', 'order this', or 'place order', call 'execute_autonomous_purchase'. " +
-  "   - This uses the customer's authenticated Razent Wallet and Agent Passkey. " +
-  "   - If the customer has AI purchases enabled and the order is within their spend limit (and under the ₹15,000 NPCI regulatory ceiling), the purchase settles instantly. Return the order confirmation, delivery ETA, and live tracking link. " +
-  "   - If the order exceeds their spend limit, exceeds wallet balance, or exceeds the ₹15,000 NPCI limit, our system provides a clear Balise UX recovery message with 3 options (1. Update limit, 2. Add funds to wallet, 3. Pay at manual checkout). Present these options clearly to the customer. " +
-  "2. MANUAL CHECKOUT SESSIONS: If the customer prefers to review or pay manually, call 'create_checkout_session' with their items and delivery address. Format the link as: [Click here to Complete Checkout on Razent](checkout_url). " +
-  "3. Always identify yourself in the 'assistant' field ('chatgpt', 'gemini', 'claude', 'store_agent', or external agent name)."
+  "\n\nCRITICAL PROTOCOLS FOR ORDERING & PAYMENTS: " +
+  "\n1. MANDATORY CONFIRMATION PROTOCOL (Never Order Without Asking): " +
+  "   - When a customer selects or asks to buy an item, FIRST call 'get_customer_wallet_status' to inspect their wallet balance and spend limit. " +
+  "   - Present the item title, quantity, and total price clearly to the customer. " +
+  "   - ALWAYS explicitly ask the customer: 'Would you like me to pay and place this order directly using your Razent Wallet (Balance: ₹X), or would you prefer a checkout link to pay with UPI/Card yourself?' " +
+  "   - ONLY call 'execute_autonomous_purchase' after the customer explicitly confirms they want you to pay with their wallet. " +
+  "\n2. AUTONOMOUS PURCHASING (Direct Wallet Debit): " +
+  "   - When customer confirms wallet payment, call 'execute_autonomous_purchase'. " +
+  "   - If within customer spend limit and under the ₹15,000 NPCI regulatory ceiling, the purchase settles instantly. Return the order confirmation, delivery ETA, and live tracking link. " +
+  "   - If the order exceeds their spend limit, exceeds wallet balance, or exceeds the ₹15,000 NPCI limit, present the Balise UX recovery options clearly. " +
+  "\n3. MANUAL CHECKOUT SESSIONS: " +
+  "   - If the customer prefers to pay themselves, or if the order exceeds the ₹15,000 regulatory ceiling (e.g. laptops, phones), call 'create_checkout_session' with their items and delivery address. " +
+  "   - Format the link as: [Click here to Complete Checkout on Razent](checkout_url). " +
+  "\n4. ASSISTANT IDENTIFIER: Always identify yourself in the 'assistant' field ('chatgpt', 'gemini', 'claude', 'store_agent', or external agent name)."
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1435,15 +1442,41 @@ async function executeAP2Checkout(args: any, req?: Request, meta?: any) {
   }
 }
 
-const NPCI_TRANSACTION_LIMIT_PAISE = 1500000 // ₹15,000 max per automated mandate without AFA OTP
+const NPCI_TRANSACTION_LIMIT_PAISE = 1500000 // ₹15,00,000 max per automated mandate without AFA OTP
 
-async function executeGetCustomerWalletStatus(args: any) {
-  const token = (args.auth_token || Deno.env.get("RAZENT_CUSTOMER_TOKEN") || "").trim()
+function resolveCustomerToken(args: any, req?: Request): string {
+  if (args?.auth_token && typeof args.auth_token === "string" && args.auth_token.trim()) {
+    return args.auth_token.trim()
+  }
+  if (req) {
+    try {
+      const url = new URL(req.url)
+      const qToken =
+        url.searchParams.get("token") ||
+        url.searchParams.get("passkey") ||
+        url.searchParams.get("key") ||
+        url.searchParams.get("auth_token")
+      if (qToken && qToken.trim()) return qToken.trim()
+
+      const authHeader = req.headers.get("authorization") || ""
+      if (authHeader.toLowerCase().startsWith("bearer ")) {
+        const bearer = authHeader.slice(7).trim()
+        if (bearer && bearer !== "undefined" && bearer !== "null") return bearer
+      }
+      const customHeader = req.headers.get("x-razent-token") || req.headers.get("x-agent-passkey")
+      if (customHeader && customHeader.trim()) return customHeader.trim()
+    } catch {}
+  }
+  return (Deno.env.get("RAZENT_CUSTOMER_TOKEN") || "").trim()
+}
+
+async function executeGetCustomerWalletStatus(args: any, req?: Request) {
+  const token = resolveCustomerToken(args, req)
   if (!token) {
     return {
       authenticated: false,
       message:
-        "Authentication required. Please configure your Agent Passkey in [Wallet Settings](https://razent.vercel.app/wallet) to check wallet balance and spend limits.",
+        "Authentication required. Please configure your Agent Passkey in [Wallet Settings](https://razent.vercel.app/wallet) or connect with your personal URL (?token=rz_agt_...) to check wallet balance and spend limits.",
       wallet_url: "https://razent.vercel.app/wallet",
     }
   }
@@ -1478,7 +1511,7 @@ async function executeGetCustomerWalletStatus(args: any) {
 }
 
 async function executeAutonomousPurchase(args: any, req?: Request, meta?: any) {
-  const token = (args.auth_token || Deno.env.get("RAZENT_CUSTOMER_TOKEN") || "").trim()
+  const token = resolveCustomerToken(args, req)
   const assistantInfo = resolveAssistant(args, req, meta)
   const assistant = assistantInfo.label
   const assistantId = assistantInfo.id
@@ -2116,7 +2149,7 @@ Deno.serve(async (req: Request) => {
           } else if (name === "execute_autonomous_purchase" || name === "autonomous_purchase" || name === "wallet_purchase") {
             toolResult = await executeAutonomousPurchase(toolArgs, req, meta)
           } else if (name === "get_customer_wallet_status" || name === "get_wallet_status") {
-            toolResult = await executeGetCustomerWalletStatus(toolArgs)
+            toolResult = await executeGetCustomerWalletStatus(toolArgs, req)
           } else {
             throw new Error(`Unknown tool: ${name}`)
           }

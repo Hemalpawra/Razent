@@ -89,7 +89,20 @@ export default function WalletPage() {
 
   const [customLimit, setCustomLimit] = useState("")
   const [copiedToken, setCopiedToken] = useState(false)
+  const [copiedUrl, setCopiedUrl] = useState(false)
   const [isEditingAddress, setIsEditingAddress] = useState(false)
+
+  const remoteMcpUrl = wallet?.agent_auth_token
+    ? `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp?token=${wallet.agent_auth_token}`
+    : "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp"
+
+  const handleCopyUrl = () => {
+    if (!wallet?.agent_auth_token) return
+    navigator.clipboard.writeText(remoteMcpUrl)
+    setCopiedUrl(true)
+    toast.success("Remote MCP URL copied! Paste into Claude or ChatGPT.")
+    setTimeout(() => setCopiedUrl(false), 2500)
+  }
 
   // Address form state
   const [fullName, setFullName] = useState("")
@@ -648,51 +661,97 @@ export default function WalletPage() {
             </div>
           </CardHeader>
 
-          <CardContent className="pt-0 flex flex-col gap-3 text-xs">
+          <CardContent className="pt-0 flex flex-col gap-3.5 text-xs">
             <p className="text-muted-foreground leading-relaxed">
-              When using ChatGPT, Claude, or Google Gemini via MCP, configure your Agent Passkey so the AI model can verify your wallet balance and place orders autonomously without manual steps.
+              Connect your Razent Wallet to Claude Desktop, ChatGPT, or Cursor via Model Context Protocol (MCP).
+              Your AI assistant will be automatically authenticated, able to inspect your wallet balance, and will <strong>always ask for your confirmation</strong> before finalizing any order.
             </p>
 
-            <div className="p-3 rounded-xl border border-border/80 bg-muted/30 flex items-center justify-between gap-3">
+            {/* Remote MCP URL (Recommended) */}
+            <div className="p-3.5 rounded-xl border border-primary/30 bg-primary/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block mb-1">
-                  Your Personal Agent Passkey
-                </span>
-                <code className="text-xs font-mono font-bold text-primary truncate block select-all">
-                  {wallet?.agent_auth_token || "rz_agt_live_..."}
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Badge variant="outline" className="text-[10px] font-semibold bg-primary/10 text-primary border-primary/20">
+                    Recommended
+                  </Badge>
+                  <span className="text-[11px] font-semibold text-foreground">
+                    One-Click Remote MCP URL
+                  </span>
+                </div>
+                <code className="text-xs font-mono font-medium text-foreground/90 truncate block select-all bg-background/60 px-2 py-1 rounded border border-border/60">
+                  {remoteMcpUrl}
                 </code>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Add as an SSE/HTTP MCP server in Claude Desktop, ChatGPT Custom Actions, or Cursor. Automatically carries your authenticated session.
+                </p>
               </div>
 
               <Button
-                variant="secondary"
+                variant="default"
                 size="sm"
-                className="h-8 text-xs gap-1.5 shrink-0"
+                className="h-8 text-xs gap-1.5 shrink-0 w-full sm:w-auto"
                 disabled={!isSignedIn || !wallet?.agent_auth_token}
-                onClick={handleCopyToken}
+                onClick={handleCopyUrl}
               >
-                {copiedToken ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
-                <span>{copiedToken ? "Copied" : "Copy Passkey"}</span>
+                {copiedUrl ? <Check className="size-3.5 text-white" /> : <Copy className="size-3.5" />}
+                <span>{copiedUrl ? "Copied URL" : "Copy Remote MCP URL"}</span>
               </Button>
             </div>
 
-            {/* MCP Config Example */}
-            <div className="rounded-xl border border-border/70 bg-zinc-950 p-3 text-zinc-300 font-mono text-[11px] overflow-x-auto">
-              <p className="text-[10px] text-zinc-500 uppercase font-sans font-bold tracking-wider mb-1">
-                MCP Configuration Snippet
-              </p>
-              <pre className="text-[11px] leading-relaxed">
+            {/* Passkey & Stdio Config */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl border border-border/80 bg-muted/30 flex flex-col justify-between gap-2">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block mb-1">
+                    Your Personal Agent Passkey
+                  </span>
+                  <code className="text-xs font-mono font-bold text-primary truncate block select-all">
+                    {wallet?.agent_auth_token || "rz_agt_live_..."}
+                  </code>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Pass this token directly to the assistant in chat if using an unauthenticated connector.
+                  </p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1.5 w-full mt-1"
+                  disabled={!isSignedIn || !wallet?.agent_auth_token}
+                  onClick={handleCopyToken}
+                >
+                  {copiedToken ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
+                  <span>{copiedToken ? "Copied Passkey" : "Copy Passkey"}</span>
+                </Button>
+              </div>
+
+              {/* MCP Local Config Example */}
+              <div className="rounded-xl border border-border/70 bg-zinc-950 p-3 text-zinc-300 font-mono text-[10px] overflow-x-auto">
+                <p className="text-[9px] text-zinc-500 uppercase font-sans font-bold tracking-wider mb-1">
+                  Local MCP Config (claude_desktop_config.json)
+                </p>
+                <pre className="text-[10px] leading-relaxed">
 {`{
   "mcpServers": {
     "razent": {
       "command": "node",
       "args": ["scripts/mcp-server.mjs"],
       "env": {
-        "RAZENT_CUSTOMER_TOKEN": "${wallet?.agent_auth_token || "YOUR_AGENT_PASSKEY"}"
+        "RAZENT_CUSTOMER_TOKEN": "${wallet?.agent_auth_token ? wallet.agent_auth_token.slice(0, 14) + "..." : "YOUR_PASSKEY"}"
       }
     }
   }
 }`}
-              </pre>
+                </pre>
+              </div>
+            </div>
+
+            {/* Two-Choice Protocol Guarantee Notice */}
+            <div className="p-2.5 rounded-lg border border-border/70 bg-muted/20 flex items-start gap-2 text-[11px] text-muted-foreground">
+              <Sparkles className="size-3.5 text-primary mt-0.5 shrink-0" />
+              <span>
+                <strong>Mandatory Confirmation Protocol</strong>: Even with full wallet access, our server enforces that the AI assistant must always ask for your explicit consent before debiting funds, offering you the choice between autonomous wallet payment or a manual checkout link.
+              </span>
             </div>
           </CardContent>
         </Card>
