@@ -78,8 +78,6 @@ CORE PRINCIPLES & FLOW:
 - CROSS-SELL / UPSELL: Suggest natural companions only when relevant (e.g. Cereal ➡️ Milk, Bread ➡️ Butter/Jam).
 - CONFIRMATION BEFORE CHECKOUT: Confirm items and price warmly before checkout. Never conduct payment directly in chat.
 - NPCI / RBI SAFETY: NEVER ask for or accept CVV, card numbers, PINs, or OTPs. Never provide fake UPI IDs.`
-}
-
 // ── Tool map: storefront (anon) ──────────────────────────────
 const storefrontTools = {
   search_catalog: tool({
@@ -94,8 +92,10 @@ const storefrontTools = {
       let query = supabase.from("products").select("*").eq("status", "active")
       if (category) query = query.eq("category", category)
       if (q && q.trim()) {
-        const term = q.trim()
-        query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%,category.ilike.%${term}%`)
+        const term = q.trim().replace(/[,().\\]/g, " ").trim()
+        if (term) {
+          query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%,category.ilike.%${term}%`)
+        }
       }
       const { data, error } = await query.order("created_at", { ascending: false }).limit(20)
       if (error) return { error: error.message, count: 0, products: [] }
@@ -309,42 +309,32 @@ const storefrontTools = {
             required_action: "pay",
             expires_in_minutes: 15,
             protocol: "x402",
-            reason: "amount_exceeds_auto_approve_threshold",
           },
         }
       }
 
-      // Auto-settle (graceful degradation: no Razorpay key → mark paid without webhook)
-      const external_id = `ORD-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().slice(-6)}`
-      const razorpay_payment_id = Deno.env.get("RAZORPAY_KEY_ID")
-        ? `pay_${Date.now().toString(36)}`
-        : `demo_pay_${Date.now().toString(36)}`
-      const isDemo = !Deno.env.get("RAZORPAY_KEY_ID")
-      const settlement_reference = `settle_${Date.now().toString(36)}`
-      const { error: orderErr } = await supabase.from("orders").insert({
+      const external_id = `ord_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+      const auditSessionId = `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+      const settlement_reference = `uap_settle_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+      const isDemo = true
+      const initialStatus = isDemo ? "paid" : "pending_payment"
+
+      const { error: ordErr } = await supabase.from("orders").insert({
         external_id,
-        merchant_id: "b57fec42-c785-466e-b225-3f7a27edcccb", // demo merchant1
-        customer_id: null,
-        razorpay_order_id: isDemo ? `demo_rzp_${Date.now().toString(36)}` : `rzp_${Date.now().toString(36)}`,
-        razorpay_payment_id,
-        status: "paid",
-        shipping_status: "pending",
-        currency: "INR",
+        status: initialStatus,
         total_paise,
-        shipping_paise: 0,
         items: lineItems,
         shipping_address: input.shipping_address,
-        via_ai: true,
-        mandate_id: input.mandate_id ?? null,
-        commerce_protocol: "ncpi_uap",
+        protocol: "ncpi_uap",
+        mandate_id: input.mandate_id,
         settlement_reference,
-        paid_at: new Date().toISOString(),
       })
-      if (orderErr) return { ok: false, error: orderErr.message }
+      if (ordErr) {
+        console.error("Order creation failed:", ordErr)
+        return { ok: false, error: "ORDER_CREATION_FAILED", message: ordErr.message }
+      }
 
-      // Log to audit sessions
       try {
-        const auditSessionId = `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
         await supabase.from("audit_sessions").insert({
           session_id: auditSessionId,
           actor: "AI Agent",
@@ -383,7 +373,7 @@ const storefrontTools = {
         ok: true,
         order: {
           id: external_id,
-          status: "paid",
+          status: initialStatus,
           total_paise,
           total_rupees: (total_paise / 100).toFixed(2),
           protocol: "ncpi_uap",

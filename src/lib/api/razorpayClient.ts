@@ -13,8 +13,8 @@
 
 import { verifyRazorpayPaymentSignature } from "@/lib/protocol/ap2Crypto"
 
-const RAZORPAY_KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TXeysTR9U8Fyws"
-const RAZORPAY_KEY_SECRET = import.meta.env.VITE_RAZORPAY_KEY_SECRET || "UuzZqB93v2obPdSyg3plRzKd"
+const RAZORPAY_KEY_ID = (import.meta.env.VITE_RAZORPAY_KEY_ID as string | undefined)?.trim() || ""
+const RAZORPAY_KEY_SECRET = (import.meta.env.VITE_RAZORPAY_KEY_SECRET as string | undefined)?.trim() || ""
 const RAZORPAY_BASE_URL = "https://api.razorpay.com/v1"
 
 export interface RazorpayOrder {
@@ -60,6 +60,9 @@ export interface RazorpayPayment {
 }
 
 function getAuthHeader(): string {
+  if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+    throw new Error("Razorpay credentials are not configured in environment.")
+  }
   return `Basic ${btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)}`
 }
 

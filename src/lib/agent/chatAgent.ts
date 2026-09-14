@@ -25,7 +25,7 @@ export const isOpenRouterConfigured = Boolean(apiKey && apiKey.startsWith("sk-or
 
 const openrouter = createOpenAICompatible({
   name: "openrouter",
-  apiKey: apiKey || "sk-dummy",
+  apiKey: apiKey || "",
   baseURL,
 })
 

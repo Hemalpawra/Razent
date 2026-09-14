@@ -42,7 +42,7 @@ Open or create `claude_desktop_config.json` and paste:
       "command": "npx",
       "args": [
         "-y",
-        "mcp-remote",
+        "mcp-remote@0.1.15",
         "https://razent.vercel.app/mcp"
       ],
       "env": {
@@ -75,7 +75,7 @@ Open or create `claude_desktop_config.json` and paste:
 If you use Anthropic's new `claude` CLI terminal tool:
 
 ```bash
-claude mcp add razent-commerce -- npx -y mcp-remote https://razent.vercel.app/mcp
+claude mcp add razent-commerce -- npx -y mcp-remote@0.1.15 https://razent.vercel.app/mcp
 ```
 
 Verify with:

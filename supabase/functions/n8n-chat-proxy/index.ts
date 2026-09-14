@@ -21,6 +21,18 @@
 // @ts-nocheck
 declare const Deno: any;
 
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+const supabase = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    })
+  : null;
+
+
 const N8N_WEBHOOK_URL = Deno.env.get("N8N_WEBHOOK_URL") ?? "";
 const N8N_SHARED_SECRET = Deno.env.get("N8N_SHARED_SECRET") ?? "";
 
@@ -126,7 +138,7 @@ Deno.serve(async (req: Request) => {
   ).trim();
   const echoedInput = lastUser.trim().toLowerCase();
 
-  if (!upstreamText || (echoedInput && upstreamText.toLowerCase() === echoedInput)) {
+  if (supabase && (!upstreamText || (echoedInput && upstreamText.toLowerCase() === echoedInput))) {
     const { data: savedConversation } = await supabase
       .from("conversations")
       .select("last_message, products_recommended, selected_product, status")

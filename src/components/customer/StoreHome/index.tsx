@@ -385,6 +385,16 @@ export default function StoreHome() {
 
     if (!isCheckoutRoute || !sessionParam) return
 
+    // Eagerly wipe the persisted cart the moment we know we have a session param,
+    // so stale items (e.g. a laptop from a prior session) never flash or persist
+    // in localStorage across page refreshes.
+    useCart.getState().clearCart()
+
+    // Wait for the real product catalog to load before populating the cart.
+    // Running with an empty catalog causes the fallback stub product to be saved
+    // to localStorage, which then reappears on every hard refresh.
+    if (activeProducts.length === 0) return
+
     let isMounted = true
     ;(async () => {
       try {
@@ -418,10 +428,10 @@ export default function StoreHome() {
           null
         if (addr) setSessionAddress(addr)
 
-        // 3. Clear cart of stale items and populate exclusively with session items
+        // 3. Replace cart exclusively with session items
         const sessionLineItems = dbSession.line_items || []
         if (sessionLineItems.length > 0) {
-          // Clear any stale browser items from prior browsing/checkout sessions
+          // Clear again after products loaded (guards against race between two effect runs)
           useCart.getState().clearCart()
 
           sessionLineItems.forEach((it: any) => {
@@ -438,6 +448,8 @@ export default function StoreHome() {
               (!isNaN(Number(p.id)) && !isNaN(Number(itId)) && Number(p.id) === Number(itId)) ||
               (p.title && it.title && p.title.toLowerCase().trim() === it.title.toLowerCase().trim())
             ) || {
+              // Fallback stub when product can't be matched – use neutral defaults
+              // (NOT "Laptops & Tech") so wrong category doesn't confuse the display.
               id: itId || `prod_${Date.now()}`,
               external_id: itExtId,
               db_id: itId,
@@ -447,15 +459,15 @@ export default function StoreHome() {
               mrp_paise: unitPrice || 10000,
               currency: "INR",
               unit: it.unit || "1 unit",
-              category: "Laptops & Tech",
+              category: "General",
               stock: 50,
               tags: [],
               status: "active",
               image_url:
                 it.image_url ||
-                "https://images.unsplash.com/photo-1546470427-227df1ed3a1d?w=480&q=80&auto=format&fit=crop",
-              rating: 4.8,
-              reviews_count: 50,
+                "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=480&q=80&auto=format&fit=crop",
+              rating: 4.5,
+              review_count: 10,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             }
@@ -1735,6 +1747,7 @@ export default function StoreHome() {
                   })
                 }
                 setCart([])
+                useCart.getState().clearCart()
                 setView("payment-success")
               }}
               onPaymentFailed={(oid, amt, rsn) => {

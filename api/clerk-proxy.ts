@@ -7,9 +7,16 @@ export default async function handler(req: Request) {
 
   // Extract path passed from vercel.json rewrite
   const pathParam = url.searchParams.get('path') || ''
-  const cleanPath = pathParam.startsWith('/') ? pathParam : `/${pathParam}`
+  // Strip leading slashes to prevent protocol-relative '//attacker.com' bypasses
+  const cleanPath = '/' + pathParam.replace(/^\/+/, '')
 
   const targetUrl = new URL(cleanPath, 'https://frontend-api.clerk.dev')
+  if (targetUrl.origin !== 'https://frontend-api.clerk.dev') {
+    return new Response(JSON.stringify({ error: 'Invalid proxy target' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
   
   // Forward query parameters
   url.searchParams.forEach((value, key) => {

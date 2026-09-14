@@ -24,7 +24,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "mcp-remote",
+        "mcp-remote@0.1.15",
         "https://razent.vercel.app/mcp"
       ],
       "env": {
@@ -45,7 +45,7 @@
 Run this single command in your terminal:
 
 ```bash
-claude mcp add razent-commerce -- npx -y mcp-remote https://razent.vercel.app/mcp
+claude mcp add razent-commerce -- npx -y mcp-remote@0.1.15 https://razent.vercel.app/mcp
 ```
 
 Verify connection:

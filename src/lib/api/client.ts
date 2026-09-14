@@ -543,12 +543,41 @@ export async function trackOrdersFlexible(
 }
 
 /**
- * Backwards-compatible single order tracker.
- * Delegates to trackOrdersFlexible and returns the latest / matched order.
+ * Strict 3-factor customer order tracker (orderId + mobile + email).
+ * Required by security policy and acceptance tests to prevent order enumeration.
  */
 export async function trackOrder(args: TrackOrderArgs | string): Promise<Order | null> {
-  const res = await trackOrdersFlexible(args)
-  return res.latestOrder
+  if (typeof args === "string") return null
+  if (!args || !args.orderId || !args.mobile || !args.email) return null
+
+  // 1. Check in-memory store
+  const localMatch = orderStore.track(args.orderId, args.mobile, args.email)
+  if (localMatch) return localMatch
+
+  // 2. Query Supabase with 3-factor verification
+  try {
+    const { data } = await supabase
+      .from("orders")
+      .select("*")
+      .or(`external_id.ilike.${args.orderId},id.eq.${args.orderId}`)
+      .maybeSingle()
+
+    if (data) {
+      const order = mapDbOrder(data)
+      const cleanMobile = args.mobile.replace(/\D/g, "")
+      const cleanEmail = args.email.trim().toLowerCase()
+      if (cleanMobile.length < 5 || !cleanEmail.includes("@")) return null
+      const last10 = cleanMobile.slice(-10)
+      const storedPhone = (order.shipping_address?.phone || "").replace(/\D/g, "")
+      const storedEmail = (order.shipping_address?.email || "").trim().toLowerCase()
+      if (storedPhone.endsWith(last10) && storedEmail === cleanEmail) {
+        return order
+      }
+    }
+  } catch (err) {
+    console.warn("[trackOrder] error:", err)
+  }
+  return null
 }
 
 // ─────────────────────────────────────────────────────────────────

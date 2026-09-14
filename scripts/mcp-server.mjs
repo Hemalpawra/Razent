@@ -17,8 +17,8 @@ import { createClient } from "@supabase/supabase-js"
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://flsjhsnfurxkzawdimyi.supabase.co"
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "sb_publishable_BJfbmQGnWlGSTL22LHJVxA_p3DeEUAi"
-const RAZORPAY_KEY_ID = process.env.VITE_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "rzp_test_TXeysTR9U8Fyws"
-const RAZORPAY_KEY_SECRET = process.env.VITE_RAZORPAY_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || "UuzZqB93v2obPdSyg3plRzKd"
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || ""
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || process.env.VITE_RAZORPAY_KEY_SECRET || ""
 
 const SUPPORTED_PROTOCOL_VERSIONS = ["2026-07-28", "2025-11-25", "2024-11-05"]
 const LATEST_PROTOCOL_VERSION = "2026-07-28"
@@ -1222,17 +1222,30 @@ async function executeGetCheckoutSession(args, req, meta) {
 
 async function executeTrackOrders(args) {
   const { order_id, mobile, email } = args
+  if (!order_id && !mobile && !email) {
+    return {
+      found: false,
+      message: "Order ID, mobile number, or email is required to track an order.",
+    }
+  }
+
   let query = supabase.from("orders").select("*").order("created_at", { ascending: false })
 
   if (order_id) {
-    query = query.or(`external_id.ilike.%${order_id}%,razorpay_order_id.ilike.%${order_id}%`)
+    const cleanId = String(order_id).trim()
+    query = query.or(`external_id.ilike.%${cleanId}%,razorpay_order_id.ilike.%${cleanId}%`)
   } else if (mobile) {
     const cleanMobile = mobile.replace(/[^0-9]/g, "").slice(-10)
+    if (cleanMobile.length < 5) {
+      return { found: false, message: "Valid mobile number is required." }
+    }
     query = query.like("shipping_address->>phone", `%${cleanMobile}%`)
   } else if (email) {
-    query = query.ilike("shipping_address->>email", `%${email}%`)
-  } else {
-    query = query.limit(5)
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail.includes("@")) {
+      return { found: false, message: "Valid email address is required." }
+    }
+    query = query.ilike("shipping_address->>email", `%${cleanEmail}%`)
   }
 
   const { data, error } = await query.limit(5)

@@ -15,8 +15,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID") || "rzp_test_TXeysTR9U8Fyws"
-const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET") || "UuzZqB93v2obPdSyg3plRzKd"
+const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID") ?? ""
+const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET") ?? ""
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -84,9 +84,14 @@ Deno.serve(async (req: Request) => {
 
         const orClauses: string[] = []
         for (const t of Array.from(terms).slice(0, 10)) {
-          orClauses.push(`title.ilike.%${t}%`, `description.ilike.%${t}%`, `category.ilike.%${t}%`)
+          const sanitizedTerm = t.replace(/[,().\\]/g, " ").trim()
+          if (sanitizedTerm) {
+            orClauses.push(`title.ilike.%${sanitizedTerm}%`, `description.ilike.%${sanitizedTerm}%`, `category.ilike.%${sanitizedTerm}%`)
+          }
         }
-        dbQuery = dbQuery.or(orClauses.join(","))
+        if (orClauses.length > 0) {
+          dbQuery = dbQuery.or(orClauses.join(","))
+        }
       }
 
       if (maxPricePaise) {

@@ -102,7 +102,7 @@ Add this block to your Claude Desktop configuration:
       "command": "npx",
       "args": [
         "-y",
-        "mcp-remote",
+        "mcp-remote@0.1.15",
         "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp"
       ]
     }

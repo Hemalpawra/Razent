@@ -33,7 +33,7 @@ import type {
 import type { CartMandate, IntentMandate, PaymentMandate } from "@/lib/protocol/ap2Types"
 import { verifyFullAP2MandateChain } from "@/lib/protocol/agenticCommerce"
 
-const RAZORPAY_WEBHOOK_SECRET = import.meta.env.VITE_RAZORPAY_WEBHOOK_SECRET || "Jimmi@6283554982"
+const RAZORPAY_WEBHOOK_SECRET = (import.meta.env.VITE_RAZORPAY_WEBHOOK_SECRET as string | undefined)?.trim() || ""
 
 // In-memory fallback map for environments where Supabase is still bootstrapping tables
 const memorySessions = new Map<string, ACPCheckoutSession>()

@@ -27,14 +27,31 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 })
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (!a || !b) return false
+  const enc = new TextEncoder()
+  const aBuf = enc.encode(a)
+  const bBuf = enc.encode(b)
+  if (aBuf.byteLength !== bBuf.byteLength) return false
+  return crypto.subtle.timingSafeEqual(aBuf, bBuf)
+}
+
+const ALLOWED_ORIGINS = new Set([
+  "http://localhost:8443",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://razent.vercel.app",
+  "https://razent-demo.vercel.app",
+])
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response("method not allowed", { status: 405 })
   }
 
-  // Verify the admin secret header
+  // Verify the admin secret header with timing-safe comparison
   const provided = req.headers.get("X-Admin-Secret") ?? ""
-  if (!RAZENT_ADMIN_SECRET || provided !== RAZENT_ADMIN_SECRET) {
+  if (!RAZENT_ADMIN_SECRET || !timingSafeEqual(provided, RAZENT_ADMIN_SECRET)) {
     return new Response(
       JSON.stringify({ error: "forbidden", reason: "invalid_admin_secret" }),
       { status: 401, headers: { "content-type": "application/json" } },
@@ -67,7 +84,13 @@ Deno.serve(async (req: Request) => {
     email,
     options: {
       data: { full_name, role: "merchant", business_name },
-      redirectTo: `${req.headers.get("origin") ?? "http://localhost:8443"}/admin`,
+      redirectTo: (() => {
+        const origin = req.headers.get("origin")
+        const base = (origin && ALLOWED_ORIGINS.has(origin))
+          ? origin
+          : (Deno.env.get("SITE_URL") || "https://razent.vercel.app")
+        return `${base}/admin`
+      })(),
     },
   })
 

@@ -61,7 +61,7 @@ export default function ProtocolManagerPage() {
     JSON.stringify({ event: "session.completed", session_id: "acp_test_123" }, null, 2)
   )
   const [webhookHeader, setWebhookHeader] = useState("")
-  const [webhookSecret, setWebhookSecret] = useState("Jimmi@6283554982")
+  const [webhookSecret, setWebhookSecret] = useState("")
   const [webhookResult, setWebhookResult] = useState<any>(null)
 
   useEffect(() => {

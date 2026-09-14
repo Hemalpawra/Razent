@@ -58,7 +58,7 @@ export default function InvoiceDialog({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Tax Invoice - ${order?.id || "Order"}</title>
+          <title>Tax Invoice - ${(order?.id || "Order").replace(/[<>&"]/g, "")}</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 24px; color: #111; }
             table { width: 100%; border-collapse: collapse; margin-top: 16px; margin-bottom: 16px; }

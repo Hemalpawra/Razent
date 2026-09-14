@@ -17,8 +17,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID") || "rzp_test_TXeysTR9U8Fyws"
-const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET") || "UuzZqB93v2obPdSyg3plRzKd"
+const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID") ?? ""
+const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET") ?? ""
 
 const SUPPORTED_PROTOCOL_VERSIONS = ["2026-07-28", "2025-11-25", "2024-11-05"]
 const LATEST_PROTOCOL_VERSION = "2026-07-28"
@@ -916,7 +916,43 @@ async function executeCreateCheckoutSession(args: any, req?: Request, meta?: any
   const sessionId = `acp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
   const checkoutUrl = `https://razent.vercel.app/checkout?session=${sessionId}`
 
-  const sessionObj = {
+  // Attempt to create a Razorpay payment link for direct payment (no app required)
+  let razorpayPaymentLink: string | null = null
+  let razorpayPaymentLinkId: string | null = null
+  try {
+    if (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) {
+      const auth = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)
+      const plinkRes = await fetch("https://api.razorpay.com/v1/payment_links", {
+        method: "POST",
+        headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: totalPaise,
+          currency: "INR",
+          description: `Razent Order – ${lineItems.map((i: any) => `${i.quantity}x ${i.title}`).join(", ").slice(0, 80)}`,
+          customer: {
+            name: address.full_name || "Customer",
+            contact: (address.phone || "+910000000000").replace(/\s+/g, ""),
+            email: "customer@razent.app",
+          },
+          notify: { sms: false, email: false },
+          callback_url: `https://razent.vercel.app/checkout/success?session=${sessionId}`,
+          callback_method: "get",
+          notes: { session_id: sessionId, protocol: "mcp_acp" },
+        }),
+      })
+      if (plinkRes.ok) {
+        const plinkData = await plinkRes.json()
+        razorpayPaymentLink = plinkData.short_url || null
+        razorpayPaymentLinkId = plinkData.id || null
+      } else {
+        console.warn("Razorpay payment link creation failed:", await plinkRes.text())
+      }
+    }
+  } catch (plinkErr) {
+    console.error("Exception creating Razorpay payment link:", plinkErr)
+  }
+
+  const sessionObj: any = {
     session_id: sessionId,
     status: "ready_for_payment",
     currency: "INR",
@@ -926,11 +962,21 @@ async function executeCreateCheckoutSession(args: any, req?: Request, meta?: any
     delivery_address: address,
     assistant: actorLabel,
     checkout_url: checkoutUrl,
-    payment_link: checkoutUrl,
-    payment_link_markdown: `[Click here to Complete Checkout on Razent](${checkoutUrl})`,
-    instructions: "CRITICAL: Present the checkout link above to the customer. They will complete checkout, confirm address, and pay securely directly in the Razent app.",
+    payment_link: razorpayPaymentLink || checkoutUrl,
+    payment_link_markdown: razorpayPaymentLink
+      ? `[Pay ₹${(totalPaise / 100).toFixed(2)} on Razorpay](${razorpayPaymentLink})`
+      : `[Click here to Complete Checkout on Razent](${checkoutUrl})`,
+    in_app_checkout_markdown: `[Open Checkout in Razent App](${checkoutUrl})`,
+    instructions:
+      "CRITICAL: Share BOTH links below with the customer:\\n" +
+      (razorpayPaymentLink
+        ? `1. Direct payment: [Pay ₹${(totalPaise / 100).toFixed(2)} on Razorpay](${razorpayPaymentLink}) – fastest, no login needed\\n`
+        : "") +
+      `2. In-app checkout: [Open Checkout in Razent App](${checkoutUrl}) – includes address confirmation\\n` +
+      "After payment, call get_checkout_session to confirm the order was settled.",
     created_at: new Date().toISOString(),
   }
+  if (razorpayPaymentLinkId) sessionObj.razorpay_payment_link_id = razorpayPaymentLinkId
 
   memorySessions.set(sessionId, sessionObj)
 
@@ -949,7 +995,8 @@ async function executeCreateCheckoutSession(args: any, req?: Request, meta?: any
         assistant: actorLabel,
         actor_label: actorLabel,
       },
-      payment_link: checkoutUrl,
+      payment_link: razorpayPaymentLink || checkoutUrl,
+      capabilities: razorpayPaymentLinkId ? { payment_link_id: razorpayPaymentLinkId } : {},
       expires_at: new Date(Date.now() + 86400_000).toISOString(),
     })
     if (insErr) console.error("Insert checkout session error:", insErr)
@@ -1247,17 +1294,30 @@ async function executeGetCheckoutSession(args: any, req?: Request, meta?: any) {
 
 async function executeTrackOrders(args: any) {
   const { order_id, mobile, email } = args
+  if (!order_id && !mobile && !email) {
+    return {
+      found: false,
+      message: "Order ID, mobile number, or email is required to track an order.",
+    }
+  }
+
   let query = supabase.from("orders").select("*").order("created_at", { ascending: false })
 
   if (order_id) {
-    query = query.or(`external_id.ilike.%${order_id}%,razorpay_order_id.ilike.%${order_id}%`)
+    const cleanId = String(order_id).trim()
+    query = query.or(`external_id.ilike.%${cleanId}%,razorpay_order_id.ilike.%${cleanId}%`)
   } else if (mobile) {
     const cleanMobile = mobile.replace(/[^0-9]/g, "").slice(-10)
+    if (cleanMobile.length < 5) {
+      return { found: false, message: "Valid mobile number is required." }
+    }
     query = query.like("shipping_address->>phone", `%${cleanMobile}%`)
   } else if (email) {
-    query = query.ilike("shipping_address->>email", `%${email}%`)
-  } else {
-    query = query.limit(5)
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail.includes("@")) {
+      return { found: false, message: "Valid email address is required." }
+    }
+    query = query.ilike("shipping_address->>email", `%${cleanEmail}%`)
   }
 
   const { data, error } = await query.limit(5)

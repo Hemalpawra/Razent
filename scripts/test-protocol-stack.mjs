@@ -104,8 +104,12 @@ async function testACPWebhookHmac(secret, payload) {
 
 // 5. Razorpay Real Orders API Call (with retry for transient DNS/network blips)
 async function testRealRazorpayOrder() {
-  const keyId = "rzp_test_TXeysTR9U8Fyws"
-  const secret = "UuzZqB93v2obPdSyg3plRzKd"
+  const keyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || ""
+  const secret = process.env.RAZORPAY_KEY_SECRET || process.env.VITE_RAZORPAY_KEY_SECRET || ""
+  if (!keyId || !secret) {
+    console.log("ℹ Skipping Test 5 (Razorpay network call): RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not set in environment.")
+    return { id: "mock_order_skipped" }
+  }
   const auth = Buffer.from(`${keyId}:${secret}`).toString("base64")
 
   let lastError = null
@@ -177,7 +181,7 @@ async function runAllDiagnostics() {
   }
 
   // Test 4: ACP Webhook HMAC-SHA256
-  const secret = "Jimmi@6283554982"
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || "test_secret_for_acp_signature_verification"
   const webhookRes = await testACPWebhookHmac(secret, JSON.stringify({ event: "order.paid" }))
   if (webhookRes.header.startsWith("t=") && webhookRes.header.includes(",v1=")) {
     console.log(`✓ TEST 4 PASSED: ACP Webhook Signature (${webhookRes.header.slice(0, 25)}...)`)

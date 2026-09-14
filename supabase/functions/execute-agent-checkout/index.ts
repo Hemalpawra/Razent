@@ -19,8 +19,8 @@ const UAP_VERIFIER_URL = Deno.env.get("UAP_VERIFIER_URL") ?? "";
 const X402_CHALLENGE_URL = Deno.env.get("X402_CHALLENGE_URL") ?? "";
 const UAP_TEST_SIGNING_KEY = Deno.env.get("UAP_TEST_SIGNING_KEY") ?? "";
 
-const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID") || "rzp_test_TXeysTR9U8Fyws";
-const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET") || "UuzZqB93v2obPdSyg3plRzKd";
+const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID") ?? "";
+const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET") ?? "";
 
 function createServiceClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -87,6 +87,20 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // Verify ownership: customer must own the order or have merchant/admin privileges
+  if (order.customer_id && order.customer_id !== userData.user.id) {
+    const { data: profile } = await svc
+      .from("profiles")
+      .select("role")
+      .eq("user_id", userData.user.id)
+      .maybeSingle();
+    if (profile?.role !== "super_admin" && profile?.role !== "merchant") {
+      return new Response(JSON.stringify({ error: "forbidden", reason: "order_unauthorized" }), {
+        status: 403, headers: { "content-type": "application/json" },
+      });
+    }
+  }
+
   // 2. AP2 / ACP mandate verification
   if (mandate) {
     const { data: mandateRow } = await svc
@@ -108,8 +122,11 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // 3. Autonomous threshold check
-  const thresholdPaise = approval_threshold_rupees * 100;
+  // 3. Autonomous threshold check with server-side regulatory cap (₹2,000 auto-approve / ₹15,000 max)
+  const MAX_AUTO_APPROVE_PAISE = 200000; // ₹2,000 auto-approve ceiling
+  const requestedThresholdPaise = (approval_threshold_rupees || 2000) * 100;
+  const thresholdPaise = Math.min(requestedThresholdPaise, MAX_AUTO_APPROVE_PAISE);
+
   if (order.total_paise > thresholdPaise) {
     await writeAudit(svc, order_id, "step_up", "Warning",
       `amount ${order.total_paise} > threshold ${thresholdPaise}`);
