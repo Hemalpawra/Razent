@@ -29,6 +29,7 @@ import type { AuditEvent, AuditSession, AuditResult } from "@/lib/types/audit"
 import type { Conversation } from "@/lib/types/conversation"
 import { supabase, getUser } from "@/lib/api/supabase"
 import { useError } from "@/state/useError"
+import { useSettings } from "@/state/useSettings"
 import { productStore } from "@/lib/storage/productStore"
 import { orderStore } from "@/lib/storage/orderStore"
 import {
@@ -1185,15 +1186,21 @@ export async function executeStorefrontPayment(
 ): Promise<ExecuteStorefrontPaymentResult> {
   const { order, paymentType, upiId, cardId, conversationId, razorpayResponse } = input
 
-  // Bounded check: retail basket ceiling for manual storefront checkout (₹5,00,000 / 50,000,000 paise).
+  // Bounded check: retail basket ceiling for manual storefront checkout.
+  // Configured dynamically in Merchant Settings -> Business Rules (defaults to ₹5,00,000 / 50,000,000 paise).
   // Note: Autonomous e-Mandates without 2FA remain strictly capped at ₹15,000 by NPCI regulations.
   // Manual storefront 2FA checkouts via Razorpay support high-ticket consumer electronics (laptops, phones, appliances).
-  const STOREFRONT_BASKET_CEILING_PAISE = 50000000 // ₹5,00,000
+  const configuredCeilingInr =
+    typeof window !== "undefined"
+      ? (useSettings.getState().businessRules?.storefrontCeilingAmount ?? 500000)
+      : 500000
+  const STOREFRONT_BASKET_CEILING_PAISE = (configuredCeilingInr > 0 ? configuredCeilingInr : 500000) * 100
   if (order.total_paise > STOREFRONT_BASKET_CEILING_PAISE) {
+    const formattedCeiling = `₹${(STOREFRONT_BASKET_CEILING_PAISE / 100).toLocaleString("en-IN")}`
     return {
       success: false,
       order,
-      errorReason: "Order exceeds maximum allowed basket ceiling of ₹5,00,000 (50,000,000 paise).",
+      errorReason: `Order exceeds maximum allowed basket ceiling of ${formattedCeiling} (${STOREFRONT_BASKET_CEILING_PAISE.toLocaleString("en-IN")} paise).`,
     }
   }
 

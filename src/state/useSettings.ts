@@ -26,6 +26,7 @@ type BusinessRules = {
   orderNumbering: "RAZ-YYYY-####" | "ORD-####" | "RZP-####"
   minOrderAmount: number
   maxDiscount: number
+  storefrontCeilingAmount: number
   outOfStockRule: "block" | "hide" | "warn"
 }
 type DummyShipping = {
@@ -84,6 +85,7 @@ const defaults: Omit<SettingsState, "setStoreProfile" | "setAiDefaults" | "setBu
       orderNumbering: "RAZ-YYYY-####",
       minOrderAmount: 0,
       maxDiscount: 20,
+      storefrontCeilingAmount: 500000, // ₹5,00,000 (50,000,000 paise manual checkout ceiling)
       outOfStockRule: "block",
     },
     dummyShipping: {

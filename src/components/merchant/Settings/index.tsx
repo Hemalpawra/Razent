@@ -670,6 +670,7 @@ function BusinessRulesPage({
       return
     }
     setBusinessRules(local)
+    toast.success("Business rules saved.")
     onBack()
   }
   return (
@@ -678,6 +679,8 @@ function BusinessRulesPage({
         title="Business Rules"
         subtitle="Prices, taxes and order rules — AI and storefront both obey these."
         onBack={onBack}
+        onSave={save}
+        canSave={canEdit}
       />
       <div className="grid gap-4 sm:grid-cols-2">
         <Card className="rounded-xl bg-card">
@@ -797,6 +800,48 @@ function BusinessRulesPage({
                   Caps coupon/discount
                 </p>
               </div>
+            </div>
+
+            <div className="space-y-1.5 pt-1 border-t border-border/40">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <Shield className="size-3.5 text-primary" /> Storefront Checkout Ceiling (INR)
+                </Label>
+                <Badge variant="outline" className="text-[10px] font-mono">
+                  {local.storefrontCeilingAmount ? `₹${Number(local.storefrontCeilingAmount).toLocaleString("en-IN")}` : "₹5,00,000"}
+                </Badge>
+              </div>
+              <Input
+                type="number"
+                value={local.storefrontCeilingAmount ?? 500000}
+                onChange={(e) =>
+                  setLocal({
+                    ...local,
+                    storefrontCeilingAmount: Math.max(0, Number(e.target.value) || 0),
+                  })
+                }
+                className="h-9 bg-card text-sm font-mono"
+                placeholder="500000"
+              />
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                {[50000, 100000, 200000, 500000, 1000000].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setLocal({ ...local, storefrontCeilingAmount: preset })}
+                    className={`rounded border px-2 py-0.5 text-[10px] transition-colors ${
+                      (local.storefrontCeilingAmount ?? 500000) === preset
+                        ? "border-primary bg-primary/10 text-primary font-medium"
+                        : "border-border text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    ₹{(preset / 1000).toLocaleString("en-IN")}k
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Maximum basket amount allowed for manual storefront 2FA checkouts (₹5,00,000 default). Autonomous AI e-mandates remain bounded at ₹15,000 by NPCI regulations.
+              </p>
             </div>
           </CardContent>
         </Card>
