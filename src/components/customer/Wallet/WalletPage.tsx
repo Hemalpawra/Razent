@@ -93,8 +93,8 @@ export default function WalletPage() {
   const [isEditingAddress, setIsEditingAddress] = useState(false)
 
   const remoteMcpUrl = wallet?.agent_auth_token
-    ? `https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp?token=${wallet.agent_auth_token}`
-    : "https://flsjhsnfurxkzawdimyi.supabase.co/functions/v1/mcp"
+    ? `https://razent.vercel.app/mcp?token=${wallet.agent_auth_token}`
+    : "https://razent.vercel.app/mcp"
 
   const handleCopyUrl = () => {
     if (!wallet?.agent_auth_token) return
