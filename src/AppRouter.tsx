@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, type ReactNode } from "react"
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom"
 import ThemeProvider from "@/app/ThemeProvider"
 import { Toaster } from "@/components/shared/Toaster"
@@ -37,6 +37,25 @@ function AdminLayout() {
       <Outlet />
     </AppShell>
   )
+}
+
+// View-only merchants have no access to Settings, Audit Trail, or Protocols.
+// Hide is handled in AppShell; this blocks direct URL access.
+function ViewOnlyGuard({ children }: { children: ReactNode }) {
+  const { role, isLoading } = useMerchant()
+  const location = useLocation()
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Loading admin...</p>
+      </div>
+    )
+  }
+  if (role === "view_only") {
+    const fallback = location.pathname.startsWith("/merchant") ? "/merchant/dashboard" : "/dashboard"
+    return <Navigate to={fallback} replace />
+  }
+  return <>{children}</>
 }
 
 function ExternalRedirect({ to }: { to: string }) {
@@ -87,9 +106,9 @@ function MerchantRoutes() {
         <Route path="/orders" element={<OrdersScreen />} />
         <Route path="/analytics" element={<AnalyticsScreen />} />
         <Route path="/ai_agent" element={<AIAgentScreen />} />
-        <Route path="/audit_trail" element={<AuditTrailScreen />} />
-        <Route path="/protocols" element={<ProtocolManagerPage />} />
-        <Route path="/settings" element={<SettingsScreen />} />
+        <Route path="/audit_trail" element={<ViewOnlyGuard><AuditTrailScreen /></ViewOnlyGuard>} />
+        <Route path="/protocols" element={<ViewOnlyGuard><ProtocolManagerPage /></ViewOnlyGuard>} />
+        <Route path="/settings" element={<ViewOnlyGuard><SettingsScreen /></ViewOnlyGuard>} />
 
         {/* Backward-compatibility aliases for /merchant/* */}
         <Route path="/merchant" element={<Navigate to="/dashboard" replace />} />
@@ -98,9 +117,9 @@ function MerchantRoutes() {
         <Route path="/merchant/orders" element={<Navigate to="/orders" replace />} />
         <Route path="/merchant/analytics" element={<Navigate to="/analytics" replace />} />
         <Route path="/merchant/ai_agent" element={<Navigate to="/ai_agent" replace />} />
-        <Route path="/merchant/audit_trail" element={<Navigate to="/audit_trail" replace />} />
-        <Route path="/merchant/protocols" element={<Navigate to="/protocols" replace />} />
-        <Route path="/merchant/settings" element={<Navigate to="/settings" replace />} />
+        <Route path="/merchant/audit_trail" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/merchant/protocols" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/merchant/settings" element={<Navigate to="/dashboard" replace />} />
       </Route>
 
       {/* Safeguard: Redirect checkout visits on merchant domain to storefront */}
@@ -166,9 +185,9 @@ function StorefrontRoutes() {
             <Route path="orders" element={<OrdersScreen />} />
             <Route path="analytics" element={<AnalyticsScreen />} />
             <Route path="ai_agent" element={<AIAgentScreen />} />
-            <Route path="audit_trail" element={<AuditTrailScreen />} />
-            <Route path="protocols" element={<ProtocolManagerPage />} />
-            <Route path="settings" element={<SettingsScreen />} />
+            <Route path="audit_trail" element={<ViewOnlyGuard><AuditTrailScreen /></ViewOnlyGuard>} />
+            <Route path="protocols" element={<ViewOnlyGuard><ProtocolManagerPage /></ViewOnlyGuard>} />
+            <Route path="settings" element={<ViewOnlyGuard><SettingsScreen /></ViewOnlyGuard>} />
           </Route>
           <Route path="/admin" element={<Navigate to="/merchant/dashboard" replace />} />
           <Route path="/admin/*" element={<Navigate to="/merchant/dashboard" replace />} />

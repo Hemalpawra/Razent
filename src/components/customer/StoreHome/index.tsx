@@ -987,7 +987,17 @@ export default function StoreHome() {
       <header className="sticky top-0 z-30 border-b bg-card">
         <div className="w-full px-2 sm:px-4 lg:px-[10%] flex items-center gap-3 py-3">
           {/* logo + name */}
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCat(null)
+              setSearch("")
+              setView("home")
+              window.scrollTo({ top: 0, behavior: "smooth" })
+            }}
+            className="flex items-center gap-2 rounded-lg text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+            title="Go to storefront home"
+          >
             <div className="flex size-9 items-center justify-center rounded-lg bg-card border border-border/40 overflow-hidden shadow-xs">
               {storeProfile.logo ? (
                 <img
@@ -1006,7 +1016,7 @@ export default function StoreHome() {
             <span className="hidden text-sm font-semibold tracking-tight sm:inline">
               {storeProfile.storeName}
             </span>
-          </div>
+          </button>
 
           {/* search */}
           <div className="relative hidden flex-1 items-center md:flex md:max-w-xl">
@@ -1144,14 +1154,7 @@ export default function StoreHome() {
                         <Button
                           variant="outline"
                           size="lg"
-                          onClick={() => {
-                            const catSection = document.getElementById("browse-categories-section")
-                            if (catSection) {
-                              catSection.scrollIntoView({ behavior: "smooth" })
-                            } else {
-                              setView("listing")
-                            }
-                          }}
+                          onClick={goToListing}
                         >
                           <Layers className="size-4" /> Browse Categories
                         </Button>

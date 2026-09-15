@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useClerk, useUser } from "@clerk/react"
-import { User, LogOut, PackageCheck, Shield, ChevronDown, Wallet } from "lucide-react"
+import { User, LogOut, PackageCheck, ChevronDown, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { getMerchantUrl } from "@/lib/utils/subdomain"
 
 interface CustomerProfileMenuProps {
   onOpenTrackOrder?: () => void
@@ -131,23 +130,6 @@ export function CustomerProfileMenu({ onOpenTrackOrder }: CustomerProfileMenuPro
             >
               <Wallet className="size-4 text-primary" />
               <span>Wallet & AI Authorization</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsOpen(false)
-                const merchantUrl = getMerchantUrl("/dashboard")
-                if (merchantUrl.startsWith("http")) {
-                  window.location.href = merchantUrl
-                } else {
-                  navigate(merchantUrl)
-                }
-              }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-xs text-muted-foreground rounded-lg hover:bg-accent hover:text-foreground transition-colors text-left"
-            >
-              <Shield className="size-4 text-muted-foreground" />
-              <span>Merchant Console</span>
             </button>
           </div>
 

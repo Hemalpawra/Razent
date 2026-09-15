@@ -65,8 +65,7 @@ const navGroups: {
   },
 ]
 
-export function AppShell({ children, readOnly }: { children: ReactNode; readOnly?: boolean }) {
-  const activeScreen = useUI((s) => s.activeScreen)
+export function AppShell({ children, readOnly }: { children: ReactNode; readOnly?: boolean }) {  const activeScreen = useUI((s) => s.activeScreen)
   const setScreen = useUI((s) => s.setActiveScreen)
   const role = useUI((s) => s.role)
   const setRole = useUI((s) => s.setRole)
@@ -79,7 +78,22 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
   const navigate = useNavigate()
   const isViewOnly = readOnly || merchantRole === "view_only"
 
+  // View-only merchants have no access to Settings, Audit Trail, or Protocols (Agentic Commerce Protocol Stack).
+  const VIEW_ONLY_HIDDEN: Screen[] = ["settings", "audit_trail", "protocols"]
+  const visibleNavGroups = isViewOnly
+    ? navGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => !VIEW_ONLY_HIDDEN.includes(item.key)),
+        }))
+        .filter((group) => group.items.length > 0)
+    : navGroups
+
   const handleScreenChange = (key: Screen) => {
+    if (isViewOnly && VIEW_ONLY_HIDDEN.includes(key)) {
+      navigate(isMerchantSubdomain() ? "/dashboard" : "/merchant/dashboard")
+      return
+    }
     if (drawerOrderId) closeOrderDrawer()
     if (drawerProductId) closeProductDrawer()
     setScreen(key)
@@ -206,7 +220,7 @@ export function AppShell({ children, readOnly }: { children: ReactNode; readOnly
         </SidebarHeader>
 
         <SidebarContent className="gap-0">
-          {navGroups.map((group) => (
+          {visibleNavGroups.map((group) => (
             <SidebarGroup key={group.label}>
               <SidebarGroupLabel className="text-[11px] uppercase tracking-wider">
                 {group.label}
